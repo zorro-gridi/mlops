@@ -19,7 +19,7 @@ class AbstractModelFactory(metaclass=ABCMeta):
         # model_eval_metric: 模型评估指标名称
         # model_init_params: 模型初始化参数
         # model_train_params: 提供给 train 方法的参数
-        # custom_loss_func: 非标准库的自定义损失函数
+        # custom_loss_func: 非标准库的自定义损失函数类。必须定义 loss_name 属性 和 caculate 方法
         '''
         self.model_loss_func = model_loss_func
         self.model_eval_metric = model_eval_metric
