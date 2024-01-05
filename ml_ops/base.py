@@ -26,6 +26,10 @@ class AbstractMLOps(metaclass=ABCMeta):
             preprocess_func=None,
             postprocess_func=None,
             ):
+        '''
+        # preprocess_func: 对输入的raw_data进行预处理加工
+        # postprocess_func: 对模型的输出进行加工,使满足最终输出要求。需要在主程序中定义
+        '''
         self.model_task = model_task
         self.dataset_inst = dataset_inst
         self.best_model_args = best_model_args
@@ -38,10 +42,12 @@ class AbstractMLOps(metaclass=ABCMeta):
         self.preprocess_func = preprocess_func
         self.postprocess_func = postprocess_func
 
+        # 框架目前已实现的模型训练流程类型
         self.mlflow_model_flavor = {
             'xgb': mlflow.xgboost,
             'cat': mlflow.catboost,
-            'lstm': mlflow.pytorch,
+            'LstmModel': mlflow.pytorch,
+            'CNN_LSTM': mlflow.pytorch,
             'kmeans': mlflow.sklearn,
             }
 
@@ -71,14 +77,14 @@ class AbstractMLOps(metaclass=ABCMeta):
             1. 加载历史注册模型；
             2. 加载历史模型的最新数据输入；
             3. 计算历史模型损失函数。
-        加载模型方面，mlflow已经实现了统一接口。加载测试数据集方面，如果模型需要定制方法，可以通过子类改写此方法
+        加载模型方面,mlflow已经实现了统一接口。加载测试数据集方面,如果模型需要定制方法,可以通过子类改写此方法
         '''
         model_arch = self.best_model_args['model_arch']
 
         hist_xgb_model = self.mlflow_model_flavor[model_arch].load_model(f"models:/{reg_model_name}/{model_version}")
         hist_model_config = mlflow_utils.load_register_model_args(reg_model_name, model_version)
 
-        # 如果历史没有配置数据参数，就直接加载传入的数据
+        # 如果历史没有配置数据参数,就直接加载传入的数据
         if self.dataset_inst is None:
             logging.warning(f'无数据参数调参模式, 使用当前测试数据测试历史模型...')
             test_data = self.test_data
@@ -144,7 +150,7 @@ class AbstractMLOps(metaclass=ABCMeta):
                 mlflow_client.delete_registered_model(reg_model_name)
 
         if tune_model_metric == 0:
-            logging.warning(f'未注册历史模型，新模型同时训练失败，请调整数据，重新训练......')
+            logging.warning(f'未注册历史模型,新模型同时训练失败,请调整数据,重新训练......')
             raise Exception
 
         if self.dataset_inst is not None:

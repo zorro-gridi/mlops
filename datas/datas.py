@@ -24,7 +24,9 @@ from functools import partial
 class AbstractDatasetFactory(metaclass=ABCMeta):
     def __init__(self, features=[], categoric_features=[], target=None, preprocess_func=None):
         '''
-        # 数据预处理函数
+        # preprocess_func: 数据进行特征工程之前的预处理函数
+        # categoric_features: 数据中的分类特征
+        # features: 数据默认输入特征
         '''
         self.features = features
         self.target = target
@@ -192,7 +194,7 @@ class SeqToSeqClassDt(AbstractDatasetFactory):
 class SeqToTsDt(AbstractDatasetFactory):
     def __init__(self, input_features=None, dt_class=None, model_type='nn', **kwargs):
         '''
-        # input_features: 外部变量列表
+        # input_features: 时间序列的外部变量列表
         # dt_class: 加载数据为 torch datasets class
         # model_type: 模型的类型
         '''
