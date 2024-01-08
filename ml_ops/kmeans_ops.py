@@ -25,7 +25,14 @@ class KmeansOps(AbstractMLOps):
 
 
     def find_best_data_args(self, data_args_space):
+        '''
+        凡是通过 for 循环寻找最优解的变量, 都必须初始化
+        # best_test_loss: 最优 loss
+        # final_best_estimator: 最优模型
+        '''
         best_test_loss = 0
+        final_best_estimator = None
+
         for data_args in data_args_space:
             logging.warning(f'''
                 data args:
@@ -45,9 +52,7 @@ class KmeansOps(AbstractMLOps):
                 best_labels_ratio = self.postprocess_func(pred_labels, y)
                 loss_fn = self.model_task.custom_loss_func
                 loss_name = self.model_task.custom_loss_func.loss_name
-                # loss_fn = self.model_task.model_loss_func
                 custom_test_loss = loss_fn.caculate(best_labels_ratio)
-
                 logging.warning(f'data args: {data_args} - {loss_name}: {custom_test_loss}')
 
                 if custom_test_loss:
@@ -60,8 +65,11 @@ class KmeansOps(AbstractMLOps):
             else:
                 compare_bool = -custom_test_loss > -best_test_loss
 
+            # 如果指标有提升, 则更新相关参数
             if compare_bool:
+                # 更新最优 model 和 loss
                 best_test_loss = custom_test_loss
+                final_best_estimator = best_estimator
                 # 必须写在里面更新
                 self.train_data = X, y
                 best_eatimator_params = best_estimator.get_params()
@@ -79,13 +87,16 @@ class KmeansOps(AbstractMLOps):
 
         self.model_task.model_eval_metric = loss_name
         best_checkpoint = {
-            'best_model': best_estimator,
+            'best_model': final_best_estimator,
             self.model_task.model_eval_metric: best_test_loss,
             }
         return best_checkpoint
 
 
     def test_hist_model(self, reg_model_name, model_version='1'):
+        '''
+        此处重写父类的 test_hist_model 方法
+        '''
         hist_model = self.mlflow_model_flavor[self.best_model_args['model_arch']].load_model(f"models:/{reg_model_name}/{model_version}")
 
         hist_model_config = mlflow_utils.load_register_model_args(reg_model_name, model_version)

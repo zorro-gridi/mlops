@@ -81,7 +81,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         '''
         model_arch = self.best_model_args['model_arch']
 
-        hist_xgb_model = self.mlflow_model_flavor[model_arch].load_model(f"models:/{reg_model_name}/{model_version}")
+        histt_regis_model = self.mlflow_model_flavor[model_arch].load_model(f"models:/{reg_model_name}/{model_version}")
         hist_model_config = mlflow_utils.load_register_model_args(reg_model_name, model_version)
 
         # 如果历史没有配置数据参数,就直接加载传入的数据
@@ -91,8 +91,9 @@ class AbstractMLOps(metaclass=ABCMeta):
         else:
             test_data = self.dataset_inst.load_test_data(self.raw_data, inst_config=hist_model_config)
 
-        test_loader, _ = data_util_map(test_data)
-        hist_eval_metric = self.model_task.test_job(hist_xgb_model, test_loader)
+        # 历史模型最优，不需要更新参数配置，所以不用返回 model signature
+        test_loader, _ = data_util_map(test_data, params_config=None)
+        hist_eval_metric = self.model_task.test_job(histt_regis_model, test_loader)
         return hist_eval_metric
 
 
@@ -108,26 +109,42 @@ class AbstractMLOps(metaclass=ABCMeta):
         tune_model_metric = checkpoint[self.model_task.model_eval_metric]
         mlflow_client = MlflowClient(mlflow.get_tracking_uri())
         model_arch = self.best_model_args['model_arch']
+        best_model = checkpoint['best_model']
 
         global data_util_map
         def data_util_map(test_data, params_config=None):
+            '''
+            # test_data: 模型输入的的的 test_data
+            # params_config: mlflow signature 的 params 参数
+           return:
+                test_loader: 供 self.test_job 评估模型
+                signature: 供 mlflow 注册模型
+            '''
             if model_arch == 'xgb':
                 test_loader = xgb.DMatrix(*test_data)
                 X, y = test_data
                 signature = infer_signature(X[:5], y[:5], params_config)
             elif model_arch == 'nn':
                 test_loader = DataLoader(test_data, batch_size=1)
-
                 test_data_sample = next(iter(test_loader))
                 X, y = test_data_sample
                 signature = infer_signature(X.numpy(), y.numpy(), params_config)
+            # 聚类模型没有测试集
+            elif model_arch == 'kmeans':
+                test_loader = test_data
+                X, y = test_data
+                signature = infer_signature(X[:5], best_model.predict(X[:5]), params_config)
             else:
-                pass
+                test_loader = test_data
+                X, y = test_data
+                signature = infer_signature(X[:5], y[:5], params_config)
             return test_loader, signature
 
-        if mlflow_utils.check_model_existence(reg_model_name):
-            hist_xgb_model = self.mlflow_model_flavor[model_arch].load_model(f"models:/{reg_model_name}/{model_version}")
 
+        if mlflow_utils.check_model_existence(reg_model_name):
+            histt_regis_model = self.mlflow_model_flavor[model_arch].load_model(f"models:/{reg_model_name}/{model_version}")
+
+            # 测试历史模型
             hist_eval_metric = self.test_hist_model(reg_model_name, model_version=model_version)
             if self.model_task.optimize_mode == 'min':
                 compare_bools_result = -tune_model_metric <= -hist_eval_metric
@@ -137,14 +154,14 @@ class AbstractMLOps(metaclass=ABCMeta):
             # 默认使用最大化模式
             if compare_bools_result:
                 # 更新输出的模型
-                self.output_model = hist_xgb_model
+                self.output_model = histt_regis_model
 
                 logging.warning(f'''
                     tune {model_arch} model {self.model_task.model_eval_metric}: {tune_model_metric:,.3f}
                     hist {model_arch} model {self.model_task.model_eval_metric}: {hist_eval_metric:,.3f}
                     --> 使用历史最优模型推理......
                     ''')
-                return 'hist', hist_xgb_model
+                return 'hist', histt_regis_model
             else:
                 # 将针对数据实例的更改撤回
                 mlflow_client.delete_registered_model(reg_model_name)
@@ -160,7 +177,6 @@ class AbstractMLOps(metaclass=ABCMeta):
         params_config = self.best_model_args
         params_config.update(self.best_data_args)
 
-        best_model = checkpoint['best_model']
         if model_arch == 'nn':
             best_model.eval()
         self.output_model = best_model

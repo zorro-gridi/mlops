@@ -70,10 +70,12 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
 
 
     def load_test_data(self, data, inst_config=None):
+        '''
+        # inst_config: 类实例化的参数;可为历史模型参数, 或new model 的参数
+        '''
         if inst_config is not None:
             self.set_attr(inst_config)
 
-        logging.warning(f'加载')
         model_datas = self.feature_engineering(data)
         if isinstance(model_datas, tuple):
             x_train, x_test, y_train, y_test = self.data_split(*model_datas)
