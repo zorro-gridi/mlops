@@ -9,6 +9,7 @@ class VolumeBreakOutClassDt(BaseSeqToClassDt):
         super().__init__(**kwargs)
         self.y_threshold = y_threshold
 
+
     def categoric_engineering(self, raw_data, split_name='train'):
         X_arr_list = super().categoric_engineering(raw_data, split_name)
 
@@ -16,6 +17,7 @@ class VolumeBreakOutClassDt(BaseSeqToClassDt):
         X_list = [np.median(X, axis=1).reshape(1, -1) for X in X_arr_list]
         X_cate = np.concatenate(X_list, axis=0)
         return X_cate
+
 
     def feature_engineering(self, raw_data, split_name='train'):
         X_arr_list, y_list = super().feature_engineering(raw_data, split_name)
