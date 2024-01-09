@@ -24,6 +24,7 @@ from functools import partial
 class AbstractDatasetFactory(metaclass=ABCMeta):
     def __init__(self, features=[], categoric_features=[], target=None, preprocess_func=None):
         '''
+        # target: str 表示目标变量名称 / int 目标变量的 索引值
         # preprocess_func: 数据进行特征工程之前的预处理函数
         # categoric_features: 数据中的分类特征
         # features: 数据默认输入特征
@@ -50,7 +51,7 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
 
     def data_split(self, X, y, test_size=0.2, random_state=42):
         if self.is_imbalanced:
-            logging.warning(f'the dataset is imbalanced! ')
+            logging.warning(f'the dataset is set imbalanced! ')
             # 因为数据集的标签不均衡，所以使用 StratifiedShuffleSplit 分层抽样
             sss = StratifiedShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
             for i, (train_idx, test_idx) in enumerate(sss.split(X, y)):
@@ -98,9 +99,6 @@ class SeqToSeqClassDt(AbstractDatasetFactory):
         # 固定灿哥参数
         X_seq_len = self.X_seq_len
         y_seq_len = self.y_seq_len
-        y_threshold = self.y_threshold
-        # X_seq_len, y_seq_len, y_threshold = data_args
-        # logging.warning(f'data args: {data_args}')
 
         # 读取模型的的数值特征
         if isinstance(self.categoric_features[0], int):
@@ -110,7 +108,8 @@ class SeqToSeqClassDt(AbstractDatasetFactory):
 
         if split_name == 'train':
             X_data_arr = [
-                np.min(g_arr[i:i+X_seq_len, :]).reshape(1, -1)
+                # 取 axis=1 轴, 取序列的中位数
+                np.median(g_arr[i:i+X_seq_len, :], axis=1).reshape(1, -1)
                 for g_arr in tqdm(
                     groups_arr,
                     desc='get categoric features data -->',
@@ -118,11 +117,12 @@ class SeqToSeqClassDt(AbstractDatasetFactory):
                 for i in range(len(g_arr) - X_seq_len - y_seq_len)
                 ]
             X = np.concatenate(X_data_arr, axis=0)
+            logging.warning(f'split name: {split_name}, categoric feat X shape: {X.shape}')
             return X
 
         else:
             X_data_arr = [
-                np.min(g_arr[-X_seq_len:, :]).reshape(1, -1)
+                np.median(g_arr[-X_seq_len:, :], axis=1).reshape(1, -1)
                 for g_arr in tqdm(
                     groups_arr,
                     desc='get categoric features data -->',
@@ -134,6 +134,7 @@ class SeqToSeqClassDt(AbstractDatasetFactory):
 
     def feature_engineering(self, raw_data, split_name='train'):
         '''
+        # raw_data: pd.Dataframe group 对象
         # X_seq_len: x 输入序列长度; 例如近30天的股价趋势
         # y_seq_len: y 序列 to label 的观察长度; 例如10天内股价的最高涨幅
         # y_threshold: label y 的阈值
@@ -142,8 +143,6 @@ class SeqToSeqClassDt(AbstractDatasetFactory):
         X_seq_len = self.X_seq_len
         y_seq_len = self.y_seq_len
         y_threshold = self.y_threshold
-        # X_seq_len, y_seq_len, y_threshold = data_args
-        # logging.warning(f'data args: {data_args}')
 
         # 读取模型的的数值特征
         if isinstance(self.features[0], int):
@@ -175,7 +174,9 @@ class SeqToSeqClassDt(AbstractDatasetFactory):
             X_arr_list = [x.reshape(1, -1) for x in X_arr_list]
             X = np.concatenate(X_arr_list, axis=0)
             y = np.array([1 if y >= y_threshold / 100 else 0  for x, y in X_y_data_arr])
+            logging.warning(f'split name: {split_name}, before concate categoric feat, X shape: {X.shape}')
 
+            # 合并 categoric features
             X = np.concatenate([X, X_cate], axis=1) if X_cate is not None else X
             return X, y
 
@@ -213,6 +214,7 @@ class SeqToTsDt(AbstractDatasetFactory):
 
     def feature_engineering(self, vars_datas):
         '''
+        # vars_datas: 数组对象
         # preprocess_func: 对原始数据进行特征呢工程之前，预处理的函数。可以将定义的预处理函数封装成偏函数
         '''
         window = self.features + self.target

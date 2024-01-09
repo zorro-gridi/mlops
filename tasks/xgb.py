@@ -22,6 +22,9 @@ from ray.air.integrations.mlflow import setup_mlflow, MLflowLoggerCallback
 
 class xgboost_task(AbstractModelFactory):
     def __init__(self, **kwargs):
+        '''
+        # model_eval_metric: 原生 xgb 接口支持 metric str 列表，本 task 类只支持 str
+        '''
         super(xgboost_task, self).__init__(**kwargs)
 
 
@@ -41,20 +44,6 @@ class xgboost_task(AbstractModelFactory):
             }
         # 将初始化参数更新到 config 中
         bst_params.update(self.model_init_params)
-
-        # experiment_name = config.get("experiment_name", None)
-        # tracking_uri = config.get("tracking_uri", None)
-
-        # 有时候参数重复导致 mlflow 不能更改的异常
-        # setup_mlflow(
-        #     None,
-        #     experiment_name=experiment_name,
-        #     tracking_uri=tracking_uri,
-        #     run_name=f"xgb_train_job_{time.strftime('%Y-%m-%d %H:%M')}_{random.randint(1e5, 9e5)}",
-        #     # 在分布式训练下，表示每一个线程都实例化1个 mlflow 实例记录
-        #     # False 则只记录一个最优结果
-        #     rank_zero_only=True,
-        #     )
 
         early_stopping = EarlyStopping(
             rounds=100,
@@ -80,23 +69,10 @@ class xgboost_task(AbstractModelFactory):
             **self.model_train_params,
             )
 
-        model_name = 'xgb_model_checkpoint.json'
-        # 创建 checkpoint 子文件夹
-        os.makedirs("models", exist_ok=True)
-        bst.save_model(f"models/{model_name}")
-        report_checkpoint = train.Checkpoint.from_directory("models")
-
         # 使用 auc 作为评估函数
         logging.warning(f'logging mlflow......')
         test_eval_metric_list = evals_result['test'][self.model_eval_metric]
         train_eval_metric_list = evals_result['train'][self.model_eval_metric]
-
-        # for dname in ['test', 'train']:
-        #     for metric_name, metric_list in evals_result[dname].items():
-        #         [
-        #             mlflow.log_metric(f'{dname}_{metric_name}', dname_metric, step=step)
-        #             for step, dname_metric in enumerate(metric_list)
-        #             ]
 
         best_bst_round = np.argmax(np.array(evals_result['test'][self.model_eval_metric]))
         test_eval_metric = test_eval_metric_list[best_bst_round]
@@ -111,6 +87,12 @@ class xgboost_task(AbstractModelFactory):
                 }
             return best_checkpoint
 
+        model_name = 'xgb_model_checkpoint.json'
+        # 创建 checkpoint 子文件夹
+        os.makedirs("models", exist_ok=True)
+        bst.save_model(f"models/{model_name}")
+        report_checkpoint = train.Checkpoint.from_directory("models")
+
         # logging.warning(f'best_bst_round: {best_bst_round}, test_auc: {test_auc}')
         train.report(metrics={
             f'test_{self.model_eval_metric}': test_eval_metric,
@@ -123,12 +105,6 @@ class xgboost_task(AbstractModelFactory):
         if Path(checkpoint_dir).exists():
             shutil.rmtree(checkpoint_dir)
         os.makedirs(checkpoint_dir, exist_ok=True)
-
-        # mlflow_tracking_uri = search_space['tracking_uri']
-        # experiment_name = search_space['experiment_name']
-
-        # mlflow.set_tracking_uri(mlflow_tracking_uri)
-        # mlflow.set_experiment(experiment_name=experiment_name)
 
         scale_config = train.ScalingConfig(
             num_workers=4,
