@@ -27,6 +27,7 @@ class XgboostOps(AbstractMLOps):
         pass
 
 
+    # 这一步确实没有必要
     def run_model_args(self, model_args, xgb_model=None):
         if xgb_model:
             dtest = xgb.DMatrix(*(self.test_data))
@@ -36,15 +37,24 @@ class XgboostOps(AbstractMLOps):
         return best_checkpoint
 
 
-    def find_best_model_args(self, model_args_space, **kwargs):
-        best_result = self.model_task.tune_job(model_args_space, self.train_data, self.test_data, **kwargs)
+    def find_best_model_args(self, model_args_space, checkpoint_dir=None, **kwargs):
+        best_checkpoint = self.model_task.tune_job(
+            model_args_space,
+            self.train_data,
+            self.test_data,
+            checkpoint_dir=checkpoint_dir,
+            **kwargs
+            )
+
+        best_result = best_checkpoint['best_result']
         # 更新 xgb 模型实例的最优调参结果
         self.best_model_args.update(best_result.config)
         if self.dataset_inst is not None:
             self.best_data_args.update(
                 {k: v for k, v in self.dataset_inst.__dict__.items()
                  if type(v) in [str, list, dict, np.ndarray, np.array]})
-        return best_result
+
+        return best_checkpoint
 
 
     def save_checkpoint(self, *args, **kwargs):

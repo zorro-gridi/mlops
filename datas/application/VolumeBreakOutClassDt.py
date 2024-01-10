@@ -26,6 +26,9 @@ class VolumeBreakOutClassDt(BaseSeqToClassDt):
 
 
     def feature_engineering(self, raw_data, split_name='train'):
+        if self.preprocess_func is not None:
+            raw_data = self.preprocess_func(raw_data)
+
         X_arr_list, y_list = super().feature_engineering(raw_data, split_name)
 
         X_arr_list = [MinMaxScaler().fit_transform(X).reshape(1, -1) for X in X_arr_list]
