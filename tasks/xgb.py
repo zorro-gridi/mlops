@@ -26,6 +26,7 @@ class xgboost_task(AbstractModelFactory):
         # model_eval_metric: 原生 xgb 接口支持 metric str 列表，本 task 类只支持 str
         '''
         super(xgboost_task, self).__init__(**kwargs)
+        self.checkpoint_model_name = 'xgb_model_checkpoint.json'
 
 
     def train_job(self, config, train_data, test_data, checkpoint=False):
@@ -87,11 +88,9 @@ class xgboost_task(AbstractModelFactory):
                 }
             return best_checkpoint
 
-        global xgb_model_name
-        xgb_model_name = 'xgb_model_checkpoint.json'
         # 创建 checkpoint 子文件夹
         os.makedirs("models", exist_ok=True)
-        bst.save_model(f"models/{xgb_model_name}")
+        bst.save_model(f"models/{self.checkpoint_model_name}")
         report_checkpoint = train.Checkpoint.from_directory("models")
 
         # logging.warning(f'best_bst_round: {best_bst_round}, test_auc: {test_auc}')
@@ -165,20 +164,8 @@ class xgboost_task(AbstractModelFactory):
         best_result = results.get_best_result(metric=report_metric_name, mode=self.optimize_mode)
         logging.warning(best_result)
 
-        logdir = best_result.checkpoint.to_directory()
-        # 最优模型文件
-        checkpoint_path = Path(logdir) / xgb_model_name
-        bset_xgb_model = xgb.Booster(checkpoint_path)
-
-        best_checkpoint = {
-            'best_model': bset_xgb_model,
-            self.model_eval_metric: best_result.metrics[report_metric_name],
-            'best_iteration': best_result.metrics['best_iteration'],
-            'best_result': best_result,
-            }
-
         # ray.shutdown()
-        return best_checkpoint
+        return best_result
 
 
     def eval_job(self, model, dtest, metric_name, **kwargs):

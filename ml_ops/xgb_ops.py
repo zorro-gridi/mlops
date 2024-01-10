@@ -38,7 +38,7 @@ class XgboostOps(AbstractMLOps):
 
 
     def find_best_model_args(self, model_args_space, checkpoint_dir=None, **kwargs):
-        best_checkpoint = self.model_task.tune_job(
+        best_result = self.model_task.tune_job(
             model_args_space,
             self.train_data,
             self.test_data,
@@ -46,7 +46,17 @@ class XgboostOps(AbstractMLOps):
             **kwargs
             )
 
-        best_result = best_checkpoint['best_result']
+        logdir = best_result.checkpoint.to_directory()
+        # 最优模型文件
+        checkpoint_path = Path(logdir) / self.model_task.checkpoint_model_name
+        bset_xgb_model = xgb.Booster(checkpoint_path)
+
+        best_checkpoint = {
+            'best_model': bset_xgb_model,
+            self.model_eval_metric: best_result.metrics[f'test_{self.model_eval_metric}'],
+            'best_iteration': best_result.metrics['best_iteration'],
+            }
+
         # 更新 xgb 模型实例的最优调参结果
         self.best_model_args.update(best_result.config)
         if self.dataset_inst is not None:
