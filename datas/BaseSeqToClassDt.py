@@ -10,6 +10,10 @@ import logging
 
 class BaseSeqToClassDt(AbstractDatasetFactory):
     def __init__(self, X_seq_len=10, y_seq_len=10, **kwargs):
+        '''
+        # X_seq_len: x 输入序列窗口长度; 例如, 近30天的股价趋势
+        # y_seq_len: y 序列的观察窗口长度; 例如, 10天内股价的每日涨跌幅
+        '''
         super().__init__(**kwargs)
 
         self.X_seq_len = X_seq_len
@@ -17,7 +21,9 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
 
 
     def categoric_engineering(self, raw_data, split_name='train'):
-        # 固定灿哥参数
+        '''
+        # raw_data: pd.Dataframe group 对象
+        '''
         X_seq_len = self.X_seq_len
         y_seq_len = self.y_seq_len
 
@@ -53,8 +59,6 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
     def feature_engineering(self, raw_data, split_name='train'):
         '''
         # raw_data: pd.Dataframe group 对象
-        # X_seq_len: x 输入序列长度; 例如近30天的股价趋势
-        # y_seq_len: y 序列 to label 的观察长度; 例如10天内股价的最高涨幅
         '''
         # 固定灿哥参数
         X_seq_len = self.X_seq_len

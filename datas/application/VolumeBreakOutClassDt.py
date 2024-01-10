@@ -6,11 +6,17 @@ import numpy as np
 
 class VolumeBreakOutClassDt(BaseSeqToClassDt):
     def __init__(self, y_threshold=10, **kwargs):
+        '''
+        # y_threshold: 将序列 y 转换为 class 的阈值
+        '''
         super().__init__(**kwargs)
         self.y_threshold = y_threshold
 
 
     def categoric_engineering(self, raw_data, split_name='train'):
+        '''
+        将序列汇聚成类别变量, 聚合函数: np.amax, np.amin, np.median, ...;
+        '''
         X_arr_list = super().categoric_engineering(raw_data, split_name)
 
         # X_list = [np.median(MinMaxScaler().fit_transform(X), axis=1).reshape(1, -1) for X in X_arr_list]

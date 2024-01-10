@@ -31,7 +31,7 @@ class BaseIndexMarkupTsDt(BaseSeqToTsDt):
     def feature_engineering(self, vars_datas):
         '''
         # vars_datas: 数组对象
-        # preprocess_func: 对原始数据进行特征呢工程之前，预处理的函数。可以将定义的预处理函数封装成偏函数
+        # preprocess_func: 对原始数据进行特征呢工程之前，预处理的函数。可以将定义的预处理函数转换成偏函数
         '''
         if self.preprocess_func is not None and self.input_features is not None:
             prep_func = partial(self.preprocess_func, input_features=self.input_features)
@@ -68,4 +68,5 @@ class IndexMarkupTsDt_NN(BaseIndexMarkupTsDt):
         train_dataset, test_dataset = random_split(
             raw_dataset, lengths=[1-test_size, test_size], generator=generator)
 
+        logging.warning(f'train_dataset len: {len(train_dataset)}')
         return train_dataset, test_dataset
