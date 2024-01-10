@@ -49,11 +49,12 @@ class XgboostOps(AbstractMLOps):
         logdir = best_result.checkpoint.to_directory()
         # 最优模型文件
         checkpoint_path = Path(logdir) / self.model_task.checkpoint_model_name
-        bset_xgb_model = xgb.Booster(checkpoint_path)
+        bset_xgb_model = xgb.Booster(model_file=checkpoint_path)
 
+        eval_metric_name = self.model_task.model_eval_metric
         best_checkpoint = {
             'best_model': bset_xgb_model,
-            self.model_eval_metric: best_result.metrics[f'test_{self.model_eval_metric}'],
+            eval_metric_name: best_result.metrics[f'test_{eval_metric_name}'],
             'best_iteration': best_result.metrics['best_iteration'],
             }
 
