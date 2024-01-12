@@ -16,13 +16,15 @@ from mlflow.models import infer_signature
 class kmeans_task(AbstractModelFactory):
     def __init__(self, **kwargs):
         super(kmeans_task, self).__init__(**kwargs)
+        self.model_arch = 'kmeans'
 
 
     def train_job(self, data, max_clusters=30):
         silhouette_score_list = []
         estimators = []
 
-        with mlflow.start_run(run_name=f"kmeans_train_job_{time.strftime('%Y-%m-%d %H:%M')}_{random.randint(1e3, 9e3)}"):
+        with mlflow.start_run(
+            run_name=f"kmeans_train_job_{time.strftime('%Y-%m-%d %H:%M')}_{random.randint(1e3, 9e3)}"):
             logging.warning(f'start kmeans clusters......')
             for n in range(15, max_clusters):
 

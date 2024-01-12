@@ -8,7 +8,6 @@ from pathlib import Path
 import mlflow
 from mlflow.models import infer_signature
 from mlflow.client import MlflowClient
-
 from mlops.utils import mlflow_utils
 
 
@@ -17,10 +16,9 @@ from mlops.utils import mlflow_utils
 class KmeansOps(AbstractMLOps):
     def __init__(self, **kwargs):
         super(KmeansOps, self).__init__(**kwargs)
-        self.best_model_args['model_arch'] = 'kmeans'
 
 
-    def run_data_args(self, *data_args, estimator=None):
+    def run_data_args(self,):
         pass
 
 
@@ -41,7 +39,6 @@ class KmeansOps(AbstractMLOps):
 
             self.dataset_inst.__dict__.update(data_args)
             X, y = self.dataset_inst.feature_engineering(self.raw_data)
-            # X, y = self.train_data
             # 获取所有的正例进行模式聚类，并获取最佳聚类数量
             X_positive = np.array([x for x, label in zip(X, y) if label == 1])
 
@@ -74,7 +71,8 @@ class KmeansOps(AbstractMLOps):
                 self.train_data = X, y
                 best_eatimator_params = best_estimator.get_params()
                 # 更新模型参数
-                self.best_model_args.update(best_eatimator_params)
+                # self.best_model_args.update(best_eatimator_params)
+                self.best_model_args['n_clusters'] = best_eatimator_params['n_clusters']
                 # 更新数据参数
                 self.best_data_args.update(data_args)
                 self.best_data_args.update(
@@ -97,7 +95,8 @@ class KmeansOps(AbstractMLOps):
         '''
         此处重写父类的 test_hist_model 方法
         '''
-        hist_model = self.mlflow_model_flavor[self.best_model_args['model_arch']].load_model(f"models:/{reg_model_name}/{model_version}")
+        hist_model = self.mlflow_model_flavor[self.model_task.model_arch].load_model(
+            f"models:/{reg_model_name}/{model_version}")
 
         hist_model_config = mlflow_utils.load_register_model_args(reg_model_name, model_version)
         # 更新数据参数属性为历史参数

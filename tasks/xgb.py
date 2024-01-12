@@ -27,6 +27,7 @@ class xgboost_task(AbstractModelFactory):
         '''
         super(xgboost_task, self).__init__(**kwargs)
         self.checkpoint_model_name = 'xgb_model_checkpoint.json'
+        self.model_arch = 'xgb'
 
 
     def train_job(self, config, train_data, test_data, checkpoint=False):

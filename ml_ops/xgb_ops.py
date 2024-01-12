@@ -18,7 +18,6 @@ from mlflow.client import MlflowClient
 class XgboostOps(AbstractMLOps):
     def __init__(self, **kwargs):
         super(XgboostOps, self).__init__(**kwargs)
-        self.best_model_args['model_arch'] = 'xgb'
 
     def run_data_args(self, *data_args, **kwargs):
         pass

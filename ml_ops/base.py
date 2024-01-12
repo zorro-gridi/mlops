@@ -72,9 +72,9 @@ class AbstractMLOps(metaclass=ABCMeta):
             3. 计算历史模型损失函数。
         加载模型方面,mlflow已经实现了统一接口。加载测试数据集方面,如果模型需要定制方法,可以通过子类改写此方法
         '''
-        model_arch = self.best_model_args['model_arch']
-
-        histt_regis_model = self.mlflow_model_flavor[model_arch].load_model(f"models:/{reg_model_name}/{model_version}")
+        model_arch = self.model_task.model_arch
+        histt_regis_model = self.mlflow_model_flavor[model_arch].load_model(
+            f"models:/{reg_model_name}/{model_version}")
         hist_model_config = mlflow_utils.load_register_model_args(reg_model_name, model_version)
 
         # 如果历史没有配置数据参数,就直接加载传入的数据
@@ -82,10 +82,13 @@ class AbstractMLOps(metaclass=ABCMeta):
             logging.warning(f'无数据参数调参模式, 使用当前测试数据测试历史模型...')
             test_data = self.test_data
         else:
+            # 加载 dataset hist cnofig
             test_data = self.dataset_inst.load_test_data(self.raw_data, inst_config=hist_model_config)
 
         # 历史模型最优，不需要更新参数配置，所以不用返回 model signature
         test_loader, _ = data_util_map(test_data, params_config=None)
+        # 此处很容易出 bug, 根源还是没有正确加载数据
+        # ====================================
         hist_eval_metric = self.model_task.test_job(histt_regis_model, test_loader)
         return hist_eval_metric
 
@@ -101,7 +104,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         '''
         tune_model_metric = checkpoint[self.model_task.model_eval_metric]
         mlflow_client = MlflowClient(mlflow.get_tracking_uri())
-        model_arch = self.best_model_args['model_arch']
+        model_arch = self.model_task.model_arch
         best_model = checkpoint['best_model']
 
         global data_util_map
@@ -191,7 +194,7 @@ class AbstractMLOps(metaclass=ABCMeta):
             mlflow.log_params(params_config)
             mlflow.log_metric(f'test_{self.model_task.model_eval_metric}', tune_model_metric)
             mlflow_client.set_registered_model_alias(reg_model_name, model_alias, model_version)
-            mlflow_client.set_registered_model_alias(reg_model_name, self.best_model_args['model_arch'], model_version)
+            mlflow_client.set_registered_model_alias(reg_model_name, model_arch, model_version)
             mlflow_client.set_registered_model_tag(
                 reg_model_name, f'test_{self.model_task.model_eval_metric}', str(round(tune_model_metric, 6)))
 

@@ -42,11 +42,8 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
 
 
     def set_attr(self, inst_config):
-        [setattr(self, k, v)
-         for k, v in inst_config.items()
-         if k in self.__dict__.keys()
-         ]
-        # self.__dict__.update(inst_config)
+        new_config = {k: v for k, v in inst_config.items() if k in self.__dict__.keys()}
+        self.__dict__.update(new_config)
 
 
     def data_split(self, X, y, test_size=0.2, random_state=42):
@@ -66,7 +63,8 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
             logging.warning(f'test  测试集数量: {len(x_test)}, 正样本比例: {test_pos_ratio:,.3f}')
 
         else:
-            x_train, x_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
+            x_train, x_test, y_train, y_test = train_test_split(
+                X, y, test_size=test_size, random_state=random_state)
         return x_train, x_test, y_train, y_test
 
 
