@@ -55,7 +55,6 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
         return train_data, test_data
 
 
-
 class SeqToTsDt_NN(BaseSeqToTsDt):
     def __init__(self, dt_class, **kwargs):
         '''

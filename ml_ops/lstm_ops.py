@@ -73,14 +73,12 @@ class LstmOps(AbstractMLOps):
             self.best_data_args.update(best_config['data_args_space'])
         if self.dataset_inst is not None:
             # 获取类的属性配置字典
-            dataset_config = self.dataset_inst.__dict__
             # mlflow 不支持保存的类型 torch.Datasets
             # 直接pop原始的mldel class，会剔除该属性
             # dataset_config.pop('dt_class', None)
-            dataset_config = {k: v for k, v in dataset_config.items() if k not in ['dt_class']}
-            self.best_data_args.update(dataset_config)
-        self.best_model_args = best_config.get('model_args_space', None)
+            self.best_data_args.update(self.dataset_inst.__dict__)
 
+        self.best_model_args = best_config.get('model_args_space', None)
         model_args = best_config['model_args_space']
         self.model_task.model_init_params.update(model_args)
 

@@ -60,9 +60,7 @@ class XgboostOps(AbstractMLOps):
         # 更新 xgb 模型实例的最优调参结果
         self.best_model_args.update(best_result.config)
         if self.dataset_inst is not None:
-            self.best_data_args.update(
-                {k: v for k, v in self.dataset_inst.__dict__.items()
-                 if type(v) in [str, list, dict, np.ndarray, np.array]})
+            self.best_data_args.update(self.dataset_inst.__dict__)
 
         return best_checkpoint
 

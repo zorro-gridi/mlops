@@ -75,9 +75,7 @@ class KmeansOps(AbstractMLOps):
                 self.best_model_args['n_clusters'] = best_eatimator_params['n_clusters']
                 # 更新数据参数
                 self.best_data_args.update(data_args)
-                self.best_data_args.update(
-                    {k: v for k, v in self.dataset_inst.__dict__.items()
-                     if type(v) in [str, list, dict, np.ndarray, np.array]})
+                self.best_data_args.update(self.dataset_inst.__dict__)
                 self.output_model = best_estimator
 
         if best_test_loss == 0:

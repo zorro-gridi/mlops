@@ -1,7 +1,7 @@
 from abc import ABCMeta, abstractclassmethod
 import xgboost as xgb
 from torch.utils.data import DataLoader
-
+import numpy as np
 
 from mlops.utils import mlflow_utils
 import mlflow
@@ -81,7 +81,7 @@ class AbstractMLOps(metaclass=ABCMeta):
             logging.warning(f'无数据参数调参模式, 使用当前测试数据测试历史模型...')
             test_data = self.test_data
         else:
-            # 加载 dataset hist cnofig
+            # 加载 dataset hist cnofig, 更新当前的 dataset_inst 为历史模式
             test_data = self.dataset_inst.load_test_data(self.raw_data, inst_config=hist_model_config)
 
         # 历史模型最优，不需要更新参数配置，所以不用返回 model signature
@@ -173,11 +173,16 @@ class AbstractMLOps(metaclass=ABCMeta):
         logging.warning(f'没有注册的历史模型, 或者历史模型评分低......')
         params_config = self.best_model_args
         params_config.update(self.best_data_args)
-        params_config = {k: v for k, v in params_config.items() if v is not None}
+        params_config = {
+            k: v for k, v in params_config.items()
+            if v is not None
+            and type(v) in [bool, str, int, float, list, dict, np.array, np.ndarray]
+            }
 
         if model_arch == 'nn':
             best_model.eval()
         self.output_model = best_model
+
 
         test_data = self.test_data if self.test_data is not None else self.train_data
         test_loader, signature = data_util_map(test_data, params_config=params_config)
