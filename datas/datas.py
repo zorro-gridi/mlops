@@ -83,6 +83,7 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
             test_data = (x_test, y_test)
         else:
             train_data, test_data = self.data_split(model_datas)
+
         return test_data
 
 

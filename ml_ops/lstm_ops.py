@@ -63,7 +63,8 @@ class LstmOps(AbstractMLOps):
             )
 
         # 获取最优训练模型参数
-        best_result = trial_results.get_best_result(self.model_task.model_eval_metric, mode=self.model_task.optimize_mode)
+        best_result = trial_results.get_best_result(
+            self.model_task.model_eval_metric, mode=self.model_task.optimize_mode)
         best_config = best_result.config
         logging.warning(f'加载的最优训练结果: {best_result}')
         logging.warning(f'最优 config: {best_config}')
@@ -81,7 +82,8 @@ class LstmOps(AbstractMLOps):
         self.best_model_args = best_config.get('model_args_space', None)
 
         # 将获得的最佳 tuner 结果回传入 train_job 返回最优模型 checkpoint
-        checkpoint_inst = self.model_task.train_job(best_result, self.train_data, self.test_data, is_checkpoint=True)
+        checkpoint_inst = self.model_task.train_job(
+            best_result, self.train_data, self.test_data, is_checkpoint=True)
 
         logging.warning(f'mlops best_data_args result: {self.best_data_args}')
         logging.warning(f'mlops best_model_args result: {self.best_model_args}')

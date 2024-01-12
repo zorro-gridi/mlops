@@ -51,25 +51,18 @@ class AbstractMLOps(metaclass=ABCMeta):
             'kmeans': mlflow.sklearn,
             }
 
-
-    @abstractclassmethod
     def run_data_args(self, *args, **kwargs):
         pass
 
-
-    @abstractclassmethod
     def run_model_args(self, *args, **kwargs):
         pass
 
-
-    @abstractclassmethod
     def find_best_data_args(self, *args, **kwargs):
         pass
 
     @abstractclassmethod
     def find_best_model_args(self, *args, **kwargs):
         pass
-
 
     def test_hist_model(self, reg_model_name, model_version='1'):
         '''
@@ -170,6 +163,8 @@ class AbstractMLOps(metaclass=ABCMeta):
             logging.warning(f'未注册历史模型,新模型同时训练失败,请调整数据,重新训练......')
             raise Exception
 
+        # 在 hist 步，将 dataset_inst 调整到了 hist 模式
+        # 因此, 如果tune模式最优，则将 dataset_inst 更新为当前最优配置
         if self.dataset_inst is not None:
             self.dataset_inst.set_attr(self.best_data_args)
 
@@ -197,7 +192,8 @@ class AbstractMLOps(metaclass=ABCMeta):
             mlflow.log_metric(f'test_{self.model_task.model_eval_metric}', tune_model_metric)
             mlflow_client.set_registered_model_alias(reg_model_name, model_alias, model_version)
             mlflow_client.set_registered_model_alias(reg_model_name, self.best_model_args['model_arch'], model_version)
-            mlflow_client.set_registered_model_tag(reg_model_name, f'test_{self.model_task.model_eval_metric}', str(tune_model_metric))
+            mlflow_client.set_registered_model_tag(
+                reg_model_name, f'test_{self.model_task.model_eval_metric}', str(round(tune_model_metric, 6)))
 
             logging.warning(f'''
                 {model_arch} model test {self.model_task.model_eval_metric}: {tune_model_metric:,.3f}

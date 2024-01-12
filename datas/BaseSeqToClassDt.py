@@ -91,10 +91,7 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
 
         else:
             X_arr_list = [
-            g_arr[-X_seq_len:, :]
-            for g_arr in tqdm(
-                groups_arr,
-                desc='get features data -->',
-                )
+                g_arr[-X_seq_len:, :]
+                for g_arr in tqdm(groups_arr, desc='get features data -->',)
             ]
             return X_arr_list, None

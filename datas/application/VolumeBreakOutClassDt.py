@@ -29,11 +29,14 @@ class VolumeBreakOutClassDt(BaseSeqToClassDt):
         if self.preprocess_func is not None:
             raw_data = self.preprocess_func(raw_data)
 
+        # base dt class return base X, y datas
         X_arr_list, y_list = super().feature_engineering(raw_data, split_name)
 
+        # 将 X  concatenate & reshape
         X_arr_list = [MinMaxScaler().fit_transform(X).reshape(1, -1) for X in X_arr_list]
         X = np.concatenate(X_arr_list, axis=0)
 
+        # 如果有分类变量，则一起concat
         if self.categoric_engineering is not None:
             X_cate = self.categoric_engineering(raw_data, split_name=split_name)
             X = np.concatenate([X, X_cate], axis=1)
