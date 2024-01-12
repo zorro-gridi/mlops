@@ -22,7 +22,7 @@ from functools import partial
 
 
 class AbstractDatasetFactory(metaclass=ABCMeta):
-    def __init__(self, features=[], categoric_features=[], target=None, preprocess_func=None):
+    def __init__(self, features=None, categoric_features=None, target=None, preprocess_func=None):
         '''
         # target: str 表示目标变量名称 / int 目标变量的 索引值
         # preprocess_func: 数据进行特征工程之前的预处理函数
@@ -76,12 +76,13 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
             self.set_attr(inst_config)
 
         model_datas = self.feature_engineering(data)
+        # 同时传入 X, y
         if isinstance(model_datas, tuple):
             x_train, x_test, y_train, y_test = self.data_split(*model_datas)
             test_data = (x_test, y_test)
+        # 只传入 X
         else:
             train_data, test_data = self.data_split(model_datas)
-
         return test_data
 
 

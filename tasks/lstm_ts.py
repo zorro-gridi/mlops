@@ -30,7 +30,7 @@ from pathlib import Path
 import shutil
 
 
-from mlops.datas.datas import SeqToTsDt
+from mlops.datas.BaseDt import SeqToTsDt
 from mlops.nn import train_utils
 import os
 
@@ -42,22 +42,17 @@ LstmModel = LstmModel
 
 
 class lstmTsTask(AbstractModelFactory):
-    def __init__(self, model_arch, **kwargs):
+    def __init__(self, nn_arch, **kwargs):
         super(lstmTsTask, self).__init__(**kwargs)
-        self.model_arch = model_arch
+        self.model_arch = 'nn'
+        self.nn_arch = nn_arch
+        self.model_checkpoint_name = 'lstm_checkpoint.pt'
 
     # train_job ray tune 调参不支持传入 **kwargs 关键字参数
-    def train_job(self, config, train_data, test_data, max_epochs=10, is_checkpoint=False):
+    def train_job(self, config, train_data, test_data, max_epochs=10):
         '''
         # config: 输入的模型和数据参数。
-            # 特别的，当输入的是调参后的 best_result时, 则返回最优模型实例
         '''
-        # 更新为最优结果的 config
-        if is_checkpoint:
-            best_result = config
-            # 此时 config 为 tuner 的 best_result，获取其 config
-            config = best_result.config
-
         logging.warning(f'trial config: {config}')
         model_args = config['model_args_space']
         self.model_init_params.update(model_args)
@@ -67,28 +62,10 @@ class lstmTsTask(AbstractModelFactory):
         batch_size = data_args['batch_size']
 
         logging.warning(f'model_init_params: {self.model_init_params}')
-        dnn_model = self.model_arch(**self.model_init_params)
+        dnn_model = self.nn_arch(**self.model_init_params)
 
         train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
         test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=True)
-
-        checkpoint_name = 'lstm_checkpoint.pt'
-        if is_checkpoint:
-            logdir = best_result.checkpoint.to_directory()
-            checkpoint_path = Path(logdir) / checkpoint_name
-            logging.warning(f'best model checkpoint: {checkpoint_path}')
-            # 加载 checkpoint 中的 model
-            model_state, optimizer_state = torch.load(checkpoint_path)
-            dnn_model.load_state_dict(model_state)
-            test_loss = train_utils.test_func(dnn_model, test_loader)
-
-            return {
-                'best_estimator': dnn_model,
-                # 'best_data_args': data_args,
-                # 'best_model_args': model_args,
-                # 'test_data': test_loader,
-                self.model_eval_metric: test_loss,
-                }
 
         lr = config.pop('lr', None)
         # AdamW 优化器
@@ -117,7 +94,7 @@ class lstmTsTask(AbstractModelFactory):
             if improved_rate >= 0.01:
             # if train.get_context().get_world_rank() == 0:
                 torch.save(
-                    (dnn_model.state_dict(), optimizer.state_dict()), f'models/{checkpoint_name}')
+                    (dnn_model.state_dict(), optimizer.state_dict()), f'models/{self.model_checkpoint_name}')
                 metric_loss_init = metric_loss
 
                 # checkpoint (实际上 checkpoint 的意思就是每一轮训练都保存一个文件夹)

@@ -46,8 +46,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         self.mlflow_model_flavor = {
             'xgb': mlflow.xgboost,
             'cat': mlflow.catboost,
-            'LstmModel': mlflow.pytorch,
-            'CNN_LSTM': mlflow.pytorch,
+            'nn': mlflow.pytorch,
             'kmeans': mlflow.sklearn,
             }
 
@@ -174,6 +173,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         logging.warning(f'没有注册的历史模型, 或者历史模型评分低......')
         params_config = self.best_model_args
         params_config.update(self.best_data_args)
+        params_config = {k: v for k, v in params_config.items() if v is not None}
 
         if model_arch == 'nn':
             best_model.eval()

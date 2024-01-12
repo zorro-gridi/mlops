@@ -4,7 +4,7 @@ import numpy as np
 
 
 
-class VolumeBreakOutClassDt(BaseSeqToClassDt):
+class SeqToBinaryClfDt(BaseSeqToClassDt):
     def __init__(self, y_threshold=10, **kwargs):
         '''
         # y_threshold: 将序列 y 转换为 class 的阈值
@@ -37,7 +37,7 @@ class VolumeBreakOutClassDt(BaseSeqToClassDt):
         X = np.concatenate(X_arr_list, axis=0)
 
         # 如果有分类变量，则一起concat
-        if self.categoric_engineering is not None:
+        if self.categoric_features:
             X_cate = self.categoric_engineering(raw_data, split_name=split_name)
             X = np.concatenate([X, X_cate], axis=1)
 

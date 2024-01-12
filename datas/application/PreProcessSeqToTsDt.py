@@ -1,4 +1,8 @@
-from mlops.datas.BaseSeqToTsDt import BaseSeqToTsDt
+from mlops.datas.BaseSeqToTsDt import (
+    BaseSeqToTsDt,
+    SeqToTsDt_NN,
+    )
+
 from functools import partial
 import torch
 import numpy as np
@@ -9,23 +13,17 @@ from torch.utils.data import (
     random_split,
     )
 
-
 import logging
 
 
 
-class BaseIndexMarkupTsDt(BaseSeqToTsDt):
-    def __init__(self, input_features=None, **kwargs):
-        '''
-        # input_features: 时间序列的外部变量列表
-        '''
+class PreProcessSeqToTsDt_Base(BaseSeqToTsDt):
+    '''
+    PreProcessSeqToTsDt: 进行时间序列预测前，需要对输入数据进行一定的自定义变换，再进行特征工程的数据集
+    # preprocess_func 自定义数据预处理函数，属性必选
+    '''
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-        # input_features 作为外部变量
-        self.input_features = input_features
-        # 时间序列的特征是窗口长度
-        if isinstance(self.features, list):
-            self.features = len(self.features)
 
 
     def feature_engineering(self, vars_datas):
@@ -33,11 +31,11 @@ class BaseIndexMarkupTsDt(BaseSeqToTsDt):
         # vars_datas: 数组对象
         # preprocess_func: 对原始数据进行特征呢工程之前，预处理的函数。可以将定义的预处理函数转换成偏函数
         '''
-        if self.preprocess_func is not None and self.input_features is not None:
+        if self.input_features is not None:
             prep_func = partial(self.preprocess_func, input_features=self.input_features)
             vars_datas = prep_func(vars_datas)
 
-        elif self.preprocess_func is not None and self.input_features is None:
+        else:
             vars_datas = self.preprocess_func(vars_datas)
 
         logging.warning(f'var datas preview: {vars_datas[0]}')
@@ -47,10 +45,10 @@ class BaseIndexMarkupTsDt(BaseSeqToTsDt):
 
 
 
-class IndexMarkupTsDt_NN(BaseIndexMarkupTsDt):
-    def __init__(self, **kwargs):
+class PreProcessSeqToTsDt_NN(PreProcessSeqToTsDt_Base):
+    def __init__(self, dt_class, **kwargs):
         super().__init__(**kwargs)
-
+        self.dt_class = dt_class
 
     def feature_engineering(self, vars_datas):
         vars_datasets = super().feature_engineering(vars_datas)
@@ -60,6 +58,7 @@ class IndexMarkupTsDt_NN(BaseIndexMarkupTsDt):
         vars_datasets = vars_datasets.reshape(len(vars_datasets), window, -1)
         vars_datasets = vars_datasets.astype(np.float32)
         vars_datasets = torch.from_numpy(vars_datasets)
+        vars_datasets = self.dt_class(vars_datasets)
         return vars_datasets
 
 

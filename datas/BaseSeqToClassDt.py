@@ -1,4 +1,4 @@
-from mlops.datas.datas import AbstractDatasetFactory
+from mlops.datas.BaseDt import AbstractDatasetFactory
 from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
 import numpy as np
