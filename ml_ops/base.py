@@ -12,7 +12,6 @@ import logging
 
 
 
-
 class AbstractMLOps(metaclass=ABCMeta):
     def __init__(self,
             model_task=None,
@@ -84,7 +83,7 @@ class AbstractMLOps(metaclass=ABCMeta):
             # 加载 dataset hist cnofig, 更新当前的 dataset_inst 为历史模式
             test_data = self.dataset_inst.load_test_data(self.raw_data, inst_config=hist_model_config)
 
-        # 历史模型最优，不需要更新参数配置，所以不用返回 model signature
+        # 历史模型不用更新参数，不用返回 model signature
         test_loader, _ = data_util_map(test_data, params_config=None)
         # 此处很容易出 bug, 根源还是没有正确加载数据
         # ====================================
@@ -182,7 +181,6 @@ class AbstractMLOps(metaclass=ABCMeta):
         if model_arch == 'nn':
             best_model.eval()
         self.output_model = best_model
-
 
         test_data = self.test_data if self.test_data is not None else self.train_data
         test_loader, signature = data_util_map(test_data, params_config=params_config)

@@ -30,11 +30,11 @@ from pathlib import Path
 import shutil
 
 
-from mlops.datas.BaseDt import SeqToTsDt
+# from mlops.datas.BaseDt import SeqToTsDt
 from mlops.nn import train_utils
 import os
 
-# 即将删除
+# will deprecated in fueture version
 # ==================================
 from mlops.nn.lstm import LstmModel
 LstmModel = LstmModel
@@ -119,8 +119,8 @@ class lstmTsTask(AbstractModelFactory):
         max_epochs = kwargs.pop('max_epochs', 10)
         num_samples=kwargs.pop('num_samples', 20)
 
-        tracking_uri = search_space.pop('tracking_uri', None)
-        experiment_name = search_space.pop('experiment_name', None)
+        # tracking_uri = search_space.pop('tracking_uri', None)
+        # experiment_name = search_space.pop('experiment_name', None)
 
         logging.warning(f'search_space: {search_space}')
         logging.warning(f'max_epochs: {max_epochs}')
