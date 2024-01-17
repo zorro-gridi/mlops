@@ -162,11 +162,7 @@ class xgboost_task(AbstractModelFactory):
             )
 
         results = tuner.fit()
-        best_result = results.get_best_result(metric=report_metric_name, mode=self.optimize_mode)
-        logging.warning(best_result)
-
-        # ray.shutdown()
-        return best_result
+        return results
 
 
     def eval_job(self, model, dtest, metric_name, **kwargs):
