@@ -38,7 +38,6 @@ class AbstractModelFactory(metaclass=ABCMeta):
         pass
 
 
-    @abstractclassmethod
     def eval_job(self, y_true, y_pred, metric_name, tasktype='binary_clf', **kwargs):
         metric_config = {
             'auc': metrics.roc_auc_score,
@@ -59,6 +58,5 @@ class AbstractModelFactory(metaclass=ABCMeta):
         return test_score
 
 
-    @abstractclassmethod
     def test_job(self, *args, **kwargs):
         pass
