@@ -37,13 +37,18 @@ class XgboostOps(AbstractMLOps):
 
 
     def find_best_model_args(self, model_args_space, checkpoint_dir=None, **kwargs):
-        best_result = self.model_task.tune_job(
+        tune_results = self.model_task.tune_job(
             model_args_space,
             self.train_data,
             self.test_data,
             checkpoint_dir=checkpoint_dir,
             **kwargs
             )
+
+        report_metric_name = f'test_{self.model_task.model_eval_metric}'
+        best_result = tune_results.get_best_result(
+            metric=report_metric_name, mode=self.model_task.optimize_mode)
+        logging.warning(best_result)
 
         logdir = best_result.checkpoint.to_directory()
         # 最优模型文件
