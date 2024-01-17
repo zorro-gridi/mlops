@@ -178,5 +178,6 @@ class xgboost_task(AbstractModelFactory):
         y_true = dtest.get_label()
         y_pred = model.predict(dtest)
 
-        test_score = super(xgboost_task, self).eval_job(y_true, y_pred, metric_name=self.model_eval_metric, **kwargs)
+        test_score = super(xgboost_task, self).eval_job(
+            y_true, y_pred, metric_name=self.model_eval_metric, **kwargs)
         return test_score
