@@ -37,7 +37,7 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
 
 
     @abstractclassmethod
-    def feature_engineering(self, *args, **kwargs):
+    def feature_engineering(self):
         pass
 
 
