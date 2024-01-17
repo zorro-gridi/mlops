@@ -7,7 +7,6 @@ from mlops.utils import mlflow_utils
 import mlflow
 from mlflow.models import infer_signature
 from mlflow.client import MlflowClient
-
 import logging
 
 
