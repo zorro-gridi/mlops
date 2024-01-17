@@ -134,7 +134,6 @@ class AbstractMLOps(metaclass=ABCMeta):
                 signature = infer_signature(X[:5], y[:5], params_config)
             return test_loader, signature
 
-
         if mlflow_utils.check_model_existence(reg_model_name):
             histt_regis_model = self.mlflow_model_flavor[model_arch].load_model(f"models:/{reg_model_name}/{model_version}")
 
@@ -159,9 +158,12 @@ class AbstractMLOps(metaclass=ABCMeta):
             else:
                 # 将针对数据实例的更改撤回
                 mlflow_client.delete_registered_model(reg_model_name)
+                logging.warning(f'历史模型评分低, 将保存当前的模型...')
+        else:
+            logging.warning(f'没有注册的历史模型...')
 
         if tune_model_metric == 0:
-            logging.warning(f'未注册历史模型,新模型同时训练失败,请调整数据,重新训练......')
+            logging.warning(f'新模型同时训练失败,请调整数据,重新训练......')
             raise Exception
 
         # 在 hist 步，将 dataset_inst 调整到了 hist 模式
@@ -169,7 +171,6 @@ class AbstractMLOps(metaclass=ABCMeta):
         if self.dataset_inst is not None:
             self.dataset_inst.set_attr(self.best_data_args)
 
-        logging.warning(f'没有注册的历史模型, 或者历史模型评分低......')
         params_config = self.best_model_args
         params_config.update(self.best_data_args)
         params_config = {
