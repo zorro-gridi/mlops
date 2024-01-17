@@ -13,6 +13,9 @@ import shutil
 
 from functools import partial
 from mlops.tasks.base import AbstractModelFactory
+from mlops.baseConfig.raytuneConfig import (
+    scaling_config,
+    )
 
 import mlflow
 from mlflow.models import infer_signature
@@ -107,19 +110,10 @@ class xgboost_task(AbstractModelFactory):
             shutil.rmtree(checkpoint_dir)
         os.makedirs(checkpoint_dir, exist_ok=True)
 
-        scale_config = train.ScalingConfig(
-            num_workers=4,
-            resources_per_worker={
-                'CPU': 4,
-                'GPU': 0,
-                },
-            use_gpu=False,
-            )
-
         report_metric_name = f'test_{self.model_eval_metric}'
         train_cifar = partial(self.train_job, train_data=train_data, test_data=test_data)
 
-        train_with_resources = tune.with_resources(train_cifar, resources=scale_config)
+        train_with_resources = tune.with_resources(train_cifar, resources=scaling_config)
         tune_config = tune.TuneConfig(
             num_samples=num_samples,
             scheduler=ASHAScheduler(max_t=10, metric=report_metric_name, mode=self.optimize_mode),

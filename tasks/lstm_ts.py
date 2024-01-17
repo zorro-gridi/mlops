@@ -8,6 +8,9 @@ import time
 
 from functools import partial
 from mlops.tasks.base import AbstractModelFactory
+from mlops.baseConfig.raytuneConfig import (
+    scaling_config,
+    )
 
 import mlflow
 from mlflow.models import infer_signature
@@ -152,15 +155,6 @@ class lstmTsTask(AbstractModelFactory):
             #     #     ),
             #     ],
             )
-
-        scaling_config = train.ScalingConfig(
-            num_workers=4,
-            resources_per_worker={
-                "CPU": 4,
-                "GPU": 0,
-            },
-            use_gpu=False,
-        )
 
         # 定义 ray tune 运行的资源
         train_cifar_partial = partial(
