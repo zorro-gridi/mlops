@@ -166,7 +166,10 @@ class AbstractMLOps(metaclass=ABCMeta):
             else:
                 # 将针对数据实例的更改撤回
                 mlflow_client.delete_registered_model(reg_model_name)
-                logging.warning(f'历史模型评分低, 将保存当前的模型...')
+                logging.warning(f'''
+                    test loss vs: hist: {hist_eval_metric}, new: {tune_model_metric}.
+                    历史模型评分低, 将保存当前的模型...
+                    ''')
         else:
             logging.warning(f'没有注册的历史模型...')
 
