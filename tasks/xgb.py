@@ -41,11 +41,11 @@ class xgboost_task(AbstractModelFactory):
         bst_params = {
             'max_depth': config['max_depth'],
             'eta': config['eta'],
-            'objective': self.model_loss_func,
-            'eval_metric': self.model_eval_metric,
             'min_child_weight': config['min_child_weight'],
             # 是否是因为 subsample 参数影响 ???
             'subsample': config['subsample'],
+            'objective': self.model_loss_func,
+            'eval_metric': self.model_eval_metric,
             }
 
         model_init_params = {
