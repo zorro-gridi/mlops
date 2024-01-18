@@ -12,9 +12,9 @@ import shutil
 from copy import copy
 
 
-class XgboostOps(AbstractMLOps):
+class CatBoostOps(AbstractMLOps):
     def __init__(self, **kwargs):
-        super(XgboostOps, self).__init__(**kwargs)
+        super(CatBoostOps, self).__init__(**kwargs)
 
 
     def find_best_data_args(self, params_space):
