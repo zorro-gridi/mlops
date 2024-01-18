@@ -1,5 +1,5 @@
-# from mlops.tasks.base import AbstractModelFactory
-from base import AbstractModelFactory
+from mlops.tasks.base import AbstractModelFactory
+# from base import AbstractModelFactory
 
 from catboost import (
     CatBoost,
@@ -14,6 +14,7 @@ import numpy as np
 from functools import partial
 import logging
 from copy import copy
+
 
 
 class CatboostTask(AbstractModelFactory):
@@ -65,7 +66,6 @@ class CatboostTask(AbstractModelFactory):
         cv_loss = np.min(cv_data[f'test-{self.model_eval_metric}-mean'])
         if self.optimize_mode == 'max':
             cv_loss = 1 / cv_loss
-        logging.warning(f'CatBoost model test loss: {test_loss:,.6f}, cv loss: {cv_loss:,.6f}')
         return cv_loss
 
 
@@ -100,11 +100,10 @@ class CatboostTask(AbstractModelFactory):
             }
 
 
-    def test_job(self, model: CatBoost, test_pool):
+    def test_job(self, model: CatBoost, test_pool: Pool):
         loss_result = model.eval_metrics(test_pool, [self.model_eval_metric])
         test_loss = loss_result[self.model_eval_metric][0]
         return test_loss
-
 
 
 if __name__ == '__main__':

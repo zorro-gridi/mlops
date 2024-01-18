@@ -1,5 +1,6 @@
 from abc import ABCMeta, abstractclassmethod
 import xgboost as xgb
+from catboost import Pool
 from torch.utils.data import DataLoader
 import numpy as np
 
@@ -117,16 +118,24 @@ class AbstractMLOps(metaclass=ABCMeta):
                 test_loader = xgb.DMatrix(*test_data)
                 X, y = test_data
                 signature = infer_signature(X[:5], y[:5], params_config)
+
+            elif model_arch == 'cat':
+                test_loader = Pool(*test_data)
+                X, y = test_data
+                signature = infer_signature(X[:5], y[:5], params_config)
+
             elif model_arch == 'nn':
                 test_loader = DataLoader(test_data, batch_size=1)
                 test_data_sample = next(iter(test_loader))
                 X, y = test_data_sample
                 signature = infer_signature(X.numpy(), y.numpy(), params_config)
+
             # 聚类模型没有测试集
             elif model_arch == 'kmeans':
                 test_loader = test_data
                 X, y = test_data
                 signature = infer_signature(X[:5], best_model.predict(X[:5]), params_config)
+
             else:
                 test_loader = test_data
                 X, y = test_data
