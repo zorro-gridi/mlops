@@ -1,5 +1,5 @@
-from mlops.tasks.base import AbstractModelFactory
-# from base import AbstractModelFactory
+# from mlops.tasks.base import AbstractModelFactory
+from base import AbstractModelFactory
 
 from catboost import (
     CatBoost,
@@ -36,6 +36,8 @@ class CatboostTask(AbstractModelFactory):
             }
         self.model_init_params.update(earlystop_params)
 
+        self.model_arch = 'cat'
+
 
     def train_job(self, config, train_data, test_data):
         model_params = copy(config)
@@ -67,18 +69,20 @@ class CatboostTask(AbstractModelFactory):
         return cv_loss
 
 
-    def tune_job(self, params_space, train_data, test_data):
+    def tune_job(self, params_space, train_data, test_data, max_evals=50):
         trials = hyperopt.Trials()
-        trial_func = partial(self.train_job, train_data=train_data, test_data=test_data)
 
+        trial_func = partial(self.train_job, train_data=train_data, test_data=test_data)
         best_params = hyperopt.fmin(
             trial_func,
             space=params_space,
             algo=hyperopt.tpe.suggest,
-            max_evals=30,
+            max_evals=max_evals,
             trials=trials,
             rstate=np.random.default_rng(random.seed(42))
             )
+
+        # best_params = hyperopt.space_eval(params_space, best_params)
         logging.warning(f'CatBoost best tune model params: {best_params}')
 
         self.model_init_params.update(best_params)
@@ -97,7 +101,8 @@ class CatboostTask(AbstractModelFactory):
 
 
     def test_job(self, model: CatBoost, test_pool):
-        test_loss = model.eval_metrics(test_pool, [self.model_eval_metric])
+        loss_result = model.eval_metrics(test_pool, [self.model_eval_metric])
+        test_loss = loss_result[self.model_eval_metric][0]
         return test_loss
 
 

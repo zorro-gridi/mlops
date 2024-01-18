@@ -47,6 +47,12 @@ class xgboost_task(AbstractModelFactory):
             # 是否是因为 subsample 参数影响 ???
             'subsample': config['subsample'],
             }
+
+        model_init_params = {
+            'verbosity': 0,
+            'seed': 0,
+            }
+        self.model_init_params.update(model_init_params)
         # 将初始化参数更新到 config 中
         bst_params.update(self.model_init_params)
 
