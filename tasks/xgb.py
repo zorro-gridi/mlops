@@ -32,6 +32,12 @@ class xgboost_task(AbstractModelFactory):
         self.checkpoint_model_name = 'xgb_model_checkpoint.json'
         self.model_arch = 'xgb'
 
+        model_init_params = {
+            'verbosity': 0,
+            'seed': 0,
+            }
+        self.model_init_params.update(model_init_params)
+
 
     def train_job(self, config, train_data, test_data, checkpoint=False):
         '''
@@ -48,11 +54,6 @@ class xgboost_task(AbstractModelFactory):
             'eval_metric': self.model_eval_metric,
             }
 
-        model_init_params = {
-            'verbosity': 0,
-            'seed': 0,
-            }
-        self.model_init_params.update(model_init_params)
         # 将初始化参数更新到 config 中
         bst_params.update(self.model_init_params)
 
@@ -96,6 +97,7 @@ class xgboost_task(AbstractModelFactory):
                 self.model_eval_metric: test_eval_metric,
                 'best_iteration': bst.best_iteration,
                 }
+            logging.warning(f'xgb best model checkpoint: {best_checkpoint}')
             return best_checkpoint
 
         # 创建 checkpoint 子文件夹
@@ -133,7 +135,7 @@ class xgboost_task(AbstractModelFactory):
                 # 只保存一个最优的checkpoint，节约存储空间
                 num_to_keep=1,
                 # *Best* checkpoints are determined by these params:
-                checkpoint_score_attribute=self.model_eval_metric,
+                checkpoint_score_attribute=report_metric_name,
                 checkpoint_score_order=self.optimize_mode,
                 # 不支持函数调用，只支持类调用
                 # checkpoint_frequency=2,
@@ -141,7 +143,7 @@ class xgboost_task(AbstractModelFactory):
                 ),
             # checkpoint 的保存路径
             storage_path=checkpoint_dir,
-            name='xgb_model',
+            name=f'{self.model_arch}_model',
             # callbacks=[
             #     MLflowLoggerCallback(
             #         tracking_uri=tracking_uri,

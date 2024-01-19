@@ -1,5 +1,8 @@
+import os
+import sys
+sys.path.append(os.getcwd())
+
 from mlops.tasks.base import AbstractModelFactory
-# from base import AbstractModelFactory
 
 from catboost import (
     CatBoost,
@@ -58,8 +61,6 @@ class CatboostTask(AbstractModelFactory):
         # cat_features, ... 都可以写入 self.model_train_params
         trial_model.fit(train_pool, eval_set=test_pool, **self.model_train_params)
         # best_iteration = trial_model.get_best_iteration()
-        best_score = trial_model.get_best_score()
-        test_loss = best_score["validation"][self.model_eval_metric]
         cv_data = cv(cv_pool, trial_model.get_params(), logging_level='Silent')
 
         # cv 返回交叉验证的评估指标
@@ -92,7 +93,12 @@ class CatboostTask(AbstractModelFactory):
         test_pool = Pool(*test_data)
 
         best_model.fit(train_pool, eval_set=test_pool, **self.model_train_params)
-        test_loss = self.test_job(best_model, test_pool)
+
+        # 获取测试集的损失
+        best_score = best_model.get_best_score()
+        test_loss = best_score["validation"][self.model_eval_metric]
+
+        # test_loss = self.test_job(best_model, test_pool)
 
         return {
             'best_model': best_model,
@@ -104,6 +110,7 @@ class CatboostTask(AbstractModelFactory):
         loss_result = model.eval_metrics(test_pool, [self.model_eval_metric])
         test_loss = loss_result[self.model_eval_metric][0]
         return test_loss
+
 
 
 if __name__ == '__main__':

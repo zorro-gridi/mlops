@@ -1,13 +1,14 @@
+import os
+import sys
+sys.path.append(os.getcwd())
+
 from mlops.tasks.base import AbstractModelFactory
 from mlops.baseConfig.raytuneConfig import scaling_config
-from base import AbstractModelFactory
-
 
 import lightgbm as lgb
 import logging
 import numpy as np
 from functools import partial
-import os
 
 import random
 import ray
@@ -39,7 +40,7 @@ class LigthGBM_Task(AbstractModelFactory):
         self.checkpoint_model_name = 'lightgbm.txt'
 
 
-    def train_job(self, config, train__data, test_data):
+    def train_job(self, config, train__data, test_data, checkpoint=False):
 
         self.model_init_params.update(config)
         train_set = lgb.Dataset(*train__data)
@@ -54,7 +55,14 @@ class LigthGBM_Task(AbstractModelFactory):
             **self.model_train_params
             )
 
-        test_loss = self.test_job(gbm, test_set)
+        test_loss = self.test_job(gbm, test_data)
+        logging.warning(f'LightGBM model test loss: {test_loss}')
+
+        if checkpoint:
+            return {
+                'best_model': gbm,
+                self.model_eval_metric: test_loss
+                }
 
         # 单独建立一个模型的隔离文件夹
         os.makedirs('models', exist_ok=True)
@@ -67,47 +75,52 @@ class LigthGBM_Task(AbstractModelFactory):
             )
 
 
-    def tune_job(self, params_space, train_data, test_data, num_samples=10, checkpoint_dir=None):
-        scheduler = ASHAScheduler(
-            metric=f"test_{self.model_eval_metric}", mode=self.optimize_mode, max_t=10)
+    # def tune_job(self, params_space, train_data, test_data, num_samples=10, checkpoint_dir=None):
+    #     scheduler = ASHAScheduler(
+    #         metric=f"test_{self.model_eval_metric}", mode=self.optimize_mode, max_t=10)
 
-        checkpoint_strategy = train.CheckpointConfig(
-            num_to_keep=1,
-            checkpoint_score_attribute=f"test_{self.model_eval_metric}",
-            checkpoint_score_order=self.optimize_mode,
-            )
-        run_config = train.RunConfig(
-            stop={"training_iteration": 10},
-            checkpoint_config=checkpoint_strategy,
-            storage_path=checkpoint_dir,
-            )
+    #     checkpoint_strategy = train.CheckpointConfig(
+    #         num_to_keep=1,
+    #         checkpoint_score_attribute=self.model_eval_metric,
+    #         checkpoint_score_order=self.optimize_mode,
+    #         )
+    #     run_config = train.RunConfig(
+    #         stop={"training_iteration": 10},
+    #         checkpoint_config=checkpoint_strategy,
+    #         storage_path=checkpoint_dir,
+    #         )
 
-        train_partial = partial(
-            self.train_job,
-            train_data=train_data,
-            test_data=test_data,
-            checkpoint_dir=checkpoint_dir,
-            )
-        train_with_resources = tune.with_resources(train_partial, resources=scaling_config)
+    #     train_partial = partial(
+    #         self.train_job,
+    #         train_data=train_data,
+    #         test_data=test_data,
+    #         checkpoint_dir=checkpoint_dir,
+    #         )
+    #     train_with_resources = tune.with_resources(train_partial, resources=scaling_config)
 
-        tune_config = tune.TuneConfig(
-            num_samples=num_samples,
-            scheduler=scheduler,
-            )
+    #     tune_config = tune.TuneConfig(
+    #         num_samples=num_samples,
+    #         scheduler=scheduler,
+    #         )
 
-        tuner = tune.Tuner(
-            train_with_resources,
-            param_space=params_space,
-            tune_config=tune_config,
-            run_config=run_config,
-            )
+    #     tuner = tune.Tuner(
+    #         train_with_resources,
+    #         param_space=params_space,
+    #         tune_config=tune_config,
+    #         run_config=run_config,
+    #         )
 
-        results = tuner.fit()
-        return results
+    #     results = tuner.fit()
+    #     return results
 
 
-    def test_job(self, model: lgb.Booster, test_data: lgb.Dataset):
-        y_pred = model.predict(test_data, num_iteration=model.best_iteration)
+    def test_job(self, model: lgb.Booster, test_data):
+        '''
+        # test_data: can't use lgb.Dataset object
+        '''
+        x_test, y_test = test_data
+        y_pred = model.predict(x_test, num_iteration=model.best_iteration)
+        # 使用 sklearn metric 接口计算损失指标
         test_loss = self.metircs_fn[self.model_eval_metric](y_test, y_pred)
         return test_loss
 
@@ -123,11 +136,9 @@ if __name__ == '__main__':
     train_data = (x_train, y_train)
     test_data = (x_test, y_test)
 
-
-    search_space = {
-        "boosting_type": tune.grid_search(["gbdt", "dart"]),
-        "num_leaves": tune.randint(10, 1000),
-        "learning_rate": tune.loguniform(1e-8, 1e-1),
+    config = {
+        "num_leaves": 10,
+        "learning_rate": 0.2,
         }
 
     task_config = {
@@ -136,6 +147,4 @@ if __name__ == '__main__':
         }
 
     lgb_task = LigthGBM_Task(**task_config)
-
-    checkpoint_dir = '/home/zorro/project/pycharm'
-    lgb_task.tune_job(search_space, train_data, test_data, checkpoint_dir=checkpoint_dir)
+    lgb_task.config(config, train_data, test_data)
