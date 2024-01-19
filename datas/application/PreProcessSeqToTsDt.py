@@ -19,7 +19,9 @@ import logging
 
 class PreProcessSeqToTsDt_Base(BaseSeqToTsDt):
     '''
-    PreProcessSeqToTsDt: 进行时间序列预测前，需要对输入数据进行一定的自定义变换，再进行特征工程的数据集
+    主要特征：
+        进行时间序列预测前，需要对输入数据进行一定的自定义变换，再进行特征工程的数据集
+        BASE 主要应用于一般机器学习的数值模型
     # preprocess_func 自定义数据预处理函数，属性必选
     '''
     def __init__(self, **kwargs):
@@ -46,6 +48,9 @@ class PreProcessSeqToTsDt_Base(BaseSeqToTsDt):
 
 
 class PreProcessSeqToTsDt_NN(PreProcessSeqToTsDt_Base):
+    '''
+    NN 表示此数据类主要应用于 神经网络 模型
+    '''
     def __init__(self, dt_class, **kwargs):
         super().__init__(**kwargs)
         self.dt_class = dt_class
