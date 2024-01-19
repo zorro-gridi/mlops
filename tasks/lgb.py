@@ -75,6 +75,10 @@ class LigthGBM_Task(AbstractModelFactory):
             )
 
 
+    def tune_job(self, *args, **kwargs):
+        return super().tune_job(*args, **kwargs)
+
+
     # def tune_job(self, params_space, train_data, test_data, num_samples=10, checkpoint_dir=None):
     #     scheduler = ASHAScheduler(
     #         metric=f"test_{self.model_eval_metric}", mode=self.optimize_mode, max_t=10)

@@ -9,6 +9,11 @@ import mlflow
 from mlflow.models import infer_signature
 from mlflow.client import MlflowClient
 import logging
+from pathlib import Path
+
+import lightgbm as lgb
+import xgboost as xgb
+from catboost import CatBoost as cat
 
 
 
@@ -47,6 +52,7 @@ class AbstractMLOps(metaclass=ABCMeta):
             'cat': mlflow.catboost,
             'nn': mlflow.pytorch,
             'kmeans': mlflow.sklearn,
+            'lgb': mlflow.lightgbm,
             }
 
     def run_data_args(self, *args, **kwargs):
@@ -58,9 +64,51 @@ class AbstractMLOps(metaclass=ABCMeta):
     def find_best_data_args(self, *args, **kwargs):
         pass
 
-    @abstractclassmethod
-    def find_best_model_args(self, *args, **kwargs):
-        pass
+
+    def find_best_model_args(self, params_space, **kwargs):
+        '''
+        # 该函数实现了 raytune 自动调参，并返回最优模型和参数 checkpoint
+        '''
+        tune_results = self.model_task.tune_job(
+            params_space,
+            train_data=self.train_data,
+            test_data=self.test_data,
+            **kwargs
+            )
+
+        report_metric_name = f'test_{self.model_task.model_eval_metric}'
+        best_result = tune_results.get_best_result(
+            metric=report_metric_name, mode=self.model_task.optimize_mode)
+
+        logging.warning(f'Ray Tune Best Result: {best_result}')
+
+        logdir = best_result.checkpoint.to_directory()
+        # 最优模型文件
+        checkpoint_path = Path(logdir) / self.model_task.checkpoint_model_name
+
+        best_model = None
+        if self.model_task.model_arch in ['xgb', 'lgb']:
+            model_arch = self.model_task.model_arch
+            best_model = eval(model_arch).Booster(model_file=checkpoint_path)
+
+        self.output_model = best_model
+
+        eval_metric_name = self.model_task.model_eval_metric
+        best_checkpoint = {
+            'best_model': best_model,
+            eval_metric_name: best_result.metrics[f'test_{eval_metric_name}'],
+            }
+
+        # 更新模型实例的最优调参结果
+        self.best_model_args.update(self.model_task.model_init_params)
+        self.best_model_args.update(best_result.config)
+
+        if self.dataset_inst is not None:
+            self.best_data_args.update(self.dataset_inst.__dict__)
+
+        return best_checkpoint
+
+
 
     def test_hist_model(self, reg_model_name, model_version='1'):
         '''
