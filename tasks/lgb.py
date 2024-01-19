@@ -1,9 +1,3 @@
-import os
-import sys
-sys.path.append(os.getcwd())
-
-from mlops.tasks.base import AbstractModelFactory
-from mlops.baseConfig.raytuneConfig import scaling_config
 
 import lightgbm as lgb
 import logging
@@ -23,33 +17,51 @@ from sklearn.metrics import (
     f1_score,
     )
 
+import sklearn.datasets
+from sklearn.model_selection import train_test_split
+
+
+import os
+import sys
+sys.path.append(os.getcwd())
+
+from mlops.tasks.base import AbstractModelFactory
+
+
 
 class LigthGBM_Task(AbstractModelFactory):
+    '''
+    # LightGBM 的问题：
+        1. 好像无法在 train 中获取测试集的损失指标结果。 因此，使用 sklearn.metrics 接口计算指标
+    '''
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
         self.model_init_params['objective'] = self.model_loss_func
         self.model_init_params['metric'] = self.model_eval_metric
+        self.model_init_params['verbosity'] = -1
 
         self.model_arch = 'lgb'
 
         self.metircs_fn = {
             'rmse': mean_squared_error,
             'auc': roc_auc_score,
+            'acc': accuracy_score,
+            'binary_logloss': roc_auc_score,
             }
         self.checkpoint_model_name = 'lightgbm.txt'
 
 
-    def train_job(self, config, train__data, test_data, checkpoint=False):
+    def train_job(self, config, train_data, test_data, checkpoint=False):
         self.model_init_params.update(config)
 
-        train_set = lgb.Dataset(*train__data)
+        train_set = lgb.Dataset(*train_data)
         test_set = lgb.Dataset(*test_data)
 
         gbm = lgb.train(
-            config,
+            self.model_init_params,
             train_set=train_set,
-            num_boost_round=100,
+            num_boost_round=1000,
             valid_sets=[test_set],
             valid_names=['test'],
             # Training until validation scores don't improve for [stopping_rounds] rounds will stop
@@ -58,7 +70,7 @@ class LigthGBM_Task(AbstractModelFactory):
             )
 
         test_loss = self.test_job(gbm, test_data)
-        logging.warning(f'LightGBM model test loss: {test_loss}')
+        logging.warning(f'LightGBM model test {self.model_eval_metric} loss: {test_loss:,.6f}')
 
         if checkpoint:
             return {
@@ -77,27 +89,14 @@ class LigthGBM_Task(AbstractModelFactory):
             )
 
 
-    # def tune_job(self, *args, **kwargs):
-    #     return super().tune_job(*args, **kwargs)
-
-
-    def tune_job(self, config, train_data, test_data):
-        tuner = tune.Tuner(
-            partial(self.train_job, train_data=train_data, test_data=test_data),
-            tune_config=tune.TuneConfig(
-                metric="rmse",
-                mode="min",
-                scheduler=ASHAScheduler(),
-                num_samples=2,
-            ),
-            param_space=config,
-        )
-        results = tuner.fit()
+    def tune_job(self, *args, **kwargs):
+        return super().tune_job(*args, **kwargs)
 
 
     def test_job(self, model: lgb.Booster, test_data):
         '''
         # test_data: can't use lgb.Dataset object
+        # 注意：有些指标需要使用 y_pred_label 而不是 y_pred_proba
         '''
         x_test, y_test = test_data
         y_pred = model.predict(x_test, num_iteration=model.best_iteration)
@@ -108,24 +107,23 @@ class LigthGBM_Task(AbstractModelFactory):
 
 
 if __name__ == '__main__':
-    x_train = np.random.randint(0, 20, size=(100, 20))
-    y_train = np.random.randint(0, 100, size=(100,))
+    data, target = sklearn.datasets.load_breast_cancer(return_X_y=True)
+    train_x, test_x, train_y, test_y = train_test_split(data, target, test_size=0.25)
 
-    x_test = np.random.randint(0, 20, size=(20, 20))
-    y_test = np.random.randint(0, 100, size=(20,))
+    train_data = (train_x, train_y)
+    test_data = (test_x, test_y)
 
-    train_data = (x_train, y_train)
-    test_data = (x_test, y_test)
 
     config = {
-        "num_leaves": 10,
-        "learning_rate": 0.2,
-        }
+        # "metric": ["binary_logloss"],
+        "num_leaves": tune.randint(10, 1000),
+        "learning_rate": tune.loguniform(1e-8, 1e-1),
+    }
 
     task_config = {
-        'model_eval_metric': 'rmse',
-        'model_loss_func': 'regression'
+        'model_eval_metric': 'auc',
+        'model_loss_func': 'binary'
         }
 
     lgb_task = LigthGBM_Task(**task_config)
-    lgb_task.tune_job(config, train_data, test_data)
+    lgb_task.tune_job(config, train_data=train_data, test_data=test_data)

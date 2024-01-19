@@ -26,7 +26,7 @@ class AbstractModelFactory(metaclass=ABCMeta):
         ):
         '''
         # model_loss_func: 模型损失函数
-        # model_eval_metric: 模型评估指标名称
+        # model_eval_metric: 模型评估指标名称. metric(s) to be evaluated on the evaluation set(s)
         # model_init_params: 模型初始化参数
         # model_train_params: 提供给 train 方法的参数
         # custom_loss_func: 非标准库的自定义损失函数类。必须定义 loss_name 属性 和 caculate 方法
@@ -44,10 +44,11 @@ class AbstractModelFactory(metaclass=ABCMeta):
         pass
 
 
-    def tune_job(self, search_space, train_data, test_data, num_samples=20, checkpoint_dir='checkpoint_dir'):
-        if Path(checkpoint_dir).exists():
-            shutil.rmtree(checkpoint_dir)
-        os.makedirs(checkpoint_dir, exist_ok=True)
+    def tune_job(self, search_space, train_data, test_data, num_samples=20, checkpoint_dir=None):
+        if checkpoint_dir is not None:
+            if Path(checkpoint_dir).exists():
+                shutil.rmtree(checkpoint_dir)
+            os.makedirs(checkpoint_dir, exist_ok=True)
 
         report_metric_name = f'test_{self.model_eval_metric}'
 
