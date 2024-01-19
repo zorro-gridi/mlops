@@ -45,9 +45,9 @@ class CatboostTask(AbstractModelFactory):
 
     def train_job(self, config, train_data, test_data):
         model_params = copy(config)
-        model_params.update(self.model_init_params)
+        self.model_init_params.update(model_params)
         # CatBoost 接受字典类型参数
-        trial_model = CatBoost(model_params)
+        trial_model = CatBoost(self.model_init_params)
 
         train_pool = Pool(*train_data)
         test_pool = Pool(*test_data)

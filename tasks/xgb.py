@@ -29,14 +29,14 @@ class xgboost_task(AbstractModelFactory):
         # model_eval_metric: 原生 xgb 接口支持 metric str 列表，本 task 类只支持 str
         '''
         super(xgboost_task, self).__init__(**kwargs)
-        self.checkpoint_model_name = 'xgb_model_checkpoint.json'
-        self.model_arch = 'xgb'
-
         model_init_params = {
             'verbosity': 0,
             'seed': 0,
             }
         self.model_init_params.update(model_init_params)
+
+        self.checkpoint_model_name = 'xgb_model_checkpoint.json'
+        self.model_arch = 'xgb'
 
 
     def train_job(self, config, train_data, test_data, checkpoint=False):
@@ -113,58 +113,8 @@ class xgboost_task(AbstractModelFactory):
             }, checkpoint=report_checkpoint)
 
 
-    def tune_job(self, search_space, train_data, test_data, num_samples=20, checkpoint_dir='xgb_checkpoint'):
-        if Path(checkpoint_dir).exists():
-            shutil.rmtree(checkpoint_dir)
-        os.makedirs(checkpoint_dir, exist_ok=True)
-
-        report_metric_name = f'test_{self.model_eval_metric}'
-        train_cifar = partial(self.train_job, train_data=train_data, test_data=test_data)
-
-        train_with_resources = tune.with_resources(train_cifar, resources=scaling_config)
-        tune_config = tune.TuneConfig(
-            num_samples=num_samples,
-            scheduler=ASHAScheduler(max_t=10, metric=report_metric_name, mode=self.optimize_mode),
-            )
-
-        run_config = train.RunConfig(
-            # 最大迭代训练的次数, report 表格中 iter 数字
-            stop={"training_iteration": 10},
-            # checkpoint 是 ray.train 的方法
-            checkpoint_config=train.CheckpointConfig(
-                # 只保存一个最优的checkpoint，节约存储空间
-                num_to_keep=1,
-                # *Best* checkpoints are determined by these params:
-                checkpoint_score_attribute=report_metric_name,
-                checkpoint_score_order=self.optimize_mode,
-                # 不支持函数调用，只支持类调用
-                # checkpoint_frequency=2,
-                # checkpoint_at_end=True,
-                ),
-            # checkpoint 的保存路径
-            storage_path=checkpoint_dir,
-            name=f'{self.model_arch}_model',
-            # callbacks=[
-            #     MLflowLoggerCallback(
-            #         tracking_uri=tracking_uri,
-            #         experiment_name=experiment_name,
-            #         save_artifact=True,
-            #         ),
-            #     # AimLoggerCallback(
-            #     #     metrics=[self.model_eval_metric],
-            #     #     ),
-            #     ],
-            )
-
-        tuner = tune.Tuner(
-            train_with_resources,
-            tune_config=tune_config,
-            run_config=run_config,
-            param_space=search_space,
-            )
-
-        results = tuner.fit()
-        return results
+    def tune_job(self, *args, **kwargs):
+        return super().tune_job(*args, **kwargs)
 
 
     def eval_job(self, model, dtest, metric_name, **kwargs):

@@ -15,9 +15,9 @@ from pathlib import Path
 import lightgbm as lgb
 
 
-class LightGBMOps(AbstractMLOps):
+class LightGBM_Ops(AbstractMLOps):
     def __init__(self, **kwargs):
-        super(LightGBMOps, self).__init__(**kwargs)
+        super(LightGBM_Ops, self).__init__(**kwargs)
 
 
     def find_best_model_args(self, *args, **kwargs):

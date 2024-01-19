@@ -41,18 +41,20 @@ class LigthGBM_Task(AbstractModelFactory):
 
 
     def train_job(self, config, train__data, test_data, checkpoint=False):
-
         self.model_init_params.update(config)
+
         train_set = lgb.Dataset(*train__data)
         test_set = lgb.Dataset(*test_data)
 
         gbm = lgb.train(
             config,
-            train_set,
+            train_set=train_set,
             num_boost_round=100,
             valid_sets=[test_set],
             valid_names=['test'],
-            **self.model_train_params
+            # Training until validation scores don't improve for [stopping_rounds] rounds will stop
+            callbacks=[lgb.early_stopping(stopping_rounds=10)],
+            **self.model_train_params,
             )
 
         test_loss = self.test_job(gbm, test_data)
@@ -66,7 +68,7 @@ class LigthGBM_Task(AbstractModelFactory):
 
         # 单独建立一个模型的隔离文件夹
         os.makedirs('models', exist_ok=True)
-        gbm.save_model(f'models/{self.checkpoint_model_name}')
+        gbm.save_model(f'models/{self.checkpoint_model_name}', num_iteration=gbm.best_iteration)
 
         report_checkpoint = train.Checkpoint.from_directory('models')
         train.report(
@@ -75,47 +77,22 @@ class LigthGBM_Task(AbstractModelFactory):
             )
 
 
-    def tune_job(self, *args, **kwargs):
-        return super().tune_job(*args, **kwargs)
+    # def tune_job(self, *args, **kwargs):
+    #     return super().tune_job(*args, **kwargs)
 
 
-    # def tune_job(self, params_space, train_data, test_data, num_samples=10, checkpoint_dir=None):
-    #     scheduler = ASHAScheduler(
-    #         metric=f"test_{self.model_eval_metric}", mode=self.optimize_mode, max_t=10)
-
-    #     checkpoint_strategy = train.CheckpointConfig(
-    #         num_to_keep=1,
-    #         checkpoint_score_attribute=self.model_eval_metric,
-    #         checkpoint_score_order=self.optimize_mode,
-    #         )
-    #     run_config = train.RunConfig(
-    #         stop={"training_iteration": 10},
-    #         checkpoint_config=checkpoint_strategy,
-    #         storage_path=checkpoint_dir,
-    #         )
-
-    #     train_partial = partial(
-    #         self.train_job,
-    #         train_data=train_data,
-    #         test_data=test_data,
-    #         checkpoint_dir=checkpoint_dir,
-    #         )
-    #     train_with_resources = tune.with_resources(train_partial, resources=scaling_config)
-
-    #     tune_config = tune.TuneConfig(
-    #         num_samples=num_samples,
-    #         scheduler=scheduler,
-    #         )
-
-    #     tuner = tune.Tuner(
-    #         train_with_resources,
-    #         param_space=params_space,
-    #         tune_config=tune_config,
-    #         run_config=run_config,
-    #         )
-
-    #     results = tuner.fit()
-    #     return results
+    def tune_job(self, config, train_data, test_data):
+        tuner = tune.Tuner(
+            partial(self.train_job, train_data=train_data, test_data=test_data),
+            tune_config=tune.TuneConfig(
+                metric="rmse",
+                mode="min",
+                scheduler=ASHAScheduler(),
+                num_samples=2,
+            ),
+            param_space=config,
+        )
+        results = tuner.fit()
 
 
     def test_job(self, model: lgb.Booster, test_data):
@@ -131,11 +108,11 @@ class LigthGBM_Task(AbstractModelFactory):
 
 
 if __name__ == '__main__':
-    x_train = np.random.randint(0, 100, size=(100, 20))
-    y_train = np.random.randint(0, 2, size=(100,))
+    x_train = np.random.randint(0, 20, size=(100, 20))
+    y_train = np.random.randint(0, 100, size=(100,))
 
-    x_test = np.random.randint(0, 100, size=(20, 20))
-    y_test = np.random.randint(0, 2, size=(20,))
+    x_test = np.random.randint(0, 20, size=(20, 20))
+    y_test = np.random.randint(0, 100, size=(20,))
 
     train_data = (x_train, y_train)
     test_data = (x_test, y_test)
@@ -146,9 +123,9 @@ if __name__ == '__main__':
         }
 
     task_config = {
-        'model_eval_metric': 'auc',
-        'model_loss_func': 'binary'
+        'model_eval_metric': 'rmse',
+        'model_loss_func': 'regression'
         }
 
     lgb_task = LigthGBM_Task(**task_config)
-    lgb_task.config(config, train_data, test_data)
+    lgb_task.tune_job(config, train_data, test_data)

@@ -50,24 +50,26 @@ class AbstractModelFactory(metaclass=ABCMeta):
         os.makedirs(checkpoint_dir, exist_ok=True)
 
         report_metric_name = f'test_{self.model_eval_metric}'
-        train_cifar = partial(self.train_job, train_data=train_data, test_data=test_data)
 
+        train_cifar = partial(self.train_job, train_data=train_data, test_data=test_data)
         train_with_resources = tune.with_resources(train_cifar, resources=scaling_config)
+
+        checkpoint_strategy = train.CheckpointConfig(
+            # 只保存一个最优的checkpoint，节约存储空间
+            num_to_keep=1,
+            # *Best* checkpoints are determined by these params:
+            checkpoint_score_attribute=report_metric_name,
+            checkpoint_score_order=self.optimize_mode,
+            # 不支持函数调用，只支持类调用
+            # checkpoint_frequency=2,
+            # checkpoint_at_end=True,
+            )
 
         run_config = train.RunConfig(
             # 最大迭代训练的次数, report 表格中 iter 数字
             stop={"training_iteration": 10},
             # checkpoint 是 ray.train 的方法
-            checkpoint_config=train.CheckpointConfig(
-                # 只保存一个最优的checkpoint，节约存储空间
-                num_to_keep=1,
-                # *Best* checkpoints are determined by these params:
-                checkpoint_score_attribute=report_metric_name,
-                checkpoint_score_order=self.optimize_mode,
-                # 不支持函数调用，只支持类调用
-                # checkpoint_frequency=2,
-                # checkpoint_at_end=True,
-                ),
+            checkpoint_config=checkpoint_strategy,
             # checkpoint 的保存路径
             storage_path=checkpoint_dir,
             name=f'{self.model_arch}_model',
@@ -83,16 +85,17 @@ class AbstractModelFactory(metaclass=ABCMeta):
             #     ],
             )
 
+        scheduler = ASHAScheduler(max_t=10, metric=report_metric_name, mode=self.optimize_mode)
         tune_config = tune.TuneConfig(
             num_samples=num_samples,
-            scheduler=ASHAScheduler(max_t=10, metric=report_metric_name, mode=self.optimize_mode),
+            scheduler=scheduler,
             )
 
         tuner = tune.Tuner(
             train_with_resources,
+            param_space=search_space,
             tune_config=tune_config,
             run_config=run_config,
-            param_space=search_space,
             )
 
         results = tuner.fit()
@@ -100,7 +103,7 @@ class AbstractModelFactory(metaclass=ABCMeta):
 
 
 
-    def eval_job(self, y_true, y_pred, metric_name, tasktype='binary_clf', **kwargs):
+    def eval_job(self, y_true, y_pred, metric_name, tasktype='binary', **kwargs):
         metric_config = {
             'auc': metrics.roc_auc_score,
             'recall': metrics.recall_score,
@@ -109,7 +112,7 @@ class AbstractModelFactory(metaclass=ABCMeta):
             'rmse': metrics.mean_squared_error,
             }
 
-        if tasktype in ['binary_clf']:
+        if tasktype in ['binary']:
             if metric_name == 'auc':
                 test_score = metric_config[metric_name](y_true, y_pred, **kwargs)
             else:
