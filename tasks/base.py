@@ -7,6 +7,12 @@ import shutil
 from ray import train, tune
 from ray.tune.schedulers import ASHAScheduler
 
+from ray.air.integrations.mlflow import setup_mlflow, MLflowLoggerCallback
+from ray.tune.logger.aim import AimLoggerCallback
+from ray.tune.search.bayesopt import BayesOptSearch
+from ray.tune.search.hebo import HEBOSearch
+from ray.tune.search.hyperopt import HyperOptSearch
+
 import os
 import sys
 sys.path.append(os.getcwd())
@@ -38,13 +44,21 @@ class AbstractModelFactory(metaclass=ABCMeta):
         self.optimize_mode = optimize_mode
         self.custom_loss_func = custom_loss_func
 
+        self.model_arch = None
+
 
     @abstractclassmethod
-    def train_job(self, *args, **kwargs):
+    def train_job(self):
         pass
 
 
-    def tune_job(self, search_space, train_data, test_data, num_samples=20, checkpoint_dir=None):
+    def tune_job(self, search_space, train_data, test_data, checkpoint_dir=None, **kwargs):
+        '''
+        基于 raytune 调参框架的通用方法
+        '''
+        num_samples=kwargs.pop('num_samples', 20)
+        callbacks = kwargs.pop('callbacks', None)
+
         if checkpoint_dir is not None:
             if Path(checkpoint_dir).exists():
                 shutil.rmtree(checkpoint_dir)
@@ -53,6 +67,11 @@ class AbstractModelFactory(metaclass=ABCMeta):
         report_metric_name = f'test_{self.model_eval_metric}'
 
         train_cifar = partial(self.train_job, train_data=train_data, test_data=test_data)
+        # 神经网络模型，增加一个 max_epochs 参数
+        if self.model_arch == 'nn':
+            max_epochs = kwargs.pop('max_epochs', 10)
+            train_cifar = partial(train_cifar, max_epochs=max_epochs)
+
         train_with_resources = tune.with_resources(train_cifar, resources=scaling_config)
 
         checkpoint_strategy = train.CheckpointConfig(
@@ -73,7 +92,8 @@ class AbstractModelFactory(metaclass=ABCMeta):
             checkpoint_config=checkpoint_strategy,
             # checkpoint 的保存路径
             storage_path=checkpoint_dir,
-            name=f'{self.model_arch}_model',
+            name=f'{type(self).__name__}_model',
+            callbacks=callbacks,
             # callbacks=[
             #     MLflowLoggerCallback(
             #         tracking_uri=tracking_uri,
@@ -86,10 +106,20 @@ class AbstractModelFactory(metaclass=ABCMeta):
             #     ],
             )
 
+        # 定义超参数搜索算法
+        # 贝叶斯搜索不支持离散参数
+        # bayesopt = BayesOptSearch(metric=self.model_eval_metric, mode=self.optimize_mode)
+        hyperot_search = HyperOptSearch(metric=self.model_eval_metric, mode=self.optimize_mode)
+        # hebo = HEBOSearch(metric=self.model_eval_metric, mode=self.optimize_mode)
+
         scheduler = ASHAScheduler(max_t=10, metric=report_metric_name, mode=self.optimize_mode)
         tune_config = tune.TuneConfig(
             num_samples=num_samples,
             scheduler=scheduler,
+            # 方案一：利用搜索算法自动暂停
+            search_alg=hyperot_search,
+            # search_alg=bayesopt,
+            # search_alg=hebo,
             )
 
         tuner = tune.Tuner(
@@ -99,8 +129,8 @@ class AbstractModelFactory(metaclass=ABCMeta):
             run_config=run_config,
             )
 
-        results = tuner.fit()
-        return results
+        trail_results = tuner.fit()
+        return trail_results
 
 
 
