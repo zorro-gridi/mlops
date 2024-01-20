@@ -36,7 +36,6 @@ class PreProcessSeqToTsDt_Base(BaseSeqToTsDt):
         if self.input_features is not None:
             prep_func = partial(self.preprocess_func, input_features=self.input_features)
             vars_datas = prep_func(vars_datas)
-
         else:
             vars_datas = self.preprocess_func(vars_datas)
 

@@ -4,7 +4,10 @@ import numpy as np
 
 
 
-class SeqToBinaryClfDt(BaseSeqToClassDt):
+class SeqToBinaryDt(BaseSeqToClassDt):
+    '''
+    主要特征：将时间序列预测问题变为二分类问题
+    '''
     def __init__(self, y_threshold=10, **kwargs):
         '''
         # y_threshold: 将序列 y 转换为 class 的阈值
