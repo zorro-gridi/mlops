@@ -22,6 +22,9 @@ from functools import partial
 
 
 class AbstractDatasetFactory(metaclass=ABCMeta):
+    '''
+    基础数据集抽象工厂方法
+    '''
     def __init__(self, features=None, categoric_features=None, target=None, preprocess_func=None):
         '''
         # target: str 表示目标变量名称 / int 目标变量的 索引值

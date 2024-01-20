@@ -14,6 +14,9 @@ import logging
 
 
 class BaseSeqToTsDt(AbstractDatasetFactory):
+    '''
+    主要特征：序列到时间序列
+    '''
     def __init__(self, input_features=None, **kwargs):
         '''
         # input_features: 时间序列的外部变量列表

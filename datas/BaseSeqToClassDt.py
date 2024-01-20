@@ -4,11 +4,11 @@ from tqdm import tqdm
 import numpy as np
 
 
-import logging
-
-
 
 class BaseSeqToClassDt(AbstractDatasetFactory):
+    '''
+    主要特征：序列到类别
+    '''
     def __init__(self, X_seq_len=10, y_seq_len=10, **kwargs):
         '''
         # X_seq_len: x 输入序列窗口长度; 例如, 近30天的股价趋势
