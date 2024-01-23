@@ -20,6 +20,8 @@ sys.path.append(os.getcwd())
 from mlops.baseConfig.raytuneConfig import scaling_config
 
 
+
+
 class AbstractModelFactory(metaclass=ABCMeta):
 
     def __init__(self,
@@ -49,6 +51,11 @@ class AbstractModelFactory(metaclass=ABCMeta):
 
     @abstractclassmethod
     def train_job(self):
+        pass
+
+
+    @abstractclassmethod
+    def test_job(self):
         pass
 
 
@@ -101,16 +108,16 @@ class AbstractModelFactory(metaclass=ABCMeta):
             #         save_artifact=True,
             #         ),
             #     # AimLoggerCallback(
-            #     #     metrics=[self.model_eval_metric],
+            #     #     metrics=[report_metric_name],
             #     #     ),
             #     ],
             )
 
         # 定义超参数搜索算法
         # 贝叶斯搜索不支持离散参数
-        # bayesopt = BayesOptSearch(metric=self.model_eval_metric, mode=self.optimize_mode)
-        hyperot_search = HyperOptSearch(metric=self.model_eval_metric, mode=self.optimize_mode)
-        # hebo = HEBOSearch(metric=self.model_eval_metric, mode=self.optimize_mode)
+        # bayesopt = BayesOptSearch(metric=report_metric_name, mode=self.optimize_mode)
+        hyperot_search = HyperOptSearch(metric=report_metric_name, mode=self.optimize_mode)
+        # hebo = HEBOSearch(metric=report_metric_name, mode=self.optimize_mode)
 
         scheduler = ASHAScheduler(max_t=10, metric=report_metric_name, mode=self.optimize_mode)
         tune_config = tune.TuneConfig(
@@ -147,12 +154,9 @@ class AbstractModelFactory(metaclass=ABCMeta):
             if metric_name == 'auc':
                 test_score = metric_config[metric_name](y_true, y_pred, **kwargs)
             else:
+                # 二分类问题的 准确率 & 精确率需要使用预测标签计算，而不是 proba 概率
                 y_label = np.where(y_pred > 0.5, 1, 0)
                 test_score = metric_config[metric_name](y_true, y_label, **kwargs)
         else:
             test_score = metric_config[metric_name](y_true, y_pred, **kwargs)
         return test_score
-
-
-    def test_job(self, *args, **kwargs):
-        pass
