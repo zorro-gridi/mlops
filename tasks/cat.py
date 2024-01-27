@@ -49,6 +49,7 @@ class CatboostTask(AbstractModelFactory):
         # CatBoost 接受字典类型参数
         trial_model = CatBoost(self.model_init_params)
 
+        # pool 对象本身会分批次加载数据集进行模型训练
         train_pool = Pool(*train_data)
         test_pool = Pool(*test_data)
 
@@ -92,6 +93,8 @@ class CatboostTask(AbstractModelFactory):
         train_pool = Pool(*train_data)
         test_pool = Pool(*test_data)
 
+        # catboost 类似于神经网络，fit 完之后，得到的就是最后的模型
+        # 所以，应该可以使用数据集迭代训练
         best_model.fit(train_pool, eval_set=test_pool, **self.model_train_params)
 
         # 获取测试集的损失

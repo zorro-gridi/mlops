@@ -14,7 +14,7 @@ from pathlib import Path
 import lightgbm as lgb
 import xgboost as xgb
 from catboost import CatBoost as cat
-
+import ray
 
 
 class AbstractMLOps(metaclass=ABCMeta):
@@ -58,8 +58,10 @@ class AbstractMLOps(metaclass=ABCMeta):
     def run_data_args(self, *args, **kwargs):
         pass
 
+
     def run_model_args(self, *args, **kwargs):
         pass
+
 
     def find_best_data_args(self, *args, **kwargs):
         pass
@@ -69,6 +71,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         '''
         # 该函数实现了 raytune 自动调参，并返回最优模型和参数 checkpoint
         '''
+
         tune_results = self.model_task.tune_job(
             params_space,
             train_data=self.train_data,

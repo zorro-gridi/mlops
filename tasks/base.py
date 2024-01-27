@@ -4,6 +4,8 @@ import numpy as np
 from pathlib import Path
 from functools import partial
 import shutil
+
+import ray
 from ray import train, tune
 from ray.tune.schedulers import ASHAScheduler
 
@@ -61,7 +63,7 @@ class AbstractModelFactory(metaclass=ABCMeta):
 
     def tune_job(self, search_space, train_data, test_data, checkpoint_dir=None, **kwargs):
         '''
-        基于 raytune 调参框架的通用方法
+        基于 ray tune 调参框架的通用方法
         '''
         num_samples=kwargs.pop('num_samples', 20)
         callbacks = kwargs.pop('callbacks', None)
@@ -73,14 +75,18 @@ class AbstractModelFactory(metaclass=ABCMeta):
 
         report_metric_name = f'test_{self.model_eval_metric}'
 
+        # TODO: 直接把偏函数传入 ray.tune 导致 large object warning, 因为，参数太大了
+        # Warning: The actor ImplicitFunc is very large (20 MiB).
+        # Check that its definition is not implicitly capturing a large array or other object in scope.
+        # Tip: use ray.put() to put large objects in the Ray object store.
         train_cifar = partial(self.train_job, train_data=train_data, test_data=test_data)
+
         # 神经网络模型，增加一个 max_epochs 参数
         if self.model_arch == 'nn':
             max_epochs = kwargs.pop('max_epochs', 10)
             train_cifar = partial(train_cifar, max_epochs=max_epochs)
 
         train_with_resources = tune.with_resources(train_cifar, resources=scaling_config)
-
         checkpoint_strategy = train.CheckpointConfig(
             # 只保存一个最优的checkpoint，节约存储空间
             num_to_keep=1,

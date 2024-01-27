@@ -1,7 +1,6 @@
 import xgboost as xgb
 import ray
 from ray import train, tune
-from ray.tune.schedulers import ASHAScheduler
 from xgboost.callback import EarlyStopping
 import numpy as np
 import logging
@@ -13,13 +12,47 @@ import shutil
 
 from functools import partial
 from mlops.tasks.base import AbstractModelFactory
-from mlops.baseConfig.raytuneConfig import (
-    scaling_config,
-    )
+from typing import List, Callable
 
-import mlflow
-from mlflow.models import infer_signature
-from ray.air.integrations.mlflow import setup_mlflow, MLflowLoggerCallback
+
+
+class Iterator(xgb.DataIter):
+    def __init__(self, train_data: tuple, num_per_iter=1e4):
+        self._x_train, self._y_train = train_data
+        self._num_per_iter = int(num_per_iter)
+        self._max_it = len(self._y_train) // self._num_per_iter + 1
+        self._it = 0
+        # XGBoost will generate some cache files under current directory with the prefix "cache"
+        super().__init__(cache_prefix=os.path.join(".", "cache"))
+
+
+    def next(self, input_data: Callable):
+        """
+        Advance the iterator by 1 step and pass the data to XGBoost.  This function is
+        called by XGBoost during the construction of ``DMatrix``
+        """
+        if self._it == self._max_it:
+            # return 0 to let XGBoost know this is the end of iteration
+            return 0
+
+        logging.warning(f'''
+            Run with xgboost iterator data mode, data samples: {len(self._y_train)}
+            iter size is {int(self._num_per_iter)}, cur iter: {self._it}, max iter: {self._max_it}
+            ''')
+
+        # input_data is a function passed in by XGBoost who has the exact same signature of ``DMatrix``
+        start_idx, stop_idx = int(self._it*self._num_per_iter), int((self._it+1)*self._num_per_iter)
+        X, y = self._x_train[start_idx:stop_idx], self._y_train[start_idx:stop_idx]
+        input_data(data=X, label=y)
+
+        self._it += 1
+        # Return 1 to let XGBoost know we haven't seen all the files yet.
+        return 1
+
+    def reset(self):
+        """Reset the iterator to its beginning"""
+        self._it = 0
+
 
 
 
@@ -58,7 +91,7 @@ class xgboost_task(AbstractModelFactory):
         bst_params.update(self.model_init_params)
 
         early_stopping = EarlyStopping(
-            rounds=100,
+            rounds=50,
             metric_name=self.model_eval_metric,
             data_name='test',
             save_best=True,
@@ -66,7 +99,9 @@ class xgboost_task(AbstractModelFactory):
             maximize=True if self.optimize_mode == 'max' else False,
             )
 
-        dtrain = xgb.DMatrix(*train_data)
+        it = Iterator(train_data)
+        dtrain = xgb.DMatrix(it)
+        # dtrain = xgb.DMatrix(*train_data)
         dtest = xgb.DMatrix(*test_data)
 
         evals_result = {}

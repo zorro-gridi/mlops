@@ -58,12 +58,15 @@ class LigthGBM_Task(AbstractModelFactory):
         train_set = lgb.Dataset(*train_data)
         test_set = lgb.Dataset(*test_data)
 
+        init_model = None
         gbm = lgb.train(
             self.model_init_params,
             train_set=train_set,
             num_boost_round=1000,
             valid_sets=[test_set],
             valid_names=['test'],
+            # 如果数据集特别大，可以迭代训练
+            init_model=init_model,
             # Training until validation scores don't improve for [stopping_rounds] rounds will stop
             callbacks=[lgb.early_stopping(stopping_rounds=10)],
             **self.model_train_params,
