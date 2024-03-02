@@ -112,9 +112,11 @@ class lstmTsTask(AbstractModelFactory):
                         traini {self.model_eval_metric} loss: {training_loss:,.6f}
                         test {self.model_eval_metric} loss: {metric_loss:,.6f}
                     ''')
-                train.report(metrics={self.model_eval_metric: metric_loss}, checkpoint=report_checkpoint)
+
+                report_metric_name = f'test_{self.model_eval_metric}'
+                train.report(metrics={report_metric_name: metric_loss}, checkpoint=report_checkpoint)
             else:
-                train.report(metrics={self.model_eval_metric: metric_loss})
+                train.report(metrics={report_metric_name: metric_loss})
 
 
     def test_job(self, model, test_loader):

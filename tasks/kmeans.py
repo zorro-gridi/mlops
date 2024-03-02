@@ -19,15 +19,19 @@ class kmeans_task(AbstractModelFactory):
         self.model_arch = 'kmeans'
 
 
-    def train_job(self, data, max_clusters=30):
+    def train_job(self, data, init_clusters=15, max_clusters=30):
+        '''
+        # init_clusters: kmeans 迭代的最大族数
+        # max_clusters: 搜索空间的最大族数
+        '''
         silhouette_score_list = []
         estimators = []
 
         with mlflow.start_run(
             run_name=f"kmeans_train_job_{time.strftime('%Y-%m-%d %H:%M')}_{random.randint(1e3, 9e3)}"):
             logging.warning(f'start kmeans clusters......')
-            for n in range(15, max_clusters):
-
+            # init_clusters 区别于 KMeans 自身的 init
+            for n in range(init_clusters, max_clusters):
                 kmeans = KMeans(n_clusters=n, **self.model_init_params)
                 kmeans.fit(data)
 
@@ -42,7 +46,9 @@ class kmeans_task(AbstractModelFactory):
                 estimators.append(kmeans)
                 logging.warning(f'n_cluster: {n}, distance: {cluster_distance:,.0f}, {self.model_eval_metric}: {silhouette_score:,.6f}')
 
+            # ===================================================================
             # 理论上 score 是要一直下降的，找到一个突然上升的点的前一个聚类数，则是最优聚类数
+            # ===================================================================
             score_diff = [
                 silhouette_score_list[i+1] - silhouette_score_list[i]
                 for i in range(len(silhouette_score_list)-1)

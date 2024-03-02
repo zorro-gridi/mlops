@@ -151,6 +151,7 @@ class AbstractMLOps(metaclass=ABCMeta):
             4. 更新 mlops 类的 best_model_args, best_data_args
             5. 更新 mlops 类的 dataset_inst 类的属性
         '''
+        # find_best_model_args 的 checkpoint metric 指标不带 test 前缀
         tune_model_metric = checkpoint[self.model_task.model_eval_metric]
         mlflow_client = MlflowClient(mlflow.get_tracking_uri())
         model_arch = self.model_task.model_arch

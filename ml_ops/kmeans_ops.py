@@ -12,7 +12,6 @@ from mlops.utils import mlflow_utils
 
 
 
-
 class KmeansOps(AbstractMLOps):
     def __init__(self, **kwargs):
         super(KmeansOps, self).__init__(**kwargs)

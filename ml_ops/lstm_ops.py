@@ -62,9 +62,10 @@ class LstmOps(AbstractMLOps):
             **kwargs
             )
 
+        report_metric_name = f'test_{self.model_task.model_eval_metric}'
         # 获取最优训练模型参数
         best_result = trial_results.get_best_result(
-            self.model_task.model_eval_metric, mode=self.model_task.optimize_mode)
+            report_metric_name, mode=self.model_task.optimize_mode)
         best_config = best_result.config
         logging.warning(f'加载的最优训练结果: {best_result}')
         logging.warning(f'最优 config: {best_config}')
@@ -92,7 +93,7 @@ class LstmOps(AbstractMLOps):
         # 加载 checkpoint 中的 model
         model_state, optimizer_state = torch.load(checkpoint_path)
         dnn_model.load_state_dict(model_state)
-        test_loss = best_result.metrics[self.model_task.model_eval_metric]
+        test_loss = best_result.metrics[f'test_{self.model_task.model_eval_metric}']
 
         dnn_model.eval()
         checkpoint_inst = {
