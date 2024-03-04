@@ -70,7 +70,7 @@ env_kwargs = dict(
 
 if ray.is_initialized():
     ray.shutdown()
-ray.init(num_gpus=1, num_cpus=10, dashboard_host='0.0.0.0')
+ray.init(num_gpus=1, num_cpus=16, dashboard_host='0.0.0.0')
 
 env_config = {'config': env_kwargs}
 rllib_trade_env = gym.make('rllib_StockTradeEnv-v0', **env_config)
@@ -86,7 +86,7 @@ config = ( # 1. Configure the algorithm,
     PPOConfig()
     # .environment(StockTradeEnv, env_config=env_kwargs)
     .environment(env=env_name)
-    .rollouts(num_rollout_workers=8, batch_mode='complete_episodes')
+    .rollouts(num_rollout_workers=6, batch_mode='complete_episodes')
     # https://docs.ray.io/en/latest/rllib/rllib-torch2x.html#exploration
     .framework(
         "torch",
@@ -97,7 +97,7 @@ config = ( # 1. Configure the algorithm,
      # num_gpus: for learning task
      # num_learner_workers & num_gpus_per_learner_worker for collection samples task
      # avoid for compute intensive or dataset size too large
-    .resources(num_gpus=1, num_cpus_per_worker=1,)
+    .resources(num_gpus=0, num_cpus_per_worker=1, num_cpus_per_learner_worker=1, num_cpus_for_local_worker=10)
     # 策略网络的参数
     # 每次打印的 eposode 信息并不是在训练，应该是达到 batch_size 的大小后，gpu 才开始训练
     .training(model={"fcnet_hiddens": [64, 64]}, train_batch_size=1024 * 4,)
