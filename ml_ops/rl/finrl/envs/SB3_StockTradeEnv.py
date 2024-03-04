@@ -11,6 +11,7 @@ import pandas as pd
 from gymnasium import spaces
 from gymnasium.utils import seeding
 from stable_baselines3.common.vec_env import DummyVecEnv
+from pathlib import Path
 
 matplotlib.use("Agg")
 
@@ -19,7 +20,7 @@ matplotlib.use("Agg")
 
 class StockTradeEnv(gym.Env):
     """A stock trading environment for OpenAI gym"""
-    metadata = {"render.modes": ["human"]}
+    metadata = {"render_modes": ["human"]}
 
     def __init__(
         self,
@@ -32,10 +33,7 @@ class StockTradeEnv(gym.Env):
         sell_cost_pct: list[float] = [],
         hmax: int = 100, # action 对应的是买卖的单位数量，hamx 表示一单位买多少股
         reward_scaling: float = 0.8, # reward discount 系数
-        state_dim: int = None,
-        action_dim: int = None,
         tech_indicator_list: list[str] = None,
-        make_plots: bool = False,
         print_verbosity=10,
         day=0, # 这个是索引的起始位置；配合 pandas index 属性和 factorize() 函数使用
         initial=True, # 是否是从头开始，完全重置环境 与 账户信息
@@ -47,6 +45,7 @@ class StockTradeEnv(gym.Env):
         per_buy_order_max_amt=20000, # 单笔买入的最大金额
         per_unit_qty=100, # 单笔交易最小交易单位，例如股票100股
         per_unit_amount=10, # 单笔交易的最小金额，例如基金1～10元
+        output_dir=None,
     ):
         '''
         # stock_dim: 交易的股票数量
@@ -82,23 +81,18 @@ class StockTradeEnv(gym.Env):
         # 先重新初始化状态
         self.state = self._initiate_state()
 
-        # self.state_shape = (self.window_size, self.state.shape[1]) if state_dim is None else state_dim
-        self.state_shape = (len(self.state),) if state_dim is None else state_dim
         # 定义 observation_space, 因为本 class 定义的环境只有1维
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=self.state_shape, dtype="float32"
+            low=-np.inf, high=np.inf, shape=(len(self.state),) , dtype="float32"
         )
 
-        self.action_dim = self.stock_dim if action_dim is None else action_dim
         # 定义 action_space
         # 为什么可以是 box，连续区间？因为在 step 函数中，action = (action * self.hmax).astype(int)
         # self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,), dtype="float32")
         # self.action_space = spaces.Discrete(21, start=-10)
         # MultiDiscrete: 多维离散空间
-        self.action_space = spaces.MultiDiscrete(nvec=[11] * self.action_dim, start=[-5] * self.action_dim)
+        self.action_space = spaces.MultiDiscrete(nvec=[11] * self.stock_dim)
 
-        # 是否作图
-        self.make_plots = make_plots
         self.terminal = False
         self.print_verbosity = print_verbosity
         self.model_name = model_name
@@ -123,6 +117,11 @@ class StockTradeEnv(gym.Env):
         self.per_unit_qty = per_unit_qty
         self.per_unit_amount = per_unit_amount
 
+        self.output_dir = output_dir
+        if self.output_dir:
+            if not Path(self.output_dir).exists():
+                Path(self.output_dir).mkdir(exist_ok=True)
+
 
     # 卖出 action
     def _sell_stock(self, index, action):
@@ -135,18 +134,25 @@ class StockTradeEnv(gym.Env):
         close_price = self.current_data.close.to_list()[index]
         stock_shares = sum(self.acct_info['pfo_holding'][stock_name])
 
-        is_profit_price = np.array(self.acct_info['pfo_price'][stock_name]) <= close_price * 1.01 # 即最小盈利 1% 才允许卖出
+        # holding_price: 平均持仓成本
+        pfo_asset = sum(np.array(self.acct_info['pfo_holding'][stock_name]) * np.array(self.acct_info['pfo_price'][stock_name]))
+        holding_price = pfo_asset / stock_shares if stock_shares > 0 else close_price # 因为初始仓位为 0
+
+        # 赚钱的持仓 & 整体收益赚钱，才可以卖
+        is_profit_price = np.array(self.acct_info['pfo_price'][stock_name]) <= close_price
+        is_toatl_profit = holding_price < close_price
+        # 大于 0 的持仓流水为买入操作
         is_profit_shares = np.array(self.acct_info['pfo_holding'][stock_name]) > 0
 
-        # 累计已盈利的持仓
+        # 计算累计可卖出的持仓
         total_profit_shares = sum(
             np.extract(
-            [a and b for a, b in zip(is_profit_price, is_profit_shares)],
+            [any([a, is_toatl_profit]) and b for a, b in zip(is_profit_price, is_profit_shares)],
             np.array(self.acct_info['pfo_holding'][stock_name])
             )
         )
-        # 剩余可卖出的持仓
-        profit_shares_rest = total_profit_shares - self.acct_info['profit_shares_sold'][stock_name]
+        # 计算剩余可卖出的持仓
+        profit_shares_rest = max(total_profit_shares - self.acct_info['profit_shares_sold'][stock_name], 0)
 
         # check if the stock is able to sell, for simlicity we just add it in techical index
         # 也就是说，对应的股票是否可以交易，在技术指标中内置了。因为可能有些股票当日停牌，不可交易
@@ -161,37 +167,26 @@ class StockTradeEnv(gym.Env):
                 # 需要判断股票自身是否可交易
                 1==1
             ):
-                # if self.state[index + 1] > 0: # if we use price < 0 to denote a stock is unable to trade in that day,
-                # the total asset calculation may be wrong for the price is unreasonable
-                # Sell only if the price is > 0 (no missing data in this particular date)
-                # perform sell action based on the sign of the action
                 # 判断当前是否有该股票的持仓 & 股价是否大于 0
                 if profit_shares_rest > 0 and close_price > 0 and stock_shares > 0:
                     # Sell only if current asset is > 0
                     sell_num_shares = min(abs(action), stock_shares, profit_shares_rest)
+                    # 买卖数量必须 per_unit_qty 为单位
+                    sell_num_shares = sell_num_shares // self.per_unit_qty * self.per_unit_qty
 
-                    if sell_num_shares % self.per_unit_qty == 0:
+                    if sell_num_shares >= 0:
                         # 记录累计已卖出的盈利头寸
                         # logging.warning(f'do sell stock action: {sell_num_shares} quantities.')
                         self.acct_info['profit_shares_sold'][stock_name] += sell_num_shares
                         # 计算卖出可获得的金额，考虑交易费用
-                        sell_amount = (
-                            close_price
-                            * sell_num_shares
-                            * (1 - self.sell_cost_pct[index])
-                        )
+                        sell_amount = close_price * sell_num_shares * (1 - self.sell_cost_pct[index])
                         # 卖出股票，仓位减少
                         self.acct_info['pfo_holding'][stock_name].append(-sell_num_shares)
                         self.acct_info['pfo_price'][stock_name].append(close_price)
 
                         # 卖出股票，现金账户增加金额
                         self.acct_info['cash_asset'].append(sell_amount)
-                        # self.cost: 交易成本
-                        self.cost += (
-                            close_price
-                            * sell_num_shares
-                            * self.sell_cost_pct[index]
-                        )
+                        self.cost += close_price * sell_num_shares * self.sell_cost_pct[index]
                         self.trades += 1
 
             return sell_num_shares, sell_amount
@@ -208,10 +203,11 @@ class StockTradeEnv(gym.Env):
         '''
         stock_name = self.current_data.tic.to_list()[index]
         close_price = self.current_data.close.to_list()[index]
-        pfo_asset = sum(np.array(self.acct_info['pfo_holding'][stock_name]) * np.array(self.acct_info['pfo_price'][stock_name]))
         stock_shares = sum(self.acct_info['pfo_holding'][stock_name])
-        # 因为初始仓位为 0
-        holding_price = round(pfo_asset / stock_shares, 3) if stock_shares > 0 else close_price
+
+        # holding_price: 平均持仓成本
+        pfo_asset = sum(np.array(self.acct_info['pfo_holding'][stock_name]) * np.array(self.acct_info['pfo_price'][stock_name]))
+        holding_price = round(pfo_asset / stock_shares, 3) if stock_shares > 0 else close_price # 因为初始仓位为 0
 
         def _do_buy():
             buy_num_shares = 0
@@ -222,32 +218,31 @@ class StockTradeEnv(gym.Env):
                 1==1
             ):
                 # 基于单笔最大交易限制
-                available_cash = sum(self.acct_info['cash_asset'])
-                available_cash = min(available_cash, self.per_buy_order_max_amt)
+                cash_asset = sum(self.acct_info['cash_asset'])
+                available_cash = min(cash_asset, self.per_buy_order_max_amt)
+                available_shares = available_cash // close_price
 
                 # 计算可买入的最多股票数量（基于单笔交易金额限制的）
-                # 因为买入的股数需要是 100 的倍数
-                available_shares = available_cash // close_price // 100 * 100
-                if available_shares > 0 and close_price > 0 and holding_price >= close_price * 0.6: # 平均亏损 40% 后不再补仓
+                if available_shares > 0 and close_price > 0:
                     # update balance
                     buy_num_shares = min(available_shares, action)
-                    if buy_num_shares % self.per_unit_qty == 0:
-                        buy_amount = (
-                            close_price
-                            * buy_num_shares
-                            * (1 + self.buy_cost_pct[index])
-                        )
-                        # 更新账户的可用本金
-                        # 买入股票，现金账户减少金额
-                        self.acct_info['cash_asset'].append(-buy_amount)
-                        # 买入股票，增加持仓
-                        self.acct_info['pfo_holding'][stock_name].append(buy_num_shares)
-                        self.acct_info['pfo_price'][stock_name].append(close_price)
+                    # 买卖数量必须以 per_unit_qty 为单位
+                    buy_num_shares =  buy_num_shares // self.per_unit_qty * self.per_unit_qty
 
-                        # 更新买入的手续费
-                        self.cost += (close_price * buy_num_shares * self.buy_cost_pct[index])
-                        # 更新交易频次，不能写在 step 函数中
-                        self.trades += 1
+                    if buy_num_shares > 0:
+                        buy_amount = close_price * buy_num_shares * (1 + self.buy_cost_pct[index])
+                        if buy_amount >= self.per_unit_amount:
+                            # 更新账户的可用本金
+                            # 买入股票，现金账户减少金额
+                            self.acct_info['cash_asset'].append(-buy_amount)
+                            # 买入股票，增加持仓
+                            self.acct_info['pfo_holding'][stock_name].append(buy_num_shares)
+                            self.acct_info['pfo_price'][stock_name].append(close_price)
+
+                            # 更新买入的手续费
+                            self.cost += close_price * buy_num_shares * self.buy_cost_pct[index]
+                            # 更新交易频次，不能写在 step 函数中
+                            self.trades += 1
 
             # 返回买入的份额数量
             return buy_num_shares, buy_amount
@@ -255,37 +250,22 @@ class StockTradeEnv(gym.Env):
         return buy_num_shares, buy_amount
 
 
-    # 画出账户资产（现金+市值）变化的趋势图
-    def _make_plot(self):
-        plt.plot(self.asset_memory, "r")
-        plt.savefig(f"results/account_value_trade_{self.episode}.png")
-        plt.close()
-
-
     def step(self, actions):
+        # MultiDiscrete start 参数在实际运行中不起作用，手动调节 actions
+        actions = actions - 5
+        # logging.warning(f'sample actions {actions}')
         # 是否 TimeLimit & truncate
         # 因为 self.df 的最后 30 行用来计算 cumulative reward，非训练数据需要剔除
         self.terminal = self.day > len(self.df.iloc[:-self.future_days].index.unique()) - self.per_batch_size
-
-        cash_asset = sum(self.acct_info['cash_asset'])
-        holding_asset = sum([
-            sum(self.acct_info['pfo_holding'][stock_name]) * close_price
-            for stock_name, close_price in zip(self.current_data.tic, self.current_data.close)
-            ])
-        begin_total_asset = holding_asset + cash_asset
+        begin_total_asset = self._get_acct_asset()
 
         if self.terminal:
-            # print(f"Episode: {self.episode}")
-            if self.make_plots:
-                self._make_plot()
-
             # 交易后的累计资产
             end_total_asset = begin_total_asset
 
             # 以下全部为辅助信息：
             # ==========================================================================
             df_total_value = pd.DataFrame(self.asset_memory)
-             # initial_amount is only cash part of our initial asset
             # tot_reward = 当前资产 - 起始资产 （策略当前的累计奖励值）
             tot_reward = end_total_asset - self.initial_amount
             # 账户资产流水 dataframe
@@ -317,45 +297,39 @@ class StockTradeEnv(gym.Env):
                 if df_total_value["daily_return"].std() != 0:
                     print(f"Sharpe: {sharpe:0.3f}")
                 print("=================================")
+                # logging.warning(f'action history: \n{self.actions_memory}')
+                logging.warning(f'acct cash asset: {sum(self.acct_info["cash_asset"])}')
 
             if (self.model_name != "") and (self.mode != ""):
-                df_actions = self.save_action_memory()
-                df_actions.to_csv(
-                    "results/actions_{}_{}_{}.csv".format(
-                        self.mode, self.model_name, self.iteration
-                    )
-                )
                 df_total_value.to_csv(
-                    "results/account_value_{}_{}_{}.csv".format(
+                    self.output_dir / "account_value_{}_{}_{}.csv".format(
                         self.mode, self.model_name, self.iteration
                     ),
                     index=False,
                 )
                 df_rewards.to_csv(
-                    "results/account_rewards_{}_{}_{}.csv".format(
+                    self.output_dir / "account_rewards_{}_{}_{}.csv".format(
                         self.mode, self.model_name, self.iteration
                     ),
                     index=False,
                 )
                 plt.plot(self.asset_memory, "r")
                 plt.savefig(
-                    "results/account_value_{}_{}_{}.png".format(
+                    self.output_dir / "account_value_{}_{}_{}.png".format(
                         self.mode, self.model_name, self.iteration
                     )
                 )
-                plt.close()
+
+            plt.close()
             # ==========================================================================
             return self.state, self.reward, self.terminal, False, self.acct_info
 
         else:
             # actions initially is scaled between 0 to 1
             # self.hmax 表示每一笔交易需要买入的最低股票数量
-            # 这个可以自定义改一下
-            # convert into integer because we can't by fraction of shares
             # 不能买入分数的份额
             actions = actions * self.hmax
-            actions = actions // 100 * 100
-            # print("begin_total_asset:{}".format(begin_total_asset))
+            actions = actions // self.per_unit_qty * self.per_unit_qty
 
             # action 就是股票交易的份额，包含每一支股票对应买卖份额的数组。其中，正为买入，负为卖出，0 为持有
             argsort_actions = np.argsort(actions)
@@ -365,24 +339,13 @@ class StockTradeEnv(gym.Env):
             # 获取买入的清单
             buy_index = argsort_actions[::-1][: np.where(actions > 0)[0].shape[0]]
 
-            potential_reward = 0
             for index in sell_index:
-                # print(f"Num shares before: {self.state[index+self.stock_dim+1]}")
-                # print(f'take sell action before : {actions[index]}')
                 # 对于卖出以实际账户的变动计算 reward
                 sell_shares, sell_amouunt = self._sell_stock(index, actions[index])
                 # 卖出为负, 所以乘以 -1
                 actions[index] = sell_shares * -1
-                # print(f'take sell action after : {actions[index]}')
-                # print(f"Num shares after: {self.state[index+self.stock_dim+1]}")
-                # 为什么是减？因为，如果卖出后，未来股价继续涨，则不应该卖出股票，所以负向激励。反之，则为逃顶，为正向激励
-                potential_reward -= self._reward_strategy(index) * sell_amouunt
-
             for index in buy_index:
-                # print('take buy action: {}'.format(actions[index]))
                 actions[index], buy_amount = self._buy_stock(index, actions[index])
-                # 对于买入，以未来的 discount cumulative reward 预期收益率计算 reward
-                potential_reward += self._reward_strategy(index) * buy_amount
 
             # 交易的记录
             self.actions_memory.append(actions)
@@ -393,14 +356,9 @@ class StockTradeEnv(gym.Env):
             self.day += 1
             # 更新环境的状态
             self.state = self._update_state()
-
             # 同上, 再计算一次期末的累计资产，因为进行了买卖交易
-            cash_asset = sum(self.acct_info['cash_asset'])
-            holding_asset = sum([
-                sum(self.acct_info['pfo_holding'][stock_name]) * close_price
-                for stock_name, close_price in zip(self.current_data.tic, self.current_data.close)
-                ])
-            end_total_asset = holding_asset + cash_asset
+            end_total_asset = self._get_acct_asset()
+
             # 当前reward的定义: 使用资产增值的数额，可以处理多股票的组合任务
             # 这种 reward 定义的就是短期激励!!!
             self.reward = end_total_asset - begin_total_asset
@@ -409,27 +367,17 @@ class StockTradeEnv(gym.Env):
             self.date_memory.append(self._get_date())
             # 记录真实的账户盈亏记录
             self.rewards_memory.append(self.reward)
-            # add current state in state_recorder for each step
-            self.state_memory.append(self.state)
-
-            # 使用自定义的 reward 来训练 agent
-            self.reward = potential_reward
-            # self.reward = self.reward + potential_reward
 
         # truncate = False
         return self.state, self.reward, self.terminal, False, self.acct_info
 
 
     # 每个 espisode 之后要重新收集资料，”一个人的美酒可能是另一个人的毒药“
-    def reset(
-        self,
-        *,
-        seed=None,
-        options=None,
-    ):
+    def reset(self, *, seed=None, options=None):
         '''
         # * 表示接受任意数量的可变参数
         '''
+        super().reset(seed=seed, options=options)
         # initiate state
         # ===============
         self.day = 0
@@ -460,7 +408,7 @@ class StockTradeEnv(gym.Env):
             begin_total_asset = holding_asset + cash_asset
             self.asset_memory = [begin_total_asset]
         else:
-            # 不需要初始化
+            # initial=False, 账户不初始化
             cash_asset = sum(self.acct_info['cash_asset'])
             holding_asset = sum([
                 sum(self.acct_info['pfo_holding'][stock_name]) * close_price
@@ -489,9 +437,9 @@ class StockTradeEnv(gym.Env):
     def _initial_acct_info(self):
         acct_info = {
             'cash_asset': [self.initial_amount],
-            'pfo_holding': {},
-            'pfo_price': {},
-            'profit_shares_sold': {},
+            'pfo_holding': {}, # 持仓变化流水
+            'pfo_price': {},  # 买卖价格流水
+            'profit_shares_sold': {}, # 已卖出的盈利份额
             }
         # 此处需要注意股票列表与持仓列表的mapping
         for idx, tic in enumerate(self.stock_pools):
@@ -503,37 +451,26 @@ class StockTradeEnv(gym.Env):
         return acct_info
 
 
-    # 奖励函数设计
-    def _reward_strategy(self, index):
-        close_price = self.current_data.close.to_list()[index]
-        stock_name = self.stock_pools[index]
-
-        future_price = self.future_data.loc[self.future_data['tic'] == stock_name].close.to_list()
-        # 在列表的首位添加输入序列的收盘价
-        future_price.insert(0, close_price)
-        price_change = np.diff(future_price)
-        # 计算股价每日涨跌幅
-        pct_change = price_change / np.array(future_price)[:-1]
-
-        # 按照未来股价走势的预期收益作为奖励分数
-        reward_return = sum([
-            pct * (1 - np.power(self.reward_scaling, 1 / (i+1)))
-            for i, pct in enumerate(pct_change)
+    def _get_acct_asset(self):
+        cash_asset = sum(self.acct_info['cash_asset'])
+        holding_asset = sum([
+            sum(self.acct_info['pfo_holding'][stock_name]) * close_price
+            for stock_name, close_price in zip(self.current_data.tic, self.current_data.close)
             ])
-        return reward_return
+        total_asset = holding_asset + cash_asset
+        return total_asset
 
 
     # 初始状态
     def _initiate_state(self):
-        # 是否完全初始化
-        if self.initial:
-            self.data = self.df.iloc[0 : self.per_batch_size]
-            self.current_data = self.data.iloc[-self.stock_dim:]
-            self.future_data = self.df.iloc[
-                (self.day+1) * self.per_batch_size : (self.day+1) * self.per_batch_size + self.future_days]
-            state = self._state_reshape()
-        else:
-            state = self._update_state()
+        # 记录股价与指标的序列信息
+        self.data = self.df.iloc[0 : self.per_batch_size]
+        # 记录股票当前最新的股价信息
+        self.current_data = self.data.iloc[-self.stock_dim:]
+        self.future_data = self.df.iloc[
+            (self.day+1) * self.per_batch_size : (self.day+1) * self.per_batch_size + self.future_days]
+
+        state = self._state_reshape()
         return state
 
 
@@ -551,12 +488,15 @@ class StockTradeEnv(gym.Env):
     # 为环境增加账户可用现金 + 持仓数据
     def _state_reshape(self):
         state = self.data.drop(columns=['date', 'tic']).values
+        # 此处因为是多个变量
         state = state.reshape(1, -1).tolist()[0]
+        # state = state.reshape(1, -1)[0]
 
+        # 是否添加 持仓信息 & 账户现金 到 obs 中
         acct_cash_asset = sum(self.acct_info['cash_asset'])
-        holding_shares = [sum(shares) for _, shares in self.acct_info['pfo_holding'].items()]
+        # holding_shares = [sum(shares) for _, shares in self.acct_info['pfo_holding'].items()]
 
-        state.extend(holding_shares)
+        # state.extend(holding_shares)
         state.append(acct_cash_asset)
         state = np.array(state)
         return state
@@ -578,65 +518,8 @@ class StockTradeEnv(gym.Env):
         return date
 
 
-    # add save_state_memory to preserve state in the trading process
-    def save_state_memory(self):
-        if self.stock_dim > 1:
-            # date and close price length must match actions length
-            date_list = self.date_memory[:-1]
-            df_date = pd.DataFrame(date_list)
-            df_date.columns = ["date"]
-
-            state_list = self.state_memory
-            df_states = pd.DataFrame(
-                state_list,
-                columns=[
-                    "cash",
-                    "Bitcoin_price",
-                    "Gold_price",
-                    "Bitcoin_num",
-                    "Gold_num",
-                    "Bitcoin_Disable",
-                    "Gold_Disable",
-                ],
-            )
-            df_states.index = df_date.date
-            # df_actions = pd.DataFrame({'date':date_list, 'actions':action_list})
-        else:
-            date_list = self.date_memory[:-1]
-            state_list = self.state_memory
-            df_states = pd.DataFrame({"date": date_list, "states": state_list})
-        # print(df_states)
-        return df_states
-
-
-    def save_asset_memory(self):
-        date_list = self.date_memory
-        asset_list = self.asset_memory
-        # print(len(date_list))
-        # print(len(asset_list))
-        df_account_value = pd.DataFrame(
-            {"date": date_list, "account_value": asset_list}
-        )
-        return df_account_value
-
-
     def save_action_memory(self):
-        if self.stock_dim > 1:
-            # date and close price length must match actions length
-            date_list = self.date_memory[:-1]
-            df_date = pd.DataFrame(date_list)
-            df_date.columns = ["date"]
-
-            action_list = self.actions_memory
-            df_actions = pd.DataFrame(action_list)
-            df_actions.columns = self.data.tic.values
-            df_actions.index = df_date.date
-            # df_actions = pd.DataFrame({'date':date_list,'actions':action_list})
-        else:
-            date_list = self.date_memory[:-1]
-            action_list = self.actions_memory
-            df_actions = pd.DataFrame({"date": date_list, "actions": action_list})
-        return df_actions
+        pass
 
 
     # 随机种子
