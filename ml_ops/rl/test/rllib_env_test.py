@@ -1,4 +1,6 @@
 from ray.rllib.algorithms.ppo import PPOConfig
+from ray.rllib.algorithms.algorithm import Algorithm
+
 from ray.rllib.algorithms.callbacks import MemoryTrackingCallbacks
 from ray.tune.registry import register_env
 import gymnasium as gym
@@ -6,6 +8,7 @@ import time
 
 import logging
 import ray
+import os
 
 import sys
 from pathlib import Path
@@ -105,10 +108,16 @@ config = ( # 1. Configure the algorithm,
     # .evaluation(evaluation_interval=100, evaluation_num_workers=1)
     )
 
-algo = config.build()  # 2. build the algorithm,
+
+checkpoint_dir = Path(current_dir)/'trader_bot'
+if Path(checkpoint_dir).exists():
+    algo = Algorithm.from_checkpoint(checkpoint_dir)
+else:
+    algo = config.build()  # 2. build the algorithm,
+
 
 start_time = time.time()
-time_steps = 1000
+time_steps = 20
 
 for _ in range(time_steps):
     epoch_start_time = time.time()
@@ -117,6 +126,20 @@ for _ in range(time_steps):
     epoch_end_time = time.time()
     logging.warning(f'''
         training round No. {_+1}, round time: {(epoch_end_time - epoch_start_time):.1f}s, total_time: {(epoch_end_time - start_time):.1f}s''')
+
+
+os.remove(checkpoint_dir)
+# .. and call `save()` to create a checkpoint.
+save_result = algo.save(checkpoint_dir=checkpoint_dir)
+path_to_checkpoint = save_result.checkpoint.path
+print(
+    "An Algorithm checkpoint has been created inside directory: "
+    f"'{path_to_checkpoint}'."
+)
+
+# Let's terminate the algo for demonstration purposes.
+algo.stop()
+
 
 # algo.evaluate()  # 4. and evaluate it.
 

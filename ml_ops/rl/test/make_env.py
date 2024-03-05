@@ -36,6 +36,8 @@ sql = '''
 stock_data = mysql_db_client.data_read(sql)
 # factorize() 将一组数据编码成整数编码
 stock_data.index = stock_data.date.factorize()[0]
+
+stock_data.to_csv(Path(current_dir) / 'stock.csv', index=False)
 logging.warning(f'\n{stock_data.head()}')
 
 stock_nums = len(stock_data.tic.unique())
