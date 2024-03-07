@@ -49,3 +49,8 @@ def test_func(model, dataloader):
 
     metric_loss = round(test_loss / len(dataloader), 8)
     return metric_loss
+
+
+if __name__ == '__main__':
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f'Use device with {device}')

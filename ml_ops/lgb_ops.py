@@ -26,4 +26,4 @@ class LightGBM_Ops(AbstractMLOps):
 
 
     def save_checkpoint(self, *args, **kwargs):
-        return super().save_checkpoint(*args, **kwargs)
+        return super().save_checkpoint(*args, model_frame=mlflow.lightgbm, **kwargs)

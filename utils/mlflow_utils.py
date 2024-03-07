@@ -2,9 +2,9 @@ from mlflow.client import MlflowClient
 import mlflow
 import logging
 
+tracking_uri = 'http://192.168.1.105:9001/'
 
-
-def check_model_existence(model_name, tracking_uri='http://127.0.0.1:9001/'):
+def check_model_existence(model_name, tracking_uri=tracking_uri):
     # 获取注册的模型的所有版本
     mlflow_client = MlflowClient(tracking_uri)
     registered_models = [
@@ -14,7 +14,7 @@ def check_model_existence(model_name, tracking_uri='http://127.0.0.1:9001/'):
 
 
 
-def load_register_model_args(reg_model_name, model_version, tracking_uri='http://127.0.0.1:9001/'):
+def load_register_model_args(reg_model_name, model_version, tracking_uri=tracking_uri):
     mlflow_client = MlflowClient(tracking_uri)
     hist_model_uri = mlflow_client.get_model_version_download_uri(reg_model_name, model_version)
     hist_model_info = mlflow.models.get_model_info(hist_model_uri)

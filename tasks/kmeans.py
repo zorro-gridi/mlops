@@ -10,16 +10,29 @@ from mlops.tasks.base import AbstractModelFactory
 
 import mlflow
 from mlflow.models import infer_signature
-
+import ray
+from ray.air.integrations.mlflow import setup_mlflow
 
 
 class kmeans_task(AbstractModelFactory):
     def __init__(self, **kwargs):
-        super(kmeans_task, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.model_arch = 'kmeans'
 
 
-    def train_job(self, data, init_clusters=15, max_clusters=30):
+    def train_func(self, data, n_clusters=15):
+        '''
+        # init_clusters: kmeans 迭代的最大族数
+        # max_clusters: 搜索空间的最大族数
+        '''
+        km_estimator = KMeans(n_clusters=n_clusters, **self.model_init_params)
+        km_estimator.fit(data)
+
+        silhouette_score = self.eval_job(km_estimator, test_X=data, metric_name=self.model_eval_metric)
+        return km_estimator, silhouette_score
+
+
+    def train_job(self, data, init_clusters=15, max_clusters=30, **kwargs):
         '''
         # init_clusters: kmeans 迭代的最大族数
         # max_clusters: 搜索空间的最大族数
@@ -27,24 +40,26 @@ class kmeans_task(AbstractModelFactory):
         silhouette_score_list = []
         estimators = []
 
-        with mlflow.start_run(
-            run_name=f"kmeans_train_job_{time.strftime('%Y-%m-%d %H:%M')}_{random.randint(1e3, 9e3)}"):
-            logging.warning(f'start kmeans clusters......')
-            # init_clusters 区别于 KMeans 自身的 init
-            for n in range(init_clusters, max_clusters):
-                kmeans = KMeans(n_clusters=n, **self.model_init_params)
-                kmeans.fit(data)
+        # setup_mlflow(
+        #     tracking_uri=kwargs['tracking_uri'],
+        #     experiment_name=kwargs['experiment_name'],
+        #     run_name=f"kmeans_train_job_{time.strftime('%Y-%m-%d %H:%M')}_{random.randint(1e3, 9e3)}",
+        #     )
 
-                cluster_distance = kmeans.inertia_
-                # cluster_centers = kmeans.cluster_centers_
-                silhouette_score = self.eval_job(kmeans, test_X=data, metric_name=self.model_eval_metric)
-                silhouette_score_list.append(silhouette_score)
+        logging.warning(f'start kmeans clusters......')
+        # with mlflow.start_run(
+        #     run_name=f"kmeans_train_job_{time.strftime('%Y-%m-%d %H:%M')}_{random.randint(1e3, 9e3)}"):
+        # init_clusters 区别于 KMeans 自身的 init
+        for n in range(init_clusters, max_clusters):
+            kmeans, silhouette_score = self.train_func(data=data, n_clusters=n)
+            silhouette_score_list.append(silhouette_score)
+            estimators.append(kmeans)
 
-                mlflow.log_metric('cluster_distance', cluster_distance, step=n)
-                mlflow.log_metric('silhouette_score', silhouette_score, step=n)
-
-                estimators.append(kmeans)
-                logging.warning(f'n_cluster: {n}, distance: {cluster_distance:,.0f}, {self.model_eval_metric}: {silhouette_score:,.6f}')
+            cluster_distance = kmeans.inertia_
+            # cluster_centers = kmeans.cluster_centers_
+            # mlflow.log_metric('cluster_distance', cluster_distance, step=n)
+            # mlflow.log_metric('silhouette_score', silhouette_score, step=n)
+            logging.warning(f'n_cluster: {n}, distance: {cluster_distance:,.0f}, {self.model_eval_metric}: {silhouette_score:,.6f}')
 
             # ===================================================================
             # 理论上 score 是要一直下降的，找到一个突然上升的点的前一个聚类数，则是最优聚类数
@@ -54,11 +69,11 @@ class kmeans_task(AbstractModelFactory):
                 for i in range(len(silhouette_score_list)-1)
                 ]
 
-            # 自动筛选最优聚类数的 estimator
-            best_estimator_idx = np.argmax(score_diff)
-            best_estimator = estimators[best_estimator_idx]
+        # 自动筛选最优聚类数的 estimator
+        best_estimator_idx = np.argmax(score_diff)
+        best_estimator = estimators[best_estimator_idx]
 
-            return best_estimator
+        return best_estimator
 
 
     def tune_job(self, *args, **kwargs):

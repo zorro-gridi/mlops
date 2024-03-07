@@ -13,6 +13,7 @@ import shutil
 from functools import partial
 from mlops.tasks.base import AbstractModelFactory
 from typing import List, Callable
+import torch
 
 
 
@@ -85,6 +86,8 @@ class xgboost_task(AbstractModelFactory):
             'subsample': config['subsample'],
             'objective': self.model_loss_func,
             'eval_metric': self.model_eval_metric,
+            # 设置 GPU 训练
+            'device': "cuda" if torch.cuda.is_available() else "cpu"
             }
 
         # 将初始化参数更新到 config 中
@@ -98,6 +101,9 @@ class xgboost_task(AbstractModelFactory):
             min_delta=1e-3 * 0.2,
             maximize=True if self.optimize_mode == 'max' else False,
             )
+
+        train_data = ray.get(train_data)
+        test_data = ray.get(test_data)
 
         it = Iterator(train_data)
         dtrain = xgb.DMatrix(it)

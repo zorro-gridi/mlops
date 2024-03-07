@@ -23,7 +23,6 @@ from mlops.baseConfig.raytuneConfig import scaling_config
 
 
 
-
 class AbstractModelFactory(metaclass=ABCMeta):
 
     def __init__(self,
@@ -76,6 +75,8 @@ class AbstractModelFactory(metaclass=ABCMeta):
         report_metric_name = f'test_{self.model_eval_metric}'
 
         # TODO: 直接把偏函数传入 ray.tune 导致 large object warning, 因为，参数太大了
+        # 解决方案：使用 ray.put() ray.get() 好像能解决问题
+
         # Warning: The actor ImplicitFunc is very large (20 MiB).
         # Check that its definition is not implicitly capturing a large array or other object in scope.
         # Tip: use ray.put() to put large objects in the Ray object store.
@@ -86,7 +87,10 @@ class AbstractModelFactory(metaclass=ABCMeta):
             max_epochs = kwargs.pop('max_epochs', 10)
             train_cifar = partial(train_cifar, max_epochs=max_epochs)
 
-        train_with_resources = tune.with_resources(train_cifar, resources=scaling_config)
+        # scaling_config: 可能是 ray.train 的写法
+        # train_with_resources = tune.with_resources(train_cifar, resources=scaling_config)
+        # tune 写法案例：https://docs.ray.io/en/latest/tune/tutorials/tune-resources.html
+        train_with_resources = tune.with_resources(train_cifar, resources={'gpu': round(1/4, 1), 'cpu': 4})
         checkpoint_strategy = train.CheckpointConfig(
             # 只保存一个最优的checkpoint，节约存储空间
             num_to_keep=1,

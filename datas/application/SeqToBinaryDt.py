@@ -1,6 +1,7 @@
 from mlops.datas.BaseSeqToClassDt import BaseSeqToClassDt
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
+import logging
 
 
 
@@ -10,7 +11,8 @@ class SeqToBinaryDt(BaseSeqToClassDt):
     '''
     def __init__(self, y_threshold=10, **kwargs):
         '''
-        # y_threshold: 将序列 y 转换为 class 的阈值
+        Args:
+            y_threshold: 将序列 y 转换为 class 的阈值
         '''
         super().__init__(**kwargs)
         self.y_threshold = y_threshold

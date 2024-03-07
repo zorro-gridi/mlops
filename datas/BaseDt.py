@@ -27,10 +27,11 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
     '''
     def __init__(self, features=None, categoric_features=None, target=None, preprocess_func=None):
         '''
-        # target: str 表示目标变量名称 / int 目标变量的 索引值
-        # preprocess_func: 数据进行特征工程之前的预处理函数
-        # categoric_features: 数据中的分类特征
-        # features: 数据默认输入特征
+        Args:
+            features: 数据默认输入特征
+            target: str 表示目标变量名称 / int 目标变量的 索引值
+            preprocess_func: 数据进行特征工程之前的预处理函数
+            categoric_features: 数据中的分类特征
         '''
         self.features = features
         self.target = target

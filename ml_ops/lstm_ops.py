@@ -107,7 +107,7 @@ class LstmOps(AbstractMLOps):
 
 
     def save_checkpoint(self, *args, **kwargs):
-        return super().save_checkpoint(*args, **kwargs)
+        return super().save_checkpoint(*args, model_frame=mlflow.pytorch, **kwargs)
 
 
     # def save_checkpoint(self, checkpoint_inst, reg_model_name, model_version='1', model_alias=None):

@@ -10,11 +10,16 @@ from mlflow.models import infer_signature
 from mlflow.client import MlflowClient
 import logging
 from pathlib import Path
+import time
 
 import lightgbm as lgb
 import xgboost as xgb
 from catboost import CatBoost as cat
 import ray
+from munch import DefaultMunch
+from mlops.utils.wrappers import DictWrapper
+import ray
+from ray.air.integrations.mlflow import setup_mlflow
 
 
 class AbstractMLOps(metaclass=ABCMeta):
@@ -29,6 +34,7 @@ class AbstractMLOps(metaclass=ABCMeta):
             output_model=None,
             preprocess_func=None,
             postprocess_func=None,
+            mlflow_config=None,
             ):
         '''
         # preprocess_func: 对输入的raw_data进行预处理加工
@@ -45,15 +51,22 @@ class AbstractMLOps(metaclass=ABCMeta):
 
         self.preprocess_func = preprocess_func
         self.postprocess_func = postprocess_func
+        self.mlflow_config = mlflow_config
 
         # 框架目前已实现的模型训练流程类型
-        self.mlflow_model_flavor = {
-            'xgb': mlflow.xgboost,
-            'cat': mlflow.catboost,
-            'nn': mlflow.pytorch,
-            'kmeans': mlflow.sklearn,
-            'lgb': mlflow.lightgbm,
-            }
+        #  这个 lazyloader 无法序列化
+        # self.mlflow_model_flavor = {
+        #     'xgb': mlflow.xgboost,
+        #     'cat': mlflow.catboost,
+        #     'nn': mlflow.pytorch,
+        #     'kmeans': mlflow.sklearn,
+        #     'lgb': mlflow.lightgbm,
+        #     }
+
+    def _get_attr(self):
+        kwarg = {k: v for k, v in self.__dict__.items() if not k.startswith('__')}
+        return DefaultMunch.fromDict(kwarg)
+
 
     def run_data_args(self, *args, **kwargs):
         pass
@@ -71,11 +84,14 @@ class AbstractMLOps(metaclass=ABCMeta):
         '''
         # 该函数实现了 raytune 自动调参，并返回最优模型和参数 checkpoint
         '''
+        if self.model_task.model_arch in ['xgb']:
+            train_data = ray.put(self.train_data)
+            test_data = ray.put(self.test_data)
 
         tune_results = self.model_task.tune_job(
             params_space,
-            train_data=self.train_data,
-            test_data=self.test_data,
+            train_data=train_data,
+            test_data=test_data,
             **kwargs
             )
 
@@ -112,8 +128,8 @@ class AbstractMLOps(metaclass=ABCMeta):
         return best_checkpoint
 
 
-
-    def test_hist_model(self, reg_model_name, model_version='1'):
+    # 一般情况
+    def test_hist_model(self, reg_model_name, model_version='1', model_frame=None):
         '''
         该方法实现以下功能：
             1. 加载历史注册模型；
@@ -122,7 +138,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         加载模型方面,mlflow已经实现了统一接口。加载测试数据集方面,如果模型需要定制方法,可以通过子类改写此方法
         '''
         model_arch = self.model_task.model_arch
-        histt_regis_model = self.mlflow_model_flavor[model_arch].load_model(
+        histt_regis_model = model_frame.load_model(
             f"models:/{reg_model_name}/{model_version}")
         hist_model_config = mlflow_utils.load_register_model_args(reg_model_name, model_version)
 
@@ -142,7 +158,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         return hist_eval_metric
 
 
-    def save_checkpoint(self, checkpoint, reg_model_name, model_version='1', model_alias=None):
+    def save_checkpoint(self, checkpoint, reg_model_name, model_version='1', model_alias=None, model_frame=None):
         '''
         该方法实现了如下统一接口功能:
             1. 对比new model 和 hist model 的测试评分
@@ -152,10 +168,20 @@ class AbstractMLOps(metaclass=ABCMeta):
             5. 更新 mlops 类的 dataset_inst 类的属性
         '''
         # find_best_model_args 的 checkpoint metric 指标不带 test 前缀
-        tune_model_metric = checkpoint[self.model_task.model_eval_metric]
-        mlflow_client = MlflowClient(mlflow.get_tracking_uri())
+        if self.model_task.custom_loss_func:
+            metric_name = self.model_task.custom_loss_func.loss_name
+        else:
+            metric_name = self.model_task.model_eval_metric
+        tune_model_metric = checkpoint[metric_name]
+
         model_arch = self.model_task.model_arch
         best_model = checkpoint['best_model']
+
+        # 首先启动 mlflow 的 session
+        # =============================================
+        run_name = f'{model_arch}_best_model_and_config'
+        setup_mlflow(run_name=run_name, **self.mlflow_config,)
+        mlflow_client = MlflowClient(mlflow.get_tracking_uri())
 
         global data_util_map
         def data_util_map(test_data, params_config=None):
@@ -195,10 +221,11 @@ class AbstractMLOps(metaclass=ABCMeta):
             return test_loader, signature
 
         if mlflow_utils.check_model_existence(reg_model_name):
-            histt_regis_model = self.mlflow_model_flavor[model_arch].load_model(f"models:/{reg_model_name}/{model_version}")
+            histt_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{model_version}")
 
             # 测试历史模型
-            hist_eval_metric = self.test_hist_model(reg_model_name, model_version=model_version)
+            # =================================================================
+            hist_eval_metric = self.test_hist_model(reg_model_name, model_version=model_version, model_frame=model_frame)
             if self.model_task.optimize_mode == 'min':
                 compare_bools_result = -tune_model_metric <= -hist_eval_metric
             else:
@@ -210,8 +237,8 @@ class AbstractMLOps(metaclass=ABCMeta):
                 self.output_model = histt_regis_model
 
                 logging.warning(f'''
-                    tune {model_arch} model {self.model_task.model_eval_metric}: {tune_model_metric:,.3f}
-                    hist {model_arch} model {self.model_task.model_eval_metric}: {hist_eval_metric:,.3f}
+                    tune {model_arch} model {metric_name}: {tune_model_metric:,.3f}
+                    hist {model_arch} model {metric_name}: {hist_eval_metric:,.3f}
                     --> 使用历史最优模型推理......
                     ''')
                 return 'hist', histt_regis_model
@@ -246,28 +273,32 @@ class AbstractMLOps(metaclass=ABCMeta):
             best_model.eval()
         self.output_model = best_model
 
-        test_data = self.test_data if self.test_data is not None else self.train_data
+        test_data = self.test_data if self.test_data else self.train_data
         test_loader, signature = data_util_map(test_data, params_config=params_config)
 
-        run_name = f'{model_arch}_best_model_and_config'
-        with mlflow.start_run(run_name=run_name):
-            model_info = self.mlflow_model_flavor[model_arch].log_model(
-                best_model,
-                'models',
-                signature=signature,
-                registered_model_name=reg_model_name,
-                )
+        # with mlflow.start_run(run_name=run_name):
+        # TODO: current path: file:///home/zorro/project/pycharm/mlruns/0/01de69589f3b45df8c6111899175b97c/artifacts
+        logging.warning(f'register model uri: {mlflow.get_registry_uri()}')
+        logging.warning(f'tracking model uri: {mlflow.get_tracking_uri()}')
+        # model_info = self.mlflow_model_flavor[model_arch].log_model(
+        model_info = model_frame.log_model(
+            best_model,
+            artifact_path='models',
+            signature=signature,
+            registered_model_name=reg_model_name,
+            )
 
-            mlflow.log_params(params_config)
-            mlflow.log_metric(f'test_{self.model_task.model_eval_metric}', tune_model_metric)
-            mlflow_client.set_registered_model_alias(reg_model_name, model_alias, model_version)
-            mlflow_client.set_registered_model_alias(reg_model_name, model_arch, model_version)
-            mlflow_client.set_registered_model_tag(
-                reg_model_name, f'test_{self.model_task.model_eval_metric}', str(round(tune_model_metric, 6)))
+        mlflow.log_params(params_config)
+        mlflow.log_metric(f'test_{metric_name}', tune_model_metric)
+        mlflow_client.set_registered_model_alias(reg_model_name, model_alias, model_version)
+        mlflow_client.set_registered_model_alias(reg_model_name, model_arch, model_version)
+        mlflow_client.set_registered_model_tag(
+            reg_model_name, f'test_{metric_name}', str(round(tune_model_metric, 6)))
 
-            logging.warning(f'''
-                {model_arch} model test {self.model_task.model_eval_metric}: {tune_model_metric:,.3f}
-                --> 使用当前模型推理......
-                ''')
-            logging.warning(f'当前训练的 {model_arch} 模型已保存.')
-            return 'new', best_model
+        mlflow.end_run()
+        logging.warning(f'''
+            {model_arch} model test {metric_name}: {tune_model_metric:,.3f}
+            --> 使用当前模型推理......
+            ''')
+        logging.warning(f'当前训练的 {model_arch} 模型已保存.')
+        return 'new', best_model

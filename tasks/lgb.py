@@ -19,6 +19,7 @@ from sklearn.metrics import (
 
 import sklearn.datasets
 from sklearn.model_selection import train_test_split
+import torch
 
 
 import os
@@ -40,6 +41,7 @@ class LigthGBM_Task(AbstractModelFactory):
         self.model_init_params['objective'] = self.model_loss_func
         self.model_init_params['metric'] = self.model_eval_metric
         self.model_init_params['verbosity'] = -1
+        self.model_init_params['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         self.model_arch = 'lgb'
 

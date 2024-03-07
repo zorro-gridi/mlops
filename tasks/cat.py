@@ -17,6 +17,7 @@ import numpy as np
 from functools import partial
 import logging
 from copy import copy
+import torch
 
 
 
@@ -39,14 +40,18 @@ class CatboostTask(AbstractModelFactory):
             'od_wait': 40
             }
         self.model_init_params.update(earlystop_params)
-
         self.model_arch = 'cat'
 
 
     def train_job(self, config, train_data, test_data):
         model_params = copy(config)
+
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        model_params['task_type'] = device
+        model_params['devices'] = [0]
+
         self.model_init_params.update(model_params)
-        # CatBoost 接受字典类型参数
+        # CatBoost 接受字典类型参数。实例化过程类似于网络模型: 模型结构参数和模型训练参数分开
         trial_model = CatBoost(self.model_init_params)
 
         # pool 对象本身会分批次加载数据集进行模型训练

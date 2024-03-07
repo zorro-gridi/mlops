@@ -9,12 +9,13 @@ import mlflow
 from mlflow.models import infer_signature
 from mlflow.client import MlflowClient
 from mlops.utils import mlflow_utils
+import ray
 
 
-
+@ray.remote(num_cpus=1)
 class KmeansOps(AbstractMLOps):
     def __init__(self, **kwargs):
-        super(KmeansOps, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
 
     def run_data_args(self,):
@@ -30,6 +31,12 @@ class KmeansOps(AbstractMLOps):
         best_test_loss = 0
         final_best_estimator = None
 
+        built_in_metric = self.model_task.model_eval_metric
+
+        # 自定义的损失函数，必须具有 caculate (见下方代码) 方法和 loss_name 属性
+        loss_fn = self.model_task.custom_loss_func
+        loss_name = loss_fn.loss_name if loss_fn else None
+
         for data_args in data_args_space:
             logging.warning(f'''
                 data args:
@@ -42,12 +49,11 @@ class KmeansOps(AbstractMLOps):
             X_positive = np.array([x for x, label in zip(X, y) if label == 1])
 
             for _ in range(2):
-                best_estimator = self.model_task.train_job(X_positive)
+                best_estimator = self.model_task.train_job(X_positive, **self.mlflow_config)
                 pred_labels = best_estimator.predict(X)
 
+                # 返回结果 post-processing
                 best_labels_ratio = self.postprocess_func(pred_labels, y)
-                loss_fn = self.model_task.custom_loss_func
-                loss_name = self.model_task.custom_loss_func.loss_name
                 custom_test_loss = loss_fn.caculate(best_labels_ratio)
                 logging.warning(f'data args: {data_args} - {loss_name}: {custom_test_loss}')
 
@@ -64,6 +70,8 @@ class KmeansOps(AbstractMLOps):
             # 如果指标有提升, 则更新相关参数
             if compare_bool:
                 # 更新最优 model 和 loss
+                # 如果使用了自定以的损失函数，但是 checkpoint 返回的函数名还是 model_eval_metric，
+                # 和自定义名字不一样，不要误会。不影响代码数据结果
                 best_test_loss = custom_test_loss
                 final_best_estimator = best_estimator
                 # 必须写在里面更新
@@ -80,21 +88,20 @@ class KmeansOps(AbstractMLOps):
         if best_test_loss == 0:
             logging.warning(f'新模型训练失败，没有满足的目标数据......')
 
-        self.model_task.model_eval_metric = loss_name
+        #  在此处自定义更新了模型默认的 loss_name 名称，导致多进程的时候互相影响
+        return_metirc_name = loss_name if loss_name else built_in_metric
         best_checkpoint = {
             'best_model': final_best_estimator,
-            self.model_task.model_eval_metric: best_test_loss,
+            return_metirc_name: best_test_loss,
             }
         return best_checkpoint
 
 
-    def test_hist_model(self, reg_model_name, model_version='1'):
+    def test_hist_model(self, reg_model_name, model_version='1', model_frame=None):
         '''
         此处重写父类的 test_hist_model 方法
         '''
-        hist_model = self.mlflow_model_flavor[self.model_task.model_arch].load_model(
-            f"models:/{reg_model_name}/{model_version}")
-
+        hist_model = model_frame.load_model(f"models:/{reg_model_name}/{model_version}")
         hist_model_config = mlflow_utils.load_register_model_args(reg_model_name, model_version)
         # 更新数据参数属性为历史参数
         self.dataset_inst.set_attr(hist_model_config)
@@ -107,7 +114,7 @@ class KmeansOps(AbstractMLOps):
 
 
     def save_checkpoint(self, *args, **kwargs):
-        return super().save_checkpoint(*args, **kwargs)
+        return super().save_checkpoint(*args, model_frame=mlflow.sklearn, **kwargs)
 
 
     def run_model_args(self, *data_args_space, **kwargs):
