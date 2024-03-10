@@ -47,8 +47,6 @@ class kmeans_task(AbstractModelFactory):
         #     )
 
         logging.warning(f'start kmeans clusters......')
-        # with mlflow.start_run(
-        #     run_name=f"kmeans_train_job_{time.strftime('%Y-%m-%d %H:%M')}_{random.randint(1e3, 9e3)}"):
         # init_clusters 区别于 KMeans 自身的 init
         for n in range(init_clusters, max_clusters):
             kmeans, silhouette_score = self.train_func(data=data, n_clusters=n)

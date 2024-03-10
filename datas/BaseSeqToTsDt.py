@@ -12,7 +12,6 @@ from sklearn.model_selection import train_test_split
 import logging
 
 
-
 class BaseSeqToTsDt(AbstractDatasetFactory):
     '''
     主要特征：序列到时间序列
@@ -30,15 +29,18 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
             self.features = len(self.features)
 
 
-    def feature_engineering(self, vars_datas):
+    def feature_engineering(self, vars_datas: np.array):
         '''
-        # vars_datas: 数组对象
+        Args:
+            vars_datas: 数组
+        Return:
+            shape 为 (-1, window) 的多维数组
         '''
         # 时间序列的特征定义
         window = self.features + self.target
         vars_datas_copy = vars_datas.copy()
         # 时间序列处理的核心
-        vars_datasets = [vars_datas_copy[i:i+window] for i in range(len(vars_datas_copy))]
+        vars_datasets = [vars_datas_copy[i:i+window] for i in range(len(vars_datas_copy)) if vars_datas_copy[i:i+window] == window]
 
         # 将不满足长度的数据全部删除，数据信息没有影响
         vars_datasets = [v for v in vars_datasets if len(v) == window]

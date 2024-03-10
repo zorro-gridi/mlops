@@ -63,9 +63,16 @@ class AbstractMLOps(metaclass=ABCMeta):
         #     'lgb': mlflow.lightgbm,
         #     }
 
-    def _get_attr(self):
+    def _get_attr_sets(self):
         kwarg = {k: v for k, v in self.__dict__.items() if not k.startswith('__')}
         return DefaultMunch.fromDict(kwarg)
+
+
+    def _get_attr(self, name):
+        attr_ref = getattr(self, name)
+        # 对于属性为 class 的属性，需要再次调用 ray.get()
+        attr_value = ray.get(attr_ref)
+        return attr_value
 
 
     def run_data_args(self, *args, **kwargs):
@@ -140,6 +147,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         model_arch = self.model_task.model_arch
         histt_regis_model = model_frame.load_model(
             f"models:/{reg_model_name}/{model_version}")
+        # 下载历史模型
         hist_model_config = mlflow_utils.load_register_model_args(reg_model_name, model_version)
 
         # 如果历史没有配置数据参数,就直接加载传入的数据

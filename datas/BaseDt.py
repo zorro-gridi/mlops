@@ -30,6 +30,8 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
         Args:
             features: 数据默认输入特征
             target: str 表示目标变量名称 / int 目标变量的 索引值
+                = 1: 表示单步预测
+                > 1: 表示多步预测
             preprocess_func: 数据进行特征工程之前的预处理函数
             categoric_features: 数据中的分类特征
         '''

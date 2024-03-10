@@ -109,7 +109,7 @@ class lstmTsTask(AbstractModelFactory):
 
                 logging.warning(f'''
                     Epoch: {i}:
-                        traini {self.model_eval_metric} loss: {training_loss:,.6f}
+                        train {self.model_eval_metric} loss: {training_loss:,.6f}
                         test {self.model_eval_metric} loss: {metric_loss:,.6f}
                     ''')
 

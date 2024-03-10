@@ -7,6 +7,7 @@ from torch.optim.lr_scheduler import ExponentialLR
 def train_func(model, optimizer, train_dataloader):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.train()
+    model.to(device)
     # 全部样本数据（或者全部 batch）训练一次，称为一个epoch
     training_loss = 0
 
@@ -35,6 +36,7 @@ def test_func(model, dataloader):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if isinstance(model, nn.Module):
         model.eval()
+        model.to(device)
 
     test_loss = 0
     # 不用更新梯度
