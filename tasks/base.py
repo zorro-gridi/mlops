@@ -62,7 +62,20 @@ class AbstractModelFactory(metaclass=ABCMeta):
 
     def tune_job(self, search_space, train_data, test_data, checkpoint_dir=None, **kwargs):
         '''
-        基于 ray tune 调参框架的通用方法
+        Args:
+            search_space:
+            train_data:
+            test_data:
+            checkpoint_dir:
+        Kwargs:
+            num_samples:
+            callbacks:
+            num_gpus:
+            num_cpus:
+        Return:
+            tuen.ResultGrid class
+        Desc:
+            基于 ray[tune] 调参框架的通用方法
         '''
         num_samples=kwargs.pop('num_samples', 20)
         callbacks = kwargs.pop('callbacks', None)
@@ -73,6 +86,9 @@ class AbstractModelFactory(metaclass=ABCMeta):
             os.makedirs(checkpoint_dir, exist_ok=True)
 
         report_metric_name = f'test_{self.model_eval_metric}'
+
+        num_gpus = kwargs.pop('num_gpus', round(1/4, 1))
+        num_cpus = kwargs.pop('num_cpus', 4)
 
         # TODO: 直接把偏函数传入 ray.tune 导致 large object warning, 因为，参数太大了
         # 解决方案：使用 ray.put() ray.get() 好像能解决问题
@@ -90,7 +106,7 @@ class AbstractModelFactory(metaclass=ABCMeta):
         # scaling_config: 可能是 ray.train 的写法
         # train_with_resources = tune.with_resources(train_cifar, resources=scaling_config)
         # tune 写法案例：https://docs.ray.io/en/latest/tune/tutorials/tune-resources.html
-        train_with_resources = tune.with_resources(train_cifar, resources={'gpu': round(1/4, 1), 'cpu': 4})
+        train_with_resources = tune.with_resources(train_cifar, resources={'gpu': num_gpus, 'cpu': num_cpus})
         checkpoint_strategy = train.CheckpointConfig(
             # 只保存一个最优的checkpoint，节约存储空间
             num_to_keep=1,

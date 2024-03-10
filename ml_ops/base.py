@@ -37,8 +37,10 @@ class AbstractMLOps(metaclass=ABCMeta):
             mlflow_config=None,
             ):
         '''
-        # preprocess_func: 对输入的raw_data进行预处理加工
-        # postprocess_func: 对模型的输出进行加工,使满足最终输出要求。需要在主程序中定义
+        Args:
+            preprocess_func: 对输入的raw_data进行预处理加工
+            postprocess_func: 对模型的输出进行加工,使满足最终输出要求。需要在主程序中定义
+            mlflow_config: mlflow 任务的配置名称与后端链接等信息 dict
         '''
         self.model_task = model_task
         self.dataset_inst = dataset_inst
@@ -89,11 +91,20 @@ class AbstractMLOps(metaclass=ABCMeta):
 
     def find_best_model_args(self, params_space, **kwargs):
         '''
-        # 该函数实现了 raytune 自动调参，并返回最优模型和参数 checkpoint
+        Args:
+            params_space:
+        Desc:
+            该函数实现了 raytune 自动调参，并返回最优模型和参数 checkpoint
+        Return:
+            best_checkpoint: Dict
         '''
         if self.model_task.model_arch in ['xgb']:
-            train_data = ray.put(self.train_data)
-            test_data = ray.put(self.test_data)
+            # TODO: 有些案例直接调用 task train_job 接口，因此可能引发异常
+            try:
+                train_data = ray.put(self.train_data)
+                test_data = ray.put(self.test_data)
+            except:
+                logging.warning(f'train & test data already on ray remote data store! pass...')
 
         tune_results = self.model_task.tune_job(
             params_space,
@@ -138,11 +149,15 @@ class AbstractMLOps(metaclass=ABCMeta):
     # 一般情况
     def test_hist_model(self, reg_model_name, model_version='1', model_frame=None):
         '''
-        该方法实现以下功能：
-            1. 加载历史注册模型；
-            2. 加载历史模型的最新数据输入；
-            3. 计算历史模型损失函数。
-        加载模型方面,mlflow已经实现了统一接口。加载测试数据集方面,如果模型需要定制方法,可以通过子类改写此方法
+        Desc:
+            该方法实现以下功能：
+            1. 加载历史注册模型
+            2. 加载历史模型的最新数据输入
+            3. 计算历史模型损失函数
+            设计模式
+            =======================================
+            ps1. 加载模型方面, mlflow已经实现了统一接口。
+            ps2. 加载测试数据集方面, 如果模型需要定制方法, 可以通过子类继承改写此方法！！
         '''
         model_arch = self.model_task.model_arch
         histt_regis_model = model_frame.load_model(
