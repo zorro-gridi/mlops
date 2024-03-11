@@ -41,6 +41,18 @@ class CatboostTask(AbstractModelFactory):
         self.model_init_params.update(earlystop_params)
         self.model_arch = 'cat'
 
+    def convert_data(self, train_data, test_data):
+        # 当有分类特征时，最好提前构造好 Pool 格式的数据集
+        if type(train_data).__name__ == 'Pool':
+            logging.warning(f'train data alread be cat Pool type...')
+            train_pool = train_data
+            test_pool = test_data
+        else:
+            # pool 对象本身会分批次加载数据集进行模型训练
+            train_pool = Pool(*train_data)
+            test_pool = Pool(*test_data)
+        return train_pool, test_pool
+
 
     def train_job(self, config, train_data, test_data):
         config_device = config.pop('device', 'CPU')
@@ -57,25 +69,14 @@ class CatboostTask(AbstractModelFactory):
         # CatBoost 接受字典类型参数。实例化过程类似于网络模型: 模型结构参数和模型训练参数分开
         trial_model = CatBoost(self.model_init_params)
 
-        # 当有分类特征时，最好提前构造好 Pool 格式的数据集
-        if type(train_data).__name__ == 'Pool':
-            logging.warning(f'train data alread be cat Pool type...')
-            train_pool = train_data
-            test_pool = test_data
-            cv_pool = train_pool
+        train_pool, test_pool = self.convert_data(train_data, test_data)
+        # x_train, y_train = train_data
+        # x_test, y_test = test_data
 
-        else:
-            # pool 对象本身会分批次加载数据集进行模型训练
-            train_pool = Pool(*train_data)
-            test_pool = Pool(*test_data)
-
-            # x_train, y_train = train_data
-            # x_test, y_test = test_data
-
-            # X = np.concatenate([x_train, x_test], axis=0)
-            # y = np.concatenate([y_train, y_test], axis=0)
-            # cv_pool = Pool(X, y)
-            cv_pool = train_pool
+        # X = np.concatenate([x_train, x_test], axis=0)
+        # y = np.concatenate([y_train, y_test], axis=0)
+        # cv_pool = Pool(X, y)
+        cv_pool = train_pool
 
 
         # cat_features, ... 都可以写入 self.model_train_params
@@ -109,11 +110,9 @@ class CatboostTask(AbstractModelFactory):
         self.model_init_params.update(best_params)
         best_model = CatBoost(self.model_init_params)
 
-        train_pool = Pool(*train_data)
-        test_pool = Pool(*test_data)
-
         # catboost 类似于神经网络，fit 完之后，得到的就是最后的模型
         # 所以，应该可以使用数据集迭代训练
+        train_pool, test_pool = self.convert_data(train_data, test_data)
         best_model.fit(train_pool, eval_set=test_pool, **self.model_train_params)
 
         # 获取测试集的损失
