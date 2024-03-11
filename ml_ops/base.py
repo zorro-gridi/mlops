@@ -105,6 +105,8 @@ class AbstractMLOps(metaclass=ABCMeta):
                 test_data = ray.put(self.test_data)
             except:
                 logging.warning(f'train & test data already on ray remote data store! pass...')
+                train_data = self.train_data
+                test_data = self.test_data
 
         tune_results = self.model_task.tune_job(
             params_space,
@@ -297,6 +299,8 @@ class AbstractMLOps(metaclass=ABCMeta):
         self.output_model = best_model
 
         test_data = self.test_data if self.test_data else self.train_data
+        if model_arch in ['xgb']:
+            test_data = ray.get(test_data)
         test_loader, signature = data_util_map(test_data, params_config=params_config)
 
         # with mlflow.start_run(run_name=run_name):

@@ -3,7 +3,6 @@ import sys
 sys.path.append(os.getcwd())
 
 from mlops.tasks.base import AbstractModelFactory
-
 from catboost import (
     CatBoost,
     Pool,
@@ -20,12 +19,12 @@ from copy import copy
 import torch
 
 
-
 class CatboostTask(AbstractModelFactory):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.model_init_params['loss_function'] = self.model_eval_metric
+        self.model_init_params['loss_function'] = self.model_loss_func
         self.model_init_params['custom_metric'] = self.custom_loss_func
+        self.model_init_params['eval_metric'] = self.model_eval_metric
 
         baseline_params = {
             'random_seed': 42,
@@ -44,25 +43,40 @@ class CatboostTask(AbstractModelFactory):
 
 
     def train_job(self, config, train_data, test_data):
+        config_device = config.pop('device', 'CPU')
         model_params = copy(config)
 
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        model_params['task_type'] = device
-        model_params['devices'] = [0]
+        if not config_device:
+            device = 'GPU' if torch.cuda.is_available() else 'CPU'
+            model_params['task_type'] = device
+            model_params['devices'] = [0]
+        else:
+            model_params['task_type'] = config_device
 
         self.model_init_params.update(model_params)
         # CatBoost 接受字典类型参数。实例化过程类似于网络模型: 模型结构参数和模型训练参数分开
         trial_model = CatBoost(self.model_init_params)
 
-        # pool 对象本身会分批次加载数据集进行模型训练
-        train_pool = Pool(*train_data)
-        test_pool = Pool(*test_data)
+        # 当有分类特征时，最好提前构造好 Pool 格式的数据集
+        if type(train_data).__name__ == 'Pool':
+            logging.warning(f'train data alread be cat Pool type...')
+            train_pool = train_data
+            test_pool = test_data
+            cv_pool = train_pool
 
-        x_train, y_train = train_data
-        x_test, y_test = test_data
-        X = np.concatenate([x_train, x_test], axis=0)
-        y = np.concatenate([y_train, y_test], axis=0)
-        cv_pool = Pool(X, y)
+        else:
+            # pool 对象本身会分批次加载数据集进行模型训练
+            train_pool = Pool(*train_data)
+            test_pool = Pool(*test_data)
+
+            # x_train, y_train = train_data
+            # x_test, y_test = test_data
+
+            # X = np.concatenate([x_train, x_test], axis=0)
+            # y = np.concatenate([y_train, y_test], axis=0)
+            # cv_pool = Pool(X, y)
+            cv_pool = train_pool
+
 
         # cat_features, ... 都可以写入 self.model_train_params
         trial_model.fit(train_pool, eval_set=test_pool, **self.model_train_params)
@@ -105,7 +119,6 @@ class CatboostTask(AbstractModelFactory):
         # 获取测试集的损失
         best_score = best_model.get_best_score()
         test_loss = best_score["validation"][self.model_eval_metric]
-
         # test_loss = self.test_job(best_model, test_pool)
 
         return {
@@ -122,19 +135,20 @@ class CatboostTask(AbstractModelFactory):
 
 
 if __name__ == '__main__':
-    train_data = np.random.randint(0, 100, size=(100, 10))
-    train_labels = np.random.randint(0, 2, size=(100))
+    # train_data = np.random.randint(0, 100, size=(100, 10))
+    # train_labels = np.random.randint(0, 2, size=(100))
 
-    test_data = np.random.randint(0, 100, size=(50, 10))
-    test_labels = np.random.randint(0, 2, size=(50))
+    # test_data = np.random.randint(0, 100, size=(50, 10))
+    # test_labels = np.random.randint(0, 2, size=(50))
 
-    cat_task = CatboostTask(model_eval_metric='Logloss')
+    # cat_task = CatboostTask(model_eval_metric='Logloss')
 
-    params_space = {
-        'l2_leaf_reg': hyperopt.hp.qloguniform('l2_leaf_reg', 0, 2, 1),
-        'learning_rate': hyperopt.hp.uniform('learning_rate', 1e-3, 5e-1),
-        }
+    # params_space = {
+    #     'l2_leaf_reg': hyperopt.hp.qloguniform('l2_leaf_reg', 0, 2, 1),
+    #     'learning_rate': hyperopt.hp.uniform('learning_rate', 1e-3, 5e-1),
+    #     }
 
-    train_datas = (train_data, train_labels)
-    test_datas = (test_data, test_labels)
-    cat_task.tune_job(params_space, train_datas, test_datas)
+    # train_datas = (train_data, train_labels)
+    # test_datas = (test_data, test_labels)
+    # cat_task.tune_job(params_space, train_datas, test_datas)
+    pass

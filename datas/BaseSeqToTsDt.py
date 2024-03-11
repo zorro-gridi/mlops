@@ -2,6 +2,7 @@ from mlops.datas.BaseDt import AbstractDatasetFactory
 from functools import partial
 import torch
 import numpy as np
+from copy import copy
 
 from torch.utils.data import (
     Dataset,
@@ -34,13 +35,15 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
         Args:
             vars_datas: 数组
         Return:
-            shape 为 (-1, window) 的多维数组
+            shape 为 (-1, window, features) 的多维数组
         '''
         # 时间序列的特征定义
         window = self.features + self.target
-        vars_datas_copy = vars_datas.copy()
+        vars_datas_copy = copy(vars_datas)
         # 时间序列处理的核心
-        vars_datasets = [vars_datas_copy[i:i+window] for i in range(len(vars_datas_copy)) if vars_datas_copy[i:i+window] == window]
+        vars_datasets = [
+            vars_datas_copy[i:i+window] for i in range(len(vars_datas_copy))
+            if len(vars_datas_copy[i:i+window]) == window]
 
         # 将不满足长度的数据全部删除，数据信息没有影响
         vars_datasets = [v for v in vars_datasets if len(v) == window]

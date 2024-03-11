@@ -56,7 +56,6 @@ class Iterator(xgb.DataIter):
 
 
 
-
 class xgboost_task(AbstractModelFactory):
     def __init__(self, **kwargs):
         '''
@@ -123,7 +122,7 @@ class xgboost_task(AbstractModelFactory):
             )
 
         # 使用 auc 作为评估函数
-        logging.warning(f'logging mlflow......')
+        # logging.warning(f'logging mlflow......')
         test_eval_metric_list = evals_result['test'][self.model_eval_metric]
         train_eval_metric_list = evals_result['train'][self.model_eval_metric]
 

@@ -18,13 +18,11 @@ from ray.tune.search.hyperopt import HyperOptSearch
 import os
 import sys
 sys.path.append(os.getcwd())
-
 from mlops.baseConfig.raytuneConfig import scaling_config
 
 
 
 class AbstractModelFactory(metaclass=ABCMeta):
-
     def __init__(self,
             model_loss_func=None,
             model_eval_metric=None,
@@ -32,7 +30,7 @@ class AbstractModelFactory(metaclass=ABCMeta):
             model_train_params={},
             optimize_mode='min',
             custom_loss_func=None,
-        ):
+            ):
         '''
         # model_loss_func: 模型损失函数
         # model_eval_metric: 模型评估指标名称. metric(s) to be evaluated on the evaluation set(s)
@@ -88,7 +86,7 @@ class AbstractModelFactory(metaclass=ABCMeta):
         report_metric_name = f'test_{self.model_eval_metric}'
 
         num_gpus = kwargs.pop('num_gpus', round(1/4, 1))
-        num_cpus = kwargs.pop('num_cpus', 4)
+        num_cpus = kwargs.pop('num_cpus', 8)
 
         # TODO: 直接把偏函数传入 ray.tune 导致 large object warning, 因为，参数太大了
         # 解决方案：使用 ray.put() ray.get() 好像能解决问题
