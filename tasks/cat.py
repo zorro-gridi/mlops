@@ -10,6 +10,8 @@ from catboost import (
     cv,
     )
 import hyperopt
+# 调参早停技术
+from hyperopt.early_stop import no_progress_loss
 
 import random
 import numpy as np
@@ -21,6 +23,13 @@ import torch
 
 class CatboostTask(AbstractModelFactory):
     def __init__(self, **kwargs):
+        '''
+        Args:
+            model_init_params: 实例化 catbooost 的参数字典
+            model_train_params: 传入 fit 函数的参数字典
+            model_loss_func: for catboost "loss_function"
+            model_eval_metric: for catboost "eval_metric"
+        '''
         super().__init__(**kwargs)
         self.model_init_params['loss_function'] = self.model_loss_func
         self.model_init_params['custom_metric'] = self.custom_loss_func
@@ -34,6 +43,7 @@ class CatboostTask(AbstractModelFactory):
             }
         self.model_init_params.update(baseline_params)
 
+        # catboost built-in 早停技术
         earlystop_params = {
             'od_type': 'Iter',
             'od_wait': 40
@@ -78,7 +88,6 @@ class CatboostTask(AbstractModelFactory):
         # cv_pool = Pool(X, y)
         cv_pool = train_pool
 
-
         # cat_features, ... 都可以写入 self.model_train_params
         trial_model.fit(train_pool, eval_set=test_pool, **self.model_train_params)
         # best_iteration = trial_model.get_best_iteration()
@@ -88,10 +97,19 @@ class CatboostTask(AbstractModelFactory):
         cv_loss = np.min(cv_data[f'test-{self.model_eval_metric}-mean'])
         if self.optimize_mode == 'max':
             cv_loss = 1 / cv_loss
-        return cv_loss
+        # 精度控制
+        return round(cv_loss, 6)
 
 
-    def tune_job(self, params_space, train_data, test_data, max_evals=50):
+    def tune_job(self, params_space, train_data, test_data, max_evals=50, early_stop_round=10):
+        '''
+        Args:
+            params_space: 搜索空间
+            train_data:
+            test_data:
+            max_evals: 实验的数量, 类似 ray[tune] 的 num_samples
+            early_stop_round: 早停技术。如果 n 轮后损失没有提升，则停止实验
+        '''
         trials = hyperopt.Trials()
 
         trial_func = partial(self.train_job, train_data=train_data, test_data=test_data)
@@ -101,6 +119,8 @@ class CatboostTask(AbstractModelFactory):
             algo=hyperopt.tpe.suggest,
             max_evals=max_evals,
             trials=trials,
+            # 也可以自定义 stop fn
+            early_stop_fn=no_progress_loss(early_stop_round),
             rstate=np.random.default_rng(random.seed(42))
             )
 
