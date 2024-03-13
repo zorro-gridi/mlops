@@ -80,12 +80,7 @@ class CatboostTask(AbstractModelFactory):
         trial_model = CatBoost(self.model_init_params)
 
         train_pool, test_pool = self.convert_data(train_data, test_data)
-        # x_train, y_train = train_data
-        # x_test, y_test = test_data
-
-        # X = np.concatenate([x_train, x_test], axis=0)
-        # y = np.concatenate([y_train, y_test], axis=0)
-        # cv_pool = Pool(X, y)
+        # 使用训练集作为交叉验证集
         cv_pool = train_pool
 
         # cat_features, ... 都可以写入 self.model_train_params

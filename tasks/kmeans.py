@@ -34,8 +34,9 @@ class kmeans_task(AbstractModelFactory):
 
     def train_job(self, data, init_clusters=15, max_clusters=30, **kwargs):
         '''
-        # init_clusters: kmeans 迭代的最大族数
-        # max_clusters: 搜索空间的最大族数
+        Args:
+            init_clusters: kmeans 迭代的最大族数
+            max_clusters: 搜索空间的最大族数
         '''
         silhouette_score_list = []
         estimators = []
