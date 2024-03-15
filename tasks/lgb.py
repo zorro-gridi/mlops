@@ -51,6 +51,7 @@ class LigthGBM_Task(AbstractModelFactory):
         self.checkpoint_model_name = 'lightgbm.txt'
 
 
+
     def train_job(self, config, train_data, test_data, checkpoint=False):
         self.model_init_params.update(config)
 
@@ -109,7 +110,6 @@ class LigthGBM_Task(AbstractModelFactory):
         # 使用 sklearn metric 接口计算损失指标
         test_loss = self.metircs_fn[self.model_eval_metric](y_test, y_pred)
         return test_loss
-
 
 
 
