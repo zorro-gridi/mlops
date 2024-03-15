@@ -131,11 +131,11 @@ class AbstractMLOps(metaclass=ABCMeta):
             best_model = eval(model_arch).Booster(model_file=checkpoint_path)
 
         self.output_model = best_model
-
         eval_metric_name = self.model_task.model_eval_metric
         best_checkpoint = {
             'best_model': best_model,
             eval_metric_name: best_result.metrics[f'test_{eval_metric_name}'],
+            'training_loss': best_result.metrics['training_loss'],
             }
 
         # 更新模型实例的最优调参结果

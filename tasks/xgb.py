@@ -135,6 +135,7 @@ class xgboost_task(AbstractModelFactory):
             best_checkpoint = {
                 'best_model': bst,
                 self.model_eval_metric: test_eval_metric,
+                'training_loss': train_eval_metric,
                 'best_iteration': bst.best_iteration,
                 }
             logging.warning(f'xgb best model checkpoint: {best_checkpoint}')
@@ -149,6 +150,7 @@ class xgboost_task(AbstractModelFactory):
         train.report(metrics={
             f'test_{self.model_eval_metric}': test_eval_metric,
             f'train_{self.model_eval_metric}': train_eval_metric,
+            'training_loss': train_eval_metric,
             'best_iteration': bst.best_iteration,
             }, checkpoint=report_checkpoint)
 

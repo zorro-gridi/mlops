@@ -1,13 +1,13 @@
 
 import lightgbm as lgb
 import logging
-import numpy as np
-from functools import partial
+# import numpy as np
+# from functools import partial
 
-import random
-import ray
+# import random
+# import ray
 from ray import train, tune
-from ray.tune.schedulers import ASHAScheduler
+# from ray.tune.schedulers import ASHAScheduler
 
 from sklearn.metrics import (
     mean_squared_error,
@@ -16,16 +16,13 @@ from sklearn.metrics import (
     roc_auc_score,
     f1_score,
     )
-
 import sklearn.datasets
 from sklearn.model_selection import train_test_split
 import torch
 
-
 import os
 import sys
 sys.path.append(os.getcwd())
-
 from mlops.tasks.base import AbstractModelFactory
 
 
@@ -41,10 +38,10 @@ class LigthGBM_Task(AbstractModelFactory):
         self.model_init_params['objective'] = self.model_loss_func
         self.model_init_params['metric'] = self.model_eval_metric
         self.model_init_params['verbosity'] = -1
-        self.model_init_params['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # 设置 GPU 训练
+        # self.model_init_params['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         self.model_arch = 'lgb'
-
         self.metircs_fn = {
             'rmse': mean_squared_error,
             'auc': roc_auc_score,
@@ -74,12 +71,16 @@ class LigthGBM_Task(AbstractModelFactory):
             **self.model_train_params,
             )
 
+        training_loss = self.test_job(gbm, train_data)
         test_loss = self.test_job(gbm, test_data)
-        logging.warning(f'LightGBM model test {self.model_eval_metric} loss: {test_loss:,.6f}')
+        logging.warning(f'''
+            LightGBM model training loss: {training_loss:,6f}, test {self.model_eval_metric} loss: {test_loss:,.6f}
+            ''')
 
         if checkpoint:
             return {
                 'best_model': gbm,
+                'training_loss': training_loss,
                 self.model_eval_metric: test_loss
                 }
 
@@ -111,6 +112,7 @@ class LigthGBM_Task(AbstractModelFactory):
 
 
 
+
 if __name__ == '__main__':
     data, target = sklearn.datasets.load_breast_cancer(return_X_y=True)
     train_x, test_x, train_y, test_y = train_test_split(data, target, test_size=0.25)
@@ -118,12 +120,11 @@ if __name__ == '__main__':
     train_data = (train_x, train_y)
     test_data = (test_x, test_y)
 
-
     config = {
         # "metric": ["binary_logloss"],
         "num_leaves": tune.randint(10, 1000),
         "learning_rate": tune.loguniform(1e-8, 1e-1),
-    }
+        }
 
     task_config = {
         'model_eval_metric': 'auc',
@@ -131,4 +132,4 @@ if __name__ == '__main__':
         }
 
     lgb_task = LigthGBM_Task(**task_config)
-    lgb_task.tune_job(config, train_data=train_data, test_data=test_data)
+    lgb_task.tune_job(config, train_data=train_data, test_data=test_data, num_gpus=0)

@@ -132,12 +132,14 @@ class CatboostTask(AbstractModelFactory):
 
         # 获取测试集的损失
         best_score = best_model.get_best_score()
+        logging.warning(f'Best training & testing score: {best_score}')
         test_loss = best_score["validation"][self.model_eval_metric]
-        # test_loss = self.test_job(best_model, test_pool)
+        training_loss = best_score["learn"][self.model_eval_metric]
 
         return {
             'best_model': best_model,
             self.model_eval_metric: test_loss,
+            'training_loss': training_loss,
             }
 
 

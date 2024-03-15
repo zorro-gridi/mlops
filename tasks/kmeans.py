@@ -71,7 +71,6 @@ class kmeans_task(AbstractModelFactory):
         # 自动筛选最优聚类数的 estimator
         best_estimator_idx = np.argmax(score_diff)
         best_estimator = estimators[best_estimator_idx]
-
         return best_estimator
 
 

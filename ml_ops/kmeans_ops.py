@@ -92,7 +92,10 @@ class KmeansOps(AbstractMLOps):
         return_metirc_name = loss_name if loss_name else built_in_metric
         best_checkpoint = {
             'best_model': final_best_estimator,
+            # 测试集指标是自定义的损失函数
             return_metirc_name: best_test_loss,
+            # TODO: 其实可以返回聚类的评估指标
+            'training_loss': best_test_loss
             }
         return best_checkpoint
 

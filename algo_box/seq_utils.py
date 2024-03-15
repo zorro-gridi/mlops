@@ -24,7 +24,9 @@ def phase_series_point(data, start_point, n_clusters=3):
         for i in range(len(data)-start_point)]
 
     # 只能在循环中实例化
-    eatimator_list = [KMeans(n_clusters=n_clusters, n_init=2).fit(point_datas) for point_datas in point_kmeans_data]
+    eatimator_list = [
+        KMeans(n_clusters=n_clusters, n_init=2).fit(point_datas)
+        for point_datas in point_kmeans_data]
 
     # 取每组的最后一点标签作为结果，因为参照的是近期的整体数据
     k_labels = np.array([eatimator.labels_[-1] for eatimator in eatimator_list])

@@ -86,7 +86,7 @@ class AbstractModelFactory(metaclass=ABCMeta):
         report_metric_name = f'test_{self.model_eval_metric}'
 
         num_gpus = kwargs.pop('num_gpus', round(1/4, 1))
-        num_cpus = kwargs.pop('num_cpus', 8)
+        num_cpus = kwargs.pop('num_cpus', 4)
 
         # TODO: 直接把偏函数传入 ray.tune 导致 large object warning, 因为，参数太大了
         # 解决方案：使用 ray.put() ray.get() 好像能解决问题
