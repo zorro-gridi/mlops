@@ -19,10 +19,11 @@ import logging
 
 class PreProcessSeqToTsDt_Base(BaseSeqToTsDt):
     '''
-    主要特征：
+    Desc:
         进行时间序列预测前，需要对输入数据进行一定的自定义变换，再进行特征工程的数据集
         BASE 主要应用于一般机器学习的数值模型
-    # preprocess_func 自定义数据预处理函数，属性必选
+    Args:
+        preprocess_func 自定义数据预处理函数，属性必选
     '''
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -30,8 +31,11 @@ class PreProcessSeqToTsDt_Base(BaseSeqToTsDt):
 
     def feature_engineering(self, vars_datas):
         '''
-        # vars_datas: 数组对象
-        # preprocess_func: 对原始数据进行特征呢工程之前，预处理的函数。可以将定义的预处理函数转换成偏函数
+        Desc:
+            vars_datas: 数组对象
+            preprocess_func: 对原始数据进行特征呢工程之前，预处理的函数。可以将定义的预处理函数转换成偏函数
+        Return:
+            数组数据集
         '''
         if self.input_features is not None:
             prep_func = partial(self.preprocess_func, input_features=self.input_features)
@@ -40,7 +44,6 @@ class PreProcessSeqToTsDt_Base(BaseSeqToTsDt):
             vars_datas = self.preprocess_func(vars_datas)
 
         logging.warning(f'var datas preview: {vars_datas[0]}')
-
         vars_datasets = super().feature_engineering(vars_datas)
         return vars_datasets
 

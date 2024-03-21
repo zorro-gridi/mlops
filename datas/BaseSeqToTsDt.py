@@ -15,11 +15,13 @@ import logging
 
 class BaseSeqToTsDt(AbstractDatasetFactory):
     '''
-    主要特征：序列到时间序列
+    Desc:
+        序列到时间序列
     '''
     def __init__(self, input_features=None, **kwargs):
         '''
-        # input_features: 时间序列的外部变量列表
+        Args:
+            input_features: 时间序列的外部变量列表
         '''
         super(BaseSeqToTsDt, self).__init__(**kwargs)
         # input_features 作为外部变量
@@ -35,16 +37,20 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
         Args:
             vars_datas: 数组
         Return:
-            shape 为 (-1, window, features) 的多维数组
+            shape 为 (-1, window, features) 的多维数组, 还未分出(X, y)数据集
+                -1:  表示数据集的size
+                window: 时间序列的窗口长度 = features + target; 因此, X, y = dataset[:, features], dataset[:, target]
+                features: 输入的特征数量 (Unit单变量 or MultVars多变量)
         '''
         # 时间序列的特征定义
         window = self.features + self.target
         vars_datas_copy = copy(vars_datas)
         # 时间序列处理的核心
         vars_datasets = [
-            vars_datas_copy[i:i+window] for i in range(len(vars_datas_copy))
-            if len(vars_datas_copy[i:i+window]) == window]
-
+            vars_datas_copy[i:i+window]
+            for i in range(len(vars_datas_copy))
+            if len(vars_datas_copy[i:i+window]) == window
+            ]
         # 将不满足长度的数据全部删除，数据信息没有影响
         vars_datasets = [v for v in vars_datasets if len(v) == window]
         vars_datasets = np.array(vars_datasets)
@@ -52,21 +58,31 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
 
 
     def data_split(self, raw_dataset, test_size=0.2, random_state=42):
+        '''
+        Desc:
+            切分数据集, 并区分出X, y
+        Args:
+            raw_dataset: 输入数据集
+        Return:
+            train_data: (X_train, y_train)
+            test_data: (X_test, y_test)
+        '''
         logging.warning(f'datasets len: {len(raw_dataset)}')
         train_dataset, test_dataset = train_test_split(
             raw_dataset, test_size=test_size, random_state=random_state)
 
         logging.warning(f'train_dataset len: {len(train_dataset)}')
-
-        train_data = (train_dataset[:, :-1], train_dataset[:, -1])
-        test_data = (test_dataset[:, :-1], test_dataset[:, -1])
+        # 此处 self.target 表示预测变量的长度, 一般为最后 1 个索引位置, 即 target = 1
+        train_data = (train_dataset[:, :-self.target], train_dataset[:, -self.target])
+        test_data = (test_dataset[:, :-self.target], test_dataset[:, -self.target])
         return train_data, test_data
 
 
 class SeqToTsDt_NN(BaseSeqToTsDt):
     def __init__(self, dt_class, **kwargs):
         '''
-        # dt_class: 神经网络加载数据集的class
+        Desc:
+            dt_class: 神经网络加载数据集的class
         '''
         super().__init__(**kwargs)
         self.dt_class = dt_class
