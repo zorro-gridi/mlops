@@ -4,7 +4,14 @@ import logging
 
 tracking_uri = 'http://192.168.1.105:9001/'
 
+
 def check_model_existence(model_name, tracking_uri=tracking_uri):
+    '''
+    Desc:
+        判断模型是否存在注册表中
+    Retrun:
+        bool
+    '''
     # 获取注册的模型的所有版本
     mlflow_client = MlflowClient(tracking_uri)
     registered_models = [
@@ -13,8 +20,13 @@ def check_model_existence(model_name, tracking_uri=tracking_uri):
     return model_name in registered_models
 
 
-
 def load_register_model_args(reg_model_name, model_version, tracking_uri=tracking_uri):
+    '''
+    Desc:
+        加载注册模型的参数
+    Return:
+        model 的参数字典, 包括model 参数，数据集参数...
+    '''
     mlflow_client = MlflowClient(tracking_uri)
     hist_model_uri = mlflow_client.get_model_version_download_uri(reg_model_name, model_version)
     hist_model_info = mlflow.models.get_model_info(hist_model_uri)

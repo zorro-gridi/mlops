@@ -27,3 +27,6 @@ class CatBoostOps(AbstractMLOps):
 
         self.best_model_args = copy(self.model_task.model_init_params)
         return best_checkpoint
+
+    def save_checkpoint(self, *args, **kwargs):
+        return super().save_checkpoint(*args, model_frame=mlflow.catboost, **kwargs)

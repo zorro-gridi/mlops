@@ -32,16 +32,9 @@ from torch.utils.data import (
 from pathlib import Path
 import shutil
 
-
 # from mlops.datas.BaseDt import SeqToTsDt
 from mlops.nn import train_utils
 import os
-
-# will deprecated in fueture version
-# ==================================
-from mlops.nn.lstm import LstmModel
-LstmModel = LstmModel
-# ==================================
 
 
 class lstmTsTask(AbstractModelFactory):
@@ -94,6 +87,7 @@ class lstmTsTask(AbstractModelFactory):
             os.makedirs("models", exist_ok=True)
             # 同时保存模型和优化器
             improved_rate = (metric_loss_init - metric_loss) / metric_loss_init
+            # 以此控制 checkpoint 的频率
             if improved_rate >= 0.01:
             # if train.get_context().get_world_rank() == 0:
                 torch.save(
@@ -114,9 +108,17 @@ class lstmTsTask(AbstractModelFactory):
                     ''')
 
                 report_metric_name = f'test_{self.model_eval_metric}'
-                train.report(metrics={report_metric_name: metric_loss, 'training_loss': training_loss}, checkpoint=report_checkpoint)
+                train.report(metrics={
+                    report_metric_name: metric_loss,
+                    'training_loss': training_loss,
+                    'train_test_mean_loss': (metric_loss + training_loss) / 2
+                    }, checkpoint=report_checkpoint)
             else:
-                train.report(metrics={report_metric_name: metric_loss, 'training_loss': training_loss})
+                train.report(metrics={
+                    report_metric_name: metric_loss,
+                    'training_loss': training_loss,
+                    'train_test_mean_loss': (metric_loss + training_loss) / 2
+                    })
 
 
     def test_job(self, model, test_loader):

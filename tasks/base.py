@@ -70,6 +70,7 @@ class AbstractModelFactory(metaclass=ABCMeta):
             callbacks:
             num_gpus:
             num_cpus:
+            custom_metric: default "train_test_mean_loss" 处理有时候test loss小, 但是train loss 大的问题
         Return:
             tuen.ResultGrid class
         Desc:
@@ -83,10 +84,14 @@ class AbstractModelFactory(metaclass=ABCMeta):
                 shutil.rmtree(checkpoint_dir)
             os.makedirs(checkpoint_dir, exist_ok=True)
 
-        report_metric_name = f'test_{self.model_eval_metric}'
+        # 定义选取最佳实验的评估指标
+        eval_metric = kwargs.pop('custom_metric', None)
+        report_metric_name = f'test_{self.model_eval_metric}' if not eval_metric else eval_metric
 
+        # https://docs.ray.io/en/latest/tune/tutorials/tune-resources.html#how-to-leverage-gpus-in-tune
         num_gpus = kwargs.pop('num_gpus', round(1/4, 1))
-        num_cpus = kwargs.pop('num_cpus', 4)
+        # 这个是表示每个 trial 使用的 cpu 数量
+        num_cpus = kwargs.pop('num_cpus', 1)
 
         # TODO: 直接把偏函数传入 ray.tune 导致 large object warning, 因为，参数太大了
         # 解决方案：使用 ray.put() ray.get() 好像能解决问题
@@ -106,8 +111,8 @@ class AbstractModelFactory(metaclass=ABCMeta):
         # tune 写法案例：https://docs.ray.io/en/latest/tune/tutorials/tune-resources.html
         train_with_resources = tune.with_resources(train_cifar, resources={'gpu': num_gpus, 'cpu': num_cpus})
         checkpoint_strategy = train.CheckpointConfig(
-            # 只保存一个最优的checkpoint，节约存储空间
-            num_to_keep=1,
+            # 只保存 1 个最优的checkpoint,节 约存储空间, 但是会导致训练一直在同步 checkpoint, 训练速度变慢
+            num_to_keep=5,
             # *Best* checkpoints are determined by these params:
             checkpoint_score_attribute=report_metric_name,
             checkpoint_score_order=self.optimize_mode,

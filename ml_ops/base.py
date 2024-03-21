@@ -41,6 +41,11 @@ class AbstractMLOps(metaclass=ABCMeta):
             preprocess_func: 对输入的raw_data进行预处理加工
             postprocess_func: 对模型的输出进行加工,使满足最终输出要求。需要在主程序中定义
             mlflow_config: mlflow 任务的配置名称与后端链接等信息 dict
+                demo:
+                mlflow_config = {
+                    'experiment_name': experiment_name,
+                    'tracking_uri': f'http://127.0.0.1:9001/',
+                    }
         '''
         self.model_task = model_task
         self.dataset_inst = dataset_inst
@@ -56,7 +61,8 @@ class AbstractMLOps(metaclass=ABCMeta):
         self.mlflow_config = mlflow_config
 
         # 框架目前已实现的模型训练流程类型
-        #  这个 lazyloader 无法序列化
+        # 这个 lazyloader 对象无法序列化, 无法存入 ray remote object store
+        # 为了兼容 ray 框架，将以下参数该写入 save_checkpoint 的 model_frame 参数中
         # self.mlflow_model_flavor = {
         #     'xgb': mlflow.xgboost,
         #     'cat': mlflow.catboost,
@@ -162,10 +168,11 @@ class AbstractMLOps(metaclass=ABCMeta):
             ps2. 加载测试数据集方面, 如果模型需要定制方法, 可以通过子类继承改写此方法！！
         '''
         model_arch = self.model_task.model_arch
-        histt_regis_model = model_frame.load_model(
+        hist_regis_model = model_frame.load_model(
             f"models:/{reg_model_name}/{model_version}")
-        # 下载历史模型
+        # 下载历史模型的参数
         hist_model_config = mlflow_utils.load_register_model_args(reg_model_name, model_version)
+        training_loss = hist_model_config['training_loss']
 
         # 如果历史没有配置数据参数,就直接加载传入的数据
         if self.dataset_inst is None:
@@ -179,18 +186,26 @@ class AbstractMLOps(metaclass=ABCMeta):
         test_loader, _ = data_util_map(test_data, params_config=None)
         # 此处很容易出 bug, 根源还是没有正确加载数据
         # ====================================
-        hist_eval_metric = self.model_task.test_job(histt_regis_model, test_loader)
-        return hist_eval_metric
+        hist_eval_metric = self.model_task.test_job(hist_regis_model, test_loader)
+        return training_loss, hist_eval_metric
 
 
-    def save_checkpoint(self, checkpoint, reg_model_name, model_version='1', model_alias=None, model_frame=None):
+    def save_checkpoint(
+            self, checkpoint, reg_model_name, model_version='1', model_alias=None, model_frame=None, loss_strategy='UNIT'):
         '''
-        该方法实现了如下统一接口功能:
+        Desc:
+            该方法实现了如下统一接口功能:
             1. 对比new model 和 hist model 的测试评分
             2. 保存并注册最优模型到 mlflow
             3. 更新 mloops 类的 output_model 输出
             4. 更新 mlops 类的 best_model_args, best_data_args
             5. 更新 mlops 类的 dataset_inst 类的属性
+        Args:
+            model_frame: 模型框架, 需要在 ops 实现的 save_checkpoint 方法中指定默认值
+                例如 lstmops 中, model_frame=mlflow.pytorch
+            loss_strategy:
+                'SUM': 使用 train + test 的损失综合比较, 可避免 train loss 过大的问题
+                'UNIT': 仅使用 test 损失比较
         '''
         # find_best_model_args 的 checkpoint metric 指标不带 test 前缀
         if self.model_task.custom_loss_func:
@@ -198,6 +213,8 @@ class AbstractMLOps(metaclass=ABCMeta):
         else:
             metric_name = self.model_task.model_eval_metric
         tune_model_metric = checkpoint[metric_name]
+        training_loss = checkpoint['training_loss']
+        tune_sum_loss = tune_model_metric + training_loss
 
         model_arch = self.model_task.model_arch
         best_model = checkpoint['best_model']
@@ -246,32 +263,45 @@ class AbstractMLOps(metaclass=ABCMeta):
             return test_loader, signature
 
         if mlflow_utils.check_model_existence(reg_model_name):
-            histt_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{model_version}")
-
+            hist_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{model_version}")
             # 测试历史模型
             # =================================================================
-            hist_eval_metric = self.test_hist_model(reg_model_name, model_version=model_version, model_frame=model_frame)
-            if self.model_task.optimize_mode == 'min':
-                compare_bools_result = -tune_model_metric <= -hist_eval_metric
+            hist_training_loss, hist_eval_metric = self.test_hist_model(
+                reg_model_name, model_version=model_version, model_frame=model_frame)
+            hist_sum_loss = hist_training_loss + hist_eval_metric
+
+            if loss_strategy == 'UNIT':
+                if self.model_task.optimize_mode == 'min':
+                    compare_bools_result = -tune_model_metric <= -hist_eval_metric
+                else:
+                    compare_bools_result = tune_model_metric <= hist_eval_metric
             else:
-                compare_bools_result = tune_model_metric <= hist_eval_metric
+                if self.model_task.optimize_mode == 'min':
+                    compare_bools_result = -tune_sum_loss <= -hist_sum_loss
+                else:
+                    compare_bools_result = tune_sum_loss <= hist_sum_loss
 
             # 默认使用最大化模式
             if compare_bools_result:
                 # 更新输出的模型
-                self.output_model = histt_regis_model
+                self.output_model = hist_regis_model
 
                 logging.warning(f'''
-                    tune {model_arch} model {metric_name}: {tune_model_metric:,.3f}
-                    hist {model_arch} model {metric_name}: {hist_eval_metric:,.3f}
+                    tune {model_arch} model {metric_name}: {tune_model_metric:,.3f}, sum loss: {tune_sum_loss:,.3f}
+                    hist {model_arch} model {metric_name}: {hist_eval_metric:,.3f}, sum loss: {hist_sum_loss:,.3f}
                     --> 使用历史最优模型推理......
                     ''')
-                return 'hist', histt_regis_model
+                return {
+                    'training_loss': hist_training_loss,
+                    'test_loss': hist_eval_metric,
+                    'best_model': hist_regis_model
+                    }
             else:
                 # 将针对数据实例的更改撤回
                 mlflow_client.delete_registered_model(reg_model_name)
                 logging.warning(f'''
-                    test loss vs: hist: {hist_eval_metric:,.6f}, new: {tune_model_metric:,.6f}.
+                    test loss vs ------> hist: {hist_eval_metric:,.6f}, new: {tune_model_metric:,.6f}.
+                    sum loss vs  ------> hist: {hist_sum_loss:,.6f}, new: {tune_sum_loss:,.6f}.
                     历史模型评分低, 将保存当前的模型...
                     ''')
         else:
@@ -286,6 +316,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         if self.dataset_inst is not None:
             self.dataset_inst.set_attr(self.best_data_args)
 
+        # 记录模型的关键参数
         params_config = self.best_model_args
         params_config.update(self.best_data_args)
         params_config = {
@@ -293,6 +324,8 @@ class AbstractMLOps(metaclass=ABCMeta):
             if v is not None
             and type(v) in [bool, str, int, float, list, dict, np.array, np.ndarray]
             }
+        params_config['training_loss'] = training_loss
+        params_config[f'test_{metric_name}'] = tune_model_metric
 
         if model_arch == 'nn':
             best_model.eval()
@@ -319,8 +352,11 @@ class AbstractMLOps(metaclass=ABCMeta):
         mlflow.log_metric(f'test_{metric_name}', tune_model_metric)
         mlflow_client.set_registered_model_alias(reg_model_name, model_alias, model_version)
         mlflow_client.set_registered_model_alias(reg_model_name, model_arch, model_version)
+
         mlflow_client.set_registered_model_tag(
             reg_model_name, f'test_{metric_name}', str(round(tune_model_metric, 6)))
+        mlflow_client.set_registered_model_tag(
+            reg_model_name, f'training_loss', str(round(training_loss, 6)))
 
         mlflow.end_run()
         logging.warning(f'''
@@ -328,4 +364,8 @@ class AbstractMLOps(metaclass=ABCMeta):
             --> 使用当前模型推理......
             ''')
         logging.warning(f'当前训练的 {model_arch} 模型已保存.')
-        return 'new', best_model
+        return {
+            'training_loss': training_loss,
+            'test_loss': tune_model_metric,
+            'best_model': best_model
+            }
