@@ -166,6 +166,9 @@ class AbstractMLOps(metaclass=ABCMeta):
             =======================================
             ps1. 加载模型方面, mlflow已经实现了统一接口。
             ps2. 加载测试数据集方面, 如果模型需要定制方法, 可以通过子类继承改写此方法！！
+        Return:
+            training_loss: 训练损失
+            hist_eval_metric: 测试损失
         '''
         model_arch = self.model_task.model_arch
         hist_regis_model = model_frame.load_model(
@@ -294,7 +297,8 @@ class AbstractMLOps(metaclass=ABCMeta):
                 return {
                     'training_loss': hist_training_loss,
                     'test_loss': hist_eval_metric,
-                    'best_model': hist_regis_model
+                    'best_model': hist_regis_model,
+                    'best_mlops': self,
                     }
             else:
                 # 将针对数据实例的更改撤回
@@ -367,5 +371,6 @@ class AbstractMLOps(metaclass=ABCMeta):
         return {
             'training_loss': training_loss,
             'test_loss': tune_model_metric,
-            'best_model': best_model
+            'best_model': best_model,
+            'best_mlops': self,
             }

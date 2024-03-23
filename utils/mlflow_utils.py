@@ -2,7 +2,7 @@ from mlflow.client import MlflowClient
 import mlflow
 import logging
 
-tracking_uri = 'http://192.168.1.105:9001/'
+tracking_uri = 'http://192.168.1.104:9001/'
 
 
 def check_model_existence(model_name, tracking_uri=tracking_uri):

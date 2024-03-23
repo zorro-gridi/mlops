@@ -2,6 +2,7 @@ from openai import OpenAI
 from pathlib import Path
 api_key = Path('ChatGpt_API_Key.txt').open().read()
 
+
 client = OpenAI(
     # defaults to os.environ.get("OPENAI_API_KEY")
     api_key=api_key,

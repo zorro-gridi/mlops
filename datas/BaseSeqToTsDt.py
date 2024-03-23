@@ -32,10 +32,16 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
             self.features = len(self.features)
 
 
-    def feature_engineering(self, vars_datas: np.array):
+    def feature_engineering(self, vars_datas: np.array, pred_len=0, split_name='train'):
         '''
+        Desc:
+            构造序列特征的步骤:
+                1. 分割序列。以输入features长度+预测targe长度作为一条(X, y)序列样本的Window
+                2. Window数据切片, 获得 (X, y) 样本
         Args:
-            vars_datas: 数组
+            vars_datas: 输入序列的数组
+            pred_len: 预测样本的长度。例如，保留最后 1 条数据作为预测决策样本
+            split_name: 返回的数据集类型: "train", "pred"
         Return:
             shape 为 (-1, window, features) 的多维数组, 还未分出(X, y)数据集
                 -1:  表示数据集的size
@@ -54,10 +60,17 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
         # 将不满足长度的数据全部删除，数据信息没有影响
         vars_datasets = [v for v in vars_datasets if len(v) == window]
         vars_datasets = np.array(vars_datasets)
+
+        if pred_len > 0 and split_name == 'train':
+            logging.warning(f'return training datasets')
+            vars_datasets = vars_datasets[:-pred_len]
+        if split_name == 'pred':
+            logging.warning(f'return prediction datasets')
+            vars_datasets = vars_datasets[-pred_len:]
         return vars_datasets
 
 
-    def data_split(self, raw_dataset, test_size=0.2, random_state=42):
+    def data_split(self, raw_dataset:np.ndarray, test_size=0.2, random_state=42):
         '''
         Desc:
             切分数据集, 并区分出X, y
@@ -67,14 +80,16 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
             train_data: (X_train, y_train)
             test_data: (X_test, y_test)
         '''
-        logging.warning(f'datasets len: {len(raw_dataset)}')
-        train_dataset, test_dataset = train_test_split(
-            raw_dataset, test_size=test_size, random_state=random_state)
-
-        logging.warning(f'train_dataset len: {len(train_dataset)}')
+        logging.warning(f'raw datasets shape: {raw_dataset.shape}')
         # 此处 self.target 表示预测变量的长度, 一般为最后 1 个索引位置, 即 target = 1
-        train_data = (train_dataset[:, :-self.target], train_dataset[:, -self.target])
-        test_data = (test_dataset[:, :-self.target], test_dataset[:, -self.target])
+        X, y = raw_dataset[:, :-self.target], raw_dataset[:, -self.target]
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=random_state)
+
+        logging.warning(f'train_dataset len: {len(X_train)}')
+        train_data = (X_train, y_train)
+        test_data = (X_test, y_test)
         return train_data, test_data
 
 
@@ -88,8 +103,8 @@ class SeqToTsDt_NN(BaseSeqToTsDt):
         self.dt_class = dt_class
 
 
-    def feature_engineering(self, vars_datas):
-        vars_datasets = super().feature_engineering(vars_datas)
+    def feature_engineering(self, vars_datas, **kwargs):
+        vars_datasets = super().feature_engineering(vars_datas, **kwargs)
 
         window = self.features + self.target
         # 神经网络模型需要 batch_size 三维数据

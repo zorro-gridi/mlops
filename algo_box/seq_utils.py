@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.cluster import KMeans
 import logging
+import pandas as pd
 
 
 def phase_series_point(data, start_point, n_clusters=3):
@@ -48,10 +49,10 @@ def phase_series_point(data, start_point, n_clusters=3):
 
 
 
-def chunk_series(datas, checkpoint=0.1):
+def chunk_series(datas: pd.DataFrame, checkpoint=0.1):
     '''
     Desc:
-        将序列按照涨跌分组切块
+        将序列按照涨跌分组切块, data 中必须包含 "markup" 涨跌幅指标
     Args:
         data: 需要切分的序列
         checkpoint: 合并的阈值。abs(x) <= checkpoint 则合并到上一个分块序列

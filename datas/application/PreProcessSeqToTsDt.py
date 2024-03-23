@@ -12,7 +12,6 @@ from torch.utils.data import (
     DataLoader,
     random_split,
     )
-
 import logging
 
 
@@ -20,16 +19,17 @@ import logging
 class PreProcessSeqToTsDt_Base(BaseSeqToTsDt):
     '''
     Desc:
+        处理需要 preprocess 的数据集。
         进行时间序列预测前，需要对输入数据进行一定的自定义变换，再进行特征工程的数据集
         BASE 主要应用于一般机器学习的数值模型
     Args:
-        preprocess_func 自定义数据预处理函数，属性必选
+        preprocess_func: 自定义数据预处理函数，属性必选
     '''
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
 
-    def feature_engineering(self, vars_datas):
+    def feature_engineering(self, vars_datas, **kwargs):
         '''
         Desc:
             vars_datas: 数组对象
@@ -42,9 +42,7 @@ class PreProcessSeqToTsDt_Base(BaseSeqToTsDt):
             vars_datas = prep_func(vars_datas)
         else:
             vars_datas = self.preprocess_func(vars_datas)
-
-        logging.warning(f'var datas preview: {vars_datas[0]}')
-        vars_datasets = super().feature_engineering(vars_datas)
+        vars_datasets = super().feature_engineering(vars_datas, **kwargs)
         return vars_datasets
 
 
@@ -57,8 +55,8 @@ class PreProcessSeqToTsDt_NN(PreProcessSeqToTsDt_Base):
         super().__init__(**kwargs)
         self.dt_class = dt_class
 
-    def feature_engineering(self, vars_datas):
-        vars_datasets = super().feature_engineering(vars_datas)
+    def feature_engineering(self, vars_datas, **kwargs):
+        vars_datasets = super().feature_engineering(vars_datas, **kwargs)
 
         window = self.features + self.target
         # 神经网络模型需要 batch_size 三维数据
