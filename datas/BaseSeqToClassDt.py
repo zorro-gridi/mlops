@@ -8,7 +8,8 @@ import numpy as np
 
 class BaseSeqToClassDt(AbstractDatasetFactory):
     '''
-    主要特征：序列到类别
+    Desc:
+        主要特征：序列到类别
     '''
     def __init__(self, X_seq_len=10, y_seq_len=10, **kwargs):
         '''
@@ -24,7 +25,9 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
 
     def categoric_engineering(self, raw_data, split_name='train'):
         '''
-        # raw_data: pd.Dataframe group 对象
+        Args:
+            raw_data: pd.Dataframe group 对象
+            split_name: 数据集名称
         '''
         X_seq_len = self.X_seq_len
         y_seq_len = self.y_seq_len
@@ -60,7 +63,9 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
 
     def feature_engineering(self, raw_data, split_name='train'):
         '''
-        # raw_data: pd.Dataframe group 对象
+        Args:
+            raw_data: pd.Dataframe group 对象
+            split_name: 数据集的名称
         '''
         # 固定灿哥参数
         X_seq_len = self.X_seq_len

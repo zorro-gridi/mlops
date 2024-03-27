@@ -22,26 +22,30 @@ class PreProcessSeqToTsDt_Base(BaseSeqToTsDt):
         处理需要 preprocess 的数据集。
         进行时间序列预测前，需要对输入数据进行一定的自定义变换，再进行特征工程的数据集
         BASE 主要应用于一般机器学习的数值模型
-    Args:
-        preprocess_func: 自定义数据预处理函数，属性必选
     '''
-    def __init__(self, **kwargs):
+    def __init__(self, preprocess_func, **kwargs):
+        '''
+        Args:
+            preprocess_func: 对原始数据进行特征呢工程之前，预处理的函数。可以将定义的预处理函数转换成偏函数。自定义数据预处理函数，该类数据集必选属性
+        '''
         super().__init__(**kwargs)
+        self.preprocess_func = preprocess_func
 
 
     def feature_engineering(self, vars_datas, **kwargs):
         '''
         Desc:
             vars_datas: 数组对象
-            preprocess_func: 对原始数据进行特征呢工程之前，预处理的函数。可以将定义的预处理函数转换成偏函数
         Return:
             数组数据集
         '''
+        # 外部变量列表input_features 不为空，也需要交给 preprocess_func 预处理
         if self.input_features is not None:
             prep_func = partial(self.preprocess_func, input_features=self.input_features)
             vars_datas = prep_func(vars_datas)
         else:
             vars_datas = self.preprocess_func(vars_datas)
+
         vars_datasets = super().feature_engineering(vars_datas, **kwargs)
         return vars_datasets
 
@@ -49,7 +53,8 @@ class PreProcessSeqToTsDt_Base(BaseSeqToTsDt):
 
 class PreProcessSeqToTsDt_NN(PreProcessSeqToTsDt_Base):
     '''
-    NN 表示此数据类主要应用于 神经网络 模型
+    Desc:
+        NN 表示此数据集专门应用于神经网络模型
     '''
     def __init__(self, dt_class, **kwargs):
         super().__init__(**kwargs)

@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractclassmethod
+from matplotlib.pyplot import isinteractive
 import xgboost as xgb
 from catboost import Pool
 from torch.utils.data import DataLoader
@@ -20,6 +21,7 @@ from munch import DefaultMunch
 from mlops.utils.wrappers import DictWrapper
 import ray
 from ray.air.integrations.mlflow import setup_mlflow
+import pandas as pd
 
 
 class AbstractMLOps(metaclass=ABCMeta):
@@ -41,7 +43,7 @@ class AbstractMLOps(metaclass=ABCMeta):
             preprocess_func: 对输入的raw_data进行预处理加工
             postprocess_func: 对模型的输出进行加工,使满足最终输出要求。需要在主程序中定义
             mlflow_config: mlflow 任务的配置名称与后端链接等信息 dict
-                demo:
+                config demo:
                 mlflow_config = {
                     'experiment_name': experiment_name,
                     'tracking_uri': f'http://127.0.0.1:9001/',
@@ -72,11 +74,19 @@ class AbstractMLOps(metaclass=ABCMeta):
         #     }
 
     def _get_attr_sets(self):
+        '''
+        Desc:
+            获取类的所有的属性
+        '''
         kwarg = {k: v for k, v in self.__dict__.items() if not k.startswith('__')}
         return DefaultMunch.fromDict(kwarg)
 
 
     def _get_attr(self, name):
+        '''
+        Desc:
+            获取类的指定属性
+        '''
         attr_ref = getattr(self, name)
         # 对于属性为 class 的属性，需要再次调用 ray.get()
         attr_value = ray.get(attr_ref)
@@ -97,10 +107,14 @@ class AbstractMLOps(metaclass=ABCMeta):
 
     def find_best_model_args(self, params_space, **kwargs):
         '''
+        Desc:
+            该函数实现了 raytune 自动调参，并返回最优模型和参数 checkpoint.
+            主要操作如下：
+            1. 获取最优checkpoint
+            2. 更新 mlops 的 best_data_args
+            3. 更新 mlops 的 best_model_args
         Args:
             params_space:
-        Desc:
-            该函数实现了 raytune 自动调参，并返回最优模型和参数 checkpoint
         Return:
             best_checkpoint: Dict
         '''
@@ -149,8 +163,11 @@ class AbstractMLOps(metaclass=ABCMeta):
         self.best_model_args.update(best_result.config)
 
         if self.dataset_inst is not None:
-            self.best_data_args.update(self.dataset_inst.__dict__)
+            logging.warning(f'No dataset inst intansiate mode')
+            return best_checkpoint
 
+        self.best_data_args.update(self.dataset_inst.__dict__)
+        logging.warning(f'更新后的 MLOps 的 best_data_args: {self.best_data_args}')
         return best_checkpoint
 
 
@@ -185,8 +202,8 @@ class AbstractMLOps(metaclass=ABCMeta):
             # 加载 dataset hist cnofig, 更新当前的 dataset_inst 为历史模式
             test_data = self.dataset_inst.load_test_data(self.raw_data, inst_config=hist_model_config)
 
-        # 历史模型不用更新参数，不用返回 model signature
-        test_loader, _ = data_util_map(test_data, params_config=None)
+        # 历史模型不用更新参数，不用返回 model signature, 所以 params_config 可为 None
+        test_loader, _ = data_util_map(test_data, params_config=hist_model_config)
         # 此处很容易出 bug, 根源还是没有正确加载数据
         # ====================================
         hist_eval_metric = self.model_task.test_job(hist_regis_model, test_loader)
@@ -229,10 +246,11 @@ class AbstractMLOps(metaclass=ABCMeta):
         mlflow_client = MlflowClient(mlflow.get_tracking_uri())
 
         global data_util_map
-        def data_util_map(test_data, params_config=None):
+        def data_util_map(test_data, params_config={}):
             '''
-            # test_data: 模型输入的的的 test_data
-            # params_config: mlflow signature 的 params 参数
+            Args:
+                test_data: 模型输入的的的 test_data
+                params_config: mlflow signature 的 params 参数
            return:
                 test_loader: 供 self.test_job 评估模型
                 signature: 供 mlflow 注册模型
@@ -243,9 +261,25 @@ class AbstractMLOps(metaclass=ABCMeta):
                 signature = infer_signature(X[:5], y[:5], params_config)
 
             elif model_arch == 'cat':
-                test_loader = Pool(*test_data)
-                X, y = test_data
-                signature = infer_signature(X[:5], y[:5], params_config)
+                if type(test_data).__name__ == 'Pool':
+                    test_loader = test_data
+                    # 返回的是 input_size
+                    shape = test_data.shape
+                    input_examples = np.random.randint(0, 10, size=shape)
+                    label = np.random.randint(0, 10, size=shape[0])
+                    signature = infer_signature(
+                        input_examples[:5], label[:5], params_config)
+                elif isinstance(test_data[0], np.ndarray):
+                    # np.ndarray 中不能设置分类变量
+                    test_loader = Pool(
+                        pd.DataFrame(test_data[0]), label=test_data[1], cat_features=params_config.get('categoric_features', None))
+                    X, y = test_data
+                    signature = infer_signature(X[:5], y[:5], params_config)
+                else:
+                    test_loader = Pool(
+                       *test_data, cat_features=params_config.get('categoric_features', None))
+                    X, y = test_data
+                    signature = infer_signature(X[:5], y[:5], params_config)
 
             elif model_arch == 'nn':
                 test_loader = DataLoader(test_data, batch_size=1)
@@ -326,6 +360,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         params_config = {
             k: v for k, v in params_config.items()
             if v is not None
+            # 筛选 data args 的类型
             and type(v) in [bool, str, int, float, list, dict, np.array, np.ndarray]
             }
         params_config['training_loss'] = training_loss

@@ -3,6 +3,8 @@ from functools import partial
 import torch
 import numpy as np
 from copy import copy
+from typing import Union
+import pandas as pd
 
 from torch.utils.data import (
     Dataset,
@@ -16,7 +18,7 @@ import logging
 class BaseSeqToTsDt(AbstractDatasetFactory):
     '''
     Desc:
-        序列到时间序列
+        序列到序列
     '''
     def __init__(self, input_features=None, **kwargs):
         '''
@@ -24,7 +26,6 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
             input_features: 时间序列的外部变量列表
         '''
         super(BaseSeqToTsDt, self).__init__(**kwargs)
-        # input_features 作为外部变量
         self.input_features = input_features
 
         # 时间序列的特征是窗口长度
@@ -32,25 +33,31 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
             self.features = len(self.features)
 
 
-    def feature_engineering(self, vars_datas: np.array, pred_len=0, split_name='train'):
+    def feature_engineering(self, vars_datas: Union[np.ndarray, pd.DataFrame, list], pred_len=0, split_name='train'):
         '''
         Desc:
             构造序列特征的步骤:
-                1. 分割序列。以输入features长度+预测targe长度作为一条(X, y)序列样本的Window
-                2. Window数据切片, 获得 (X, y) 样本
+            1. 分割序列。以输入features长度+预测targe长度作为一条(X, y)序列样本的Window
+            2. Window数据切片, 获得 (X, y) 样本
         Args:
             vars_datas: 输入序列的数组
             pred_len: 预测样本的长度。例如，保留最后 1 条数据作为预测决策样本
             split_name: 返回的数据集类型: "train", "pred"
         Return:
-            shape 为 (-1, window, features) 的多维数组, 还未分出(X, y)数据集
-                -1:  表示数据集的size
-                window: 时间序列的窗口长度 = features + target; 因此, X, y = dataset[:, features], dataset[:, target]
-                features: 输入的特征数量 (Unit单变量 or MultVars多变量)
+            np.ndarray. shape 为 (-1, window, features), 注意，此时数据集还未切分出(X, y)
+            -1:  表示数据集的size
+            window: 时间序列的窗口长度 = features + target; 因此, X, y = dataset[:, features], dataset[:, target]
+            features: 输入的特征数量 (Unit单变量 or MultVars多变量)
         '''
         # 时间序列的特征定义
         window = self.features + self.target
-        vars_datas_copy = copy(vars_datas)
+        # 将 dataframe 转化为 numpy 加速处理
+        if isinstance(vars_datas, pd.DataFrame):
+            vars_datas_copy = vars_datas.values
+        elif isinstance(vars_datas, list):
+            vars_datas_copy = np.array(vars_datas)
+        else:
+            vars_datas_copy = copy(vars_datas)
         # 时间序列处理的核心
         vars_datasets = [
             vars_datas_copy[i:i+window]
@@ -67,10 +74,15 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
         if split_name == 'pred':
             logging.warning(f'return prediction datasets')
             vars_datasets = vars_datasets[-pred_len:]
+
+        if len(vars_datasets.shape) > 2:
+            logging.warning(f'vars_datasets shape: {vars_datasets.shape}')
+            vars_datasets = vars_datasets.reshape(len(vars_datasets), -1)
+            logging.warning(f'将 vars_datasets reshape 为二维数组: {vars_datasets.shape}')
         return vars_datasets
 
 
-    def data_split(self, raw_dataset:np.ndarray, test_size=0.2, random_state=42):
+    def data_split(self, raw_dataset: Union[np.ndarray, pd.DataFrame], test_size=0.2, random_state=42):
         '''
         Desc:
             切分数据集, 并区分出X, y
@@ -80,10 +92,10 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
             train_data: (X_train, y_train)
             test_data: (X_test, y_test)
         '''
-        logging.warning(f'raw datasets shape: {raw_dataset.shape}')
+        logging.warning(f'raw_datasets shape: {raw_dataset.shape}')
         # 此处 self.target 表示预测变量的长度, 一般为最后 1 个索引位置, 即 target = 1
+        # 当使用外部变量时，raw_dataset 会变成多维数组, 因此需要 reshape 到二维数组
         X, y = raw_dataset[:, :-self.target], raw_dataset[:, -self.target]
-
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=random_state)
 
@@ -97,13 +109,21 @@ class SeqToTsDt_NN(BaseSeqToTsDt):
     def __init__(self, dt_class, **kwargs):
         '''
         Desc:
-            dt_class: 神经网络加载数据集的class
+            应用于神经网络的序列到序列预测数据集
+        Args:
+            dt_class: torch框架的 Dataset 对象
         '''
         super().__init__(**kwargs)
         self.dt_class = dt_class
 
 
     def feature_engineering(self, vars_datas, **kwargs):
+        '''
+        Desc:
+            特征工程
+        Returns:
+            torch 框架的 tensor 对象
+        '''
         vars_datasets = super().feature_engineering(vars_datas, **kwargs)
 
         window = self.features + self.target

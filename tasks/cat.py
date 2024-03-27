@@ -54,7 +54,7 @@ class CatboostTask(AbstractModelFactory):
     def convert_data(self, train_data, test_data):
         # 当有分类特征时，最好提前构造好 Pool 格式的数据集
         if type(train_data).__name__ == 'Pool':
-            logging.warning(f'train data alread be cat Pool type...')
+            # logging.warning(f'train data alread be cat Pool type...')
             train_pool = train_data
             test_pool = test_data
         else:
