@@ -41,7 +41,7 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
             2. Window数据切片, 获得 (X, y) 样本
         Args:
             vars_datas: 输入序列的数组
-            pred_len: 预测样本的长度。例如，保留最后 1 条数据作为预测决策样本
+            pred_len: 预测样本的长度, 默认为 0 表示预测所有样本。为 1 表示保留最后 1 条数据作为预测决策样本
             split_name: 返回的数据集类型: "train", "pred"
         Return:
             np.ndarray. shape 为 (-1, window, features), 注意，此时数据集还未切分出(X, y)
@@ -68,9 +68,11 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
         vars_datasets = [v for v in vars_datasets if len(v) == window]
         vars_datasets = np.array(vars_datasets)
 
+        # 训练数据集
         if pred_len > 0 and split_name == 'train':
             logging.warning(f'return training datasets')
             vars_datasets = vars_datasets[:-pred_len]
+        # 预测数据集
         if split_name == 'pred':
             logging.warning(f'return prediction datasets')
             vars_datasets = vars_datasets[-pred_len:]

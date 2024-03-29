@@ -14,23 +14,34 @@ from gymnasium.utils import seeding
 from stable_baselines3.common.vec_env import DummyVecEnv
 from ray.rllib.env import EnvContext
 
-
-
 matplotlib.use("Agg")
 
 
+"""
+@Author: Zorro
+@Date: 2024-01-01
+@Desc:
+    本代码定义了基于 rllib 强化学习训练框架的 gym 环境模型
+"""
+
+
 class StockTradeEnv(gym.Env):
-    """A stock trading environment for OpenAI gym"""
+    """
+    Desc:
+        A stock trading environment for OpenAI gym
+    """
     metadata = {"render_modes": ["human"]}
+
 
     def __init__(self, config: EnvContext):
         '''
-        # stock_dim: 交易的股票数量
-        # hmax: action 表示交易的手数，一手 = 100股。 hmax 可设置为 100
-        # state_dim: 仅仅表示维度 int; 本质是输入的特征数量, 在本class中定义为 self.state 列表的长度
-        # action_dim:  仅仅表示维度 int; 本质是股票持仓的数量，或者说交易股票池的数量
-        # window_size: 输入序列的长度
-        # future_days: 使用未来多少天的数据计算买入的预期收益率
+        Args:
+            stock_dim: 交易的股票数量
+            hmax: action 表示交易的手数，一手 = 100股。 hmax 可设置为 100
+            state_dim: 仅仅表示维度 int; 本质是输入的特征数量, 在本class中定义为 self.state 列表的长度
+            action_dim:  仅仅表示维度 int; 本质是股票持仓的数量，或者说交易股票池的数量
+            window_size: 输入序列的长度
+            future_days: 使用未来多少天的数据计算买入的预期收益率
         '''
         self.day = config['day']
         self.df = config['df']
@@ -344,7 +355,7 @@ class StockTradeEnv(gym.Env):
         return self.state, self.reward, self.terminal, False, self.acct_info
 
 
-    # 每个 espisode 之后要重新收集资料，”一个人的美酒可能是另一个人的毒药“
+    # 每个 espisode 之后要重新收集资料。俗话说，”一个人的美酒可能是另一个人的毒药“
     def reset(self, *, seed=None, options=None):
         '''
         # * 表示接受任意数量的可变参数

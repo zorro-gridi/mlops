@@ -64,10 +64,17 @@ def compute_vars_list(series, chunk_index: list, pool_func='np.max'):
         up_days = sum(np.array(seq) > 0)
         return up_days
 
-    def get_last_phase_point(seq):
+    def get_last_point(seq):
         '''
         Desc:
             获取分割序列的最后一个牛熊分割线标签。分类标签，可以为 int
+        '''
+        return str(seq[-1])
+
+    def get_last_phase_point(seq):
+        '''
+        Desc:
+            same as "get_last_point", will deprecated !
         '''
         return str(seq[-1])
 
@@ -88,7 +95,7 @@ def compute_vars_list(series, chunk_index: list, pool_func='np.max'):
     return vars_value
 
 
-def build_multi_vars_datas(data, chunk_index, vars_config: dict, target_series=None):
+def build_multi_vars_datas(data, chunk_index: list, vars_config: dict, target_series=None):
     '''
     Desc:
         本函数实现将外部变量集成到预测目标变量中
