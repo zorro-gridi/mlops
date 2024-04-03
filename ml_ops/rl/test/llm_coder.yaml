@@ -1,0 +1,11 @@
+project_type: .py
+source_dir: /Users/zorro/project/pycharm/mlops/ml_ops/rl/finrl/envs
+target_file: /Users/zorro/project/pycharm/mlops/ml_ops/rl/test/output.txt
+urls: /Users/zorro/project/pycharm/mlops/ml_ops/rl/test/rllib_fund_quant_trade.py
+
+query: |
+    运行rllib_fund_quant_trade.py代码进行策略空间搜索的时候,
+    FundQuantTradeEnv 的 acct_info 属性的 cash_asset 列表中为什么存在大量的 0, 虽然我限制了
+    buy_num_shares > 0 和 sell_num_shares > 0; 同时, cash_asset 列表中还出现了超过40位的数, 显然是异常的,
+    需要的支持：
+    请帮我排查哪里出问题了？

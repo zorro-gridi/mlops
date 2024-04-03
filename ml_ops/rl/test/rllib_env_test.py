@@ -1,3 +1,5 @@
+
+# %%
 from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.algorithms.algorithm import Algorithm
 
@@ -23,14 +25,19 @@ from mlops.ml_ops.rl import finrl
 from mlops.ml_ops.rl.finrl.envs.rllib_StockTradeEnv import StockTradeEnv
 from tools.DB_Client import DB_Client
 
-mysql_db_client = DB_Client(con_type='mysql_centos')
+
+# %%
+"""
+@Desc:
+    本代码实现基于 rllib 框架的交易策略训练测试
+"""
 
 
 sql = '''
     select
-         trade_date as `date`
-        ,scode      as tic
-        ,open * 1   as open
+         trade_date     as `date`
+        ,scode          as tic
+        ,open * 1       as open
         ,closed * 1     as close
         ,highest * 1    as high
     from stock.east_money_stock_trade_data
@@ -42,6 +49,7 @@ sql = '''
         ,tic
 '''
 
+mysql_db_client = DB_Client(con_type='mysql_centos')
 stock_data = mysql_db_client.data_read(sql)
 # factorize() 将一组数据编码成整数编码
 stock_data.index = stock_data.date.factorize()[0]
@@ -71,17 +79,23 @@ env_kwargs = dict(
     output_dir=Path(env_path) / 'rl_results',
     )
 
-if ray.is_initialized():
-    ray.shutdown()
-ray.init(num_gpus=1, num_cpus=16, dashboard_host='0.0.0.0')
-
 env_config = {'config': env_kwargs}
-rllib_trade_env = gym.make('rllib_StockTradeEnv-v0', **env_config)
+rllib_stock_env = gym.make('rllib_StockTradeEnv-v0', **env_config)
+ray.rllib.utils.check_env(rllib_stock_env)
+
+
+# %%
+# if ray.is_initialized():
+#     ray.shutdown()
+
+ray.init(address='auto')
+
 
 def env_creator(env_config):
-    return rllib_trade_env
+    return rllib_stock_env
 
-env_name = 'rllib_env'
+
+env_name = 'rllib_stock_env'
 register_env(env_name, env_creator)
 
 
@@ -103,7 +117,7 @@ config = ( # 1. Configure the algorithm,
     .resources(num_gpus=0, num_cpus_per_worker=1, num_cpus_per_learner_worker=1, num_cpus_for_local_worker=10)
     # 策略网络的参数
     # 每次打印的 eposode 信息并不是在训练，应该是达到 batch_size 的大小后，gpu 才开始训练
-    .training(model={"fcnet_hiddens": [64, 64]}, train_batch_size=1024 * 4,)
+    .training(model={"fcnet_hiddens": [64, 64]}, train_batch_size=1024,)
     # .callbacks(MemoryTrackingCallbacks)
     # .evaluation(evaluation_interval=100, evaluation_num_workers=1)
     )
@@ -143,9 +157,10 @@ algo.stop()
 
 # algo.evaluate()  # 4. and evaluate it.
 
-
+# inference:
+# ========================================
 # trade_env = StockTradeEnv(config=env_kwargs)
-# trade_env.reset()
+# obs, info = trade_env.reset()
 # for i in range(1000):
 #     actions = trade_env.action_space.sample()
 #     state, reward, teminated, truncated, acct_info = trade_env.step(actions)

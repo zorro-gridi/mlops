@@ -15,12 +15,16 @@ from tools.DB_Client import DB_Client
 mysql_db_client = DB_Client(con_type='mysql_centos')
 
 
+"""
+@Desc: 本代码测试构建 gym 环境模型
+"""
+
 
 sql = '''
     select
-         trade_date as `date`
-        ,scode      as tic
-        ,open * 1   as open
+         trade_date     as `date`
+        ,scode          as tic
+        ,open * 1       as open
         ,closed * 1     as close
         ,highest * 1    as high
     from stock.east_money_stock_trade_data
@@ -48,7 +52,7 @@ env_config = dict(
     buy_cost_pct=[3/10000, 3/10000],
     sell_cost_pct=[3/10000, 3/10000],
     )
-
+# 加载已经注册的 env
 gym.make('sb3_StockTradeEnv-v0', **env_config)
 
 

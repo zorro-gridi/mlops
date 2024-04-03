@@ -8,3 +8,10 @@ env_path = '/'.join([dirname for dirname in dir_list[:dir_list.index('pycharm')+
 sys.path.append(env_path)
 
 from mlops.ml_ops.rl.finrl.envs.rllib_StockTradeEnv import StockTradeEnv
+from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv import FundQuantTradeEnv
+
+
+"""
+@Desc:
+    本代码实现将已经定义的 gym env class 导入到 runtime 环境
+"""
