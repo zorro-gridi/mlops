@@ -53,7 +53,7 @@ env_config = dict(
     sell_cost_pct=[3/10000, 3/10000],
     )
 # 加载已经注册的 env
-gym.make('sb3_StockTradeEnv-v0', **env_config)
+gym.make('sb3_StockTradeEnv-v0.1', **env_config)
 
 
 env_kwargs = dict(
@@ -81,4 +81,65 @@ env_kwargs = dict(
     )
 
 env_config = {'config': env_kwargs}
-rllib_trade_env = gym.make('rllib_StockTradeEnv-v0', **env_config)
+rllib_trade_env = gym.make('rllib_StockTradeEnv-v0.1', **env_config)
+
+
+
+
+# %%
+sql = '''
+    select
+        *
+    from idx.index_markup_days_rl_observations_dataset
+    where 1=1
+        and indexname = '传媒'
+    order by
+         trade_date
+        ,indexname
+'''
+
+mysql_db_client = DB_Client(con_type='mysql_centos')
+stock_data = mysql_db_client.data_read(sql)
+stock_data.rename(columns={
+    'trade_date': 'date',
+    'indexname': 'tic',
+    'markup': 'close',
+    }, inplace=True)
+stock_data.drop(columns=['model_frame'], inplace=True)
+
+# factorize() 将一组数据编码成整数编码
+stock_data.index = stock_data.date.factorize()[0]
+logging.warning(f'\n{stock_data.tail()}')
+
+
+# %%
+env_kwargs = dict(
+    df=stock_data,
+    initial_amount=100000,
+    num_stock_shares=[0],           # 初始持仓。 注意：持仓 & 交易手续费 的顺序要和 dataframe 中的股票名称顺序一致
+    buy_cost_pct=[1.5/1000],
+    sell_cost_pct=[None],
+    reward_scaling=0.6,             # reward discount 系数
+    tech_indicator_list=None,
+    print_verbosity=10,
+    day=0,
+    initial=True,
+    window_size=1,
+    future_days=5,
+    pfo_ratio=0.8,                  # 仓位控制线
+    hmax=1000,
+    model_name="rl_fund_bot",
+    mode="train",
+    iteration=1000,
+    per_buy_order_max_amt=5000,     # 单笔买入的最大金额
+    per_unit_qty=10,                # 单笔交易最小交易量，例如股票100股
+    per_unit_amount=200,            # 单笔交易的最小金额，例如基金1～10元
+    output_dir=Path(env_path) / 'rl_results',
+    goal_yield=0.08,
+    phase_yield=0.02,
+    )
+
+
+# %%
+env_config = {'config': env_kwargs}
+rllib_fund_env = gym.make('rllib_FundQuantTradeEnv-v0.1', disable_env_checker=False, **env_config)

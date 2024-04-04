@@ -88,8 +88,9 @@ env_kwargs = dict(
     per_unit_amount=200,            # 单笔交易的最小金额，例如基金1～10元
     output_dir=Path(env_path) / 'rl_results',
     goal_yield=0.08,
-    phase_yield=0.02
+    phase_yield=0.02,
     )
+
 
 # %%
 env_config = {'config': env_kwargs}
@@ -117,6 +118,7 @@ register_env(env_name, env_creator)
 # %%
 config = ( # 1. Configure the algorithm,
     PPOConfig()
+    # 直接传参
     # .environment(FundQuantTradeEnv, env_config=env_kwargs)
     .environment(env=env_name)
     .rollouts(
@@ -159,35 +161,35 @@ checkpoint_dir = Path(current_dir) / 'trader_bot/Media'
 # else:
     # algo = config.build()
 
-# algo = config.build()
+algo = config.build()
 
-# # %%
-# start_time = time.time()
-# time_steps = 50
+# %%
+start_time = time.time()
+time_steps = 50
 
-# for epoch in range(time_steps):
-#     epoch_start_time = time.time()
-#     results = algo.train()
-#     epoch_end_time = time.time()
+for epoch in range(time_steps):
+    epoch_start_time = time.time()
+    results = algo.train()
+    epoch_end_time = time.time()
 
-#     epoch_time = (epoch_end_time - epoch_start_time)
-#     total_time = (epoch_end_time - start_time)
-#     logger.warning(f'''training round No. {epoch+1}, round time: {epoch_time:.1f}s, total_time: {total_time:.1f}s''')
+    epoch_time = (epoch_end_time - epoch_start_time)
+    total_time = (epoch_end_time - start_time)
+    logger.warning(f'''training round No. {epoch+1}, round time: {epoch_time:.1f}s, total_time: {total_time:.1f}s''')
 
 
-# # %%
-# shutil.rmtree(checkpoint_dir, ignore_errors=True)
-# save_result = algo.save(checkpoint_dir=checkpoint_dir)
+# %%
+shutil.rmtree(checkpoint_dir, ignore_errors=True)
+save_result = algo.save(checkpoint_dir=checkpoint_dir)
 
-# path_to_checkpoint = save_result.checkpoint.path
-# print(
-#     "An Algorithm checkpoint has been created inside directory: "
-#     f"'{path_to_checkpoint}'."
-#     )
+path_to_checkpoint = save_result.checkpoint.path
+print(
+    "An Algorithm checkpoint has been created inside directory: "
+    f"'{path_to_checkpoint}'."
+    )
 
-# # %%
-# # Let's terminate the algo for demonstration purposes.
-# algo.stop()
+# %%
+# Let's terminate the algo for demonstration purposes.
+algo.stop()
 
 
 # inference:

@@ -96,7 +96,9 @@ class BaseTradeEnv(gym.Env):
         self.episode = 0
         self.soldout = 0
         self.goal_achieved = 0
-        self.pfo_ratio = config.get('pfo_ratio', 1)
+
+        self.pfo_ratio_guideline = config.get('pfo_ratio_guideline', 1)     # 账户的仓位警戒线
+
         self.goal_yield = config.get('goal_yield', 0.1)
         self.phase_yield = config.get('phase_yield', 0.02)
 
@@ -525,6 +527,14 @@ class BaseTradeEnv(gym.Env):
         return state
 
 
+    def _get_pfo_ratio(self):
+        '''
+        Desc:
+            获取仓位的比例
+        '''
+        return 0
+
+
     def _state_reshape(self):
         '''
         Desc:
@@ -540,8 +550,10 @@ class BaseTradeEnv(gym.Env):
         acct_cash_asset = sum(self.acct_info['cash_asset'])
         # holding_shares = [sum(shares) for _, shares in self.acct_info['pfo_holding'].items()]
 
+        pfo_ratio_gap = self.pfo_ratio_guideline - self._get_pfo_ratio()
         # state.extend(holding_shares)
         state.append(acct_cash_asset)
+        state.append(pfo_ratio_gap)
         # logging.warning(f'state cash asset ---------> {acct_cash_asset}')
         state = np.array(state, dtype='float32')
         return state

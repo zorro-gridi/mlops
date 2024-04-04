@@ -55,7 +55,7 @@ class FundQuantTradeEnv(BaseTradeEnv):
         # self.action_space = spaces.Box(low=-1, high=1, shape=(self.stock_dim,), dtype="float32")
         # 最终方案 -> action_space: MultiDiscrete, 多维离散空间
         self.action_space = spaces.MultiDiscrete([11] * self.stock_dim)
-        self.pfo_ratio = config.get('pfo_ratio', 1)
+        self.pfo_ratio_guideline = config.get('pfo_ratio_guideline', 1)
         self.goal_yield = config.get('goal_yield', 0.06)
         self.phase_yield = config.get('phase_yield', 0.02)
 
@@ -80,11 +80,25 @@ class FundQuantTradeEnv(BaseTradeEnv):
                 if s['buy_date'] != '1900-01-01'
                 ]
             for fund_code, holdings in self.acct_info['pfo_shares_redeem'].items()
-            # 过滤为 0 的历史节点持仓，加快推理速度
-            # if self.acct_info['pfo_shares_redeem']
             }
         self.acct_info['pfo_shares_redeem'] = update_holdings
         return update_holdings
+
+
+    def _set_pfo_ratio(self):
+        '''
+        Desc:
+            账户的仓位控制策略。基于上证指数的相对牛熊点位判断
+        '''
+        ratio_strategy = {
+            0: 0.8,
+            1: 0.5,
+            2: 0.3,
+            }
+        sz_point_phase = self.current_data['sz_closed_phase'].unique()[0]
+        idx_pint_phase = self.current_data['closed_phase'].unique()[0]
+        self.pfo_ratio_guideline = (ratio_strategy[sz_point_phase] + ratio_strategy[idx_pint_phase]) / 2
+        return self.pfo_ratio_guideline
 
 
     def _get_acct_pfo_shares(self):
@@ -182,7 +196,7 @@ class FundQuantTradeEnv(BaseTradeEnv):
             ]
 
         if holdings:
-            logging.warning(f'test acct holding yield -------->\n{pd.DataFrame(holdings)}')
+            # logging.warning(f'test acct holding yield -------->\n{pd.DataFrame(holdings)}')
             max_yield_shares = sum([s['hold'] for s in holdings])
             # logging.warning(f'当前可卖的累计盈利的持仓 ------------> 份额: {shares}, yield: {selling_return}')
         return max_yield_shares
@@ -391,7 +405,7 @@ class FundQuantTradeEnv(BaseTradeEnv):
                 logging.warning(f'''
                     ---------->
                     卖出日期: {selling_date}, 回收现金: {selling_return:0.2f}, 卖出手续费: {selling_cost:0.2f}
-                    卖出收益率: {return_ratio:0.4f}, 仓位: {self._get_pfo_ratio():0.2f}
+                    卖出收益率: {return_ratio:0.4f}, 仓位: {self._get_pfo_ratio():0.2f}, 仓位控制线: {self.pfo_ratio_guideline:0.2f}
                     ''')
             return return_ratio
         else:
@@ -406,13 +420,15 @@ class FundQuantTradeEnv(BaseTradeEnv):
             index 是一个索引，从 self.state 中取出对应的股票的持仓份额 或着 股价
             action 是一个标量数值，表示针对制定 index 股票进行加减仓操作; 在 self.action_space 中定义
         '''
-        if self._get_pfo_ratio() > self.pfo_ratio:
-            logging.warning(f'已达到仓位控制线, 暂停加仓 !!!')
+        # 更新仓位控制线
+        self._set_pfo_ratio()
+        if self._get_pfo_ratio() > self.pfo_ratio_guideline:
+            logging.warning(f'-------> 已达到仓位控制线 {self.pfo_ratio_guideline}, 暂停加仓 !!!')
             return 0, 0
 
         stock_name = self.current_data.tic.to_list()[index]
         # 基金使用收盘涨跌幅，收盘价在基金的模拟环境中没有实际使用
-        close_price = self.current_data.close.to_list()[index]
+        # close_price = self.current_data.close.to_list()[index]
 
         _mark_point = self.current_data.y_point.tolist()[index]
         _pred_points = self.current_data.y_pred.tolist()[index]
@@ -438,8 +454,9 @@ class FundQuantTradeEnv(BaseTradeEnv):
 
                 # 计算可买入的最多股票数量（基于单笔交易金额限制的）
                 if available_shares > 0:
-                    # update balance
-                    buy_num_shares = min(available_shares, action)
+                    # 当策略的仓位不足时，主动补足仓位
+                    action_adj = action + self.initial_amount * (self.pfo_ratio_guideline - self._get_pfo_ratio()) / 5
+                    buy_num_shares = min(available_shares, action_adj)
 
                     if buy_num_shares > self.per_unit_amount:
                         buy_amount = buy_num_shares * (1 - self.buy_cost_pct[index])
@@ -499,7 +516,8 @@ class FundQuantTradeEnv(BaseTradeEnv):
         if pfo_yield >= self.phase_yield:
             acct_holdings = self.acct_info['pfo_shares_redeem'][stock_name]
             if acct_holdings:
-                logging.warning(f"acct holdings before soldout -------->\n{pd.DataFrame(acct_holdings)}")
+                # logging.warning(f"acct holdings before soldout -------->\n{pd.DataFrame(acct_holdings)}")
+                pass
 
             if cumsum_yield >= self.goal_yield:
                 logging.warning(f'当前账户【清仓累计收益率】: {cumsum_yield:0.4f}, 达到【预期收益率】目标: {self.goal_yield}, 账户清仓 !!!')
