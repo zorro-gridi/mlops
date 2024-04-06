@@ -24,10 +24,9 @@ sys.path.append(env_path)
 
 # finrl 必须导入到 runtime
 from mlops.ml_ops.rl import finrl
-from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv import FundQuantTradeEnv
-# from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V2 import FundQuantTradeEnv_V2
+# from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv import FundQuantTradeEnv
+from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V2 import FundQuantTradeEnv_V2
 from tools.DB_Client import DB_Client
-
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename=current_dir / 'fund_trader_bot.log', level=logging.WARNING)
@@ -92,8 +91,8 @@ env_kwargs = dict(
 
 # %%
 env_config = {'config': env_kwargs}
-rllib_fund_env = gym.make('rllib_FundQuantTradeEnv-v0.1', **env_config)
-ray.rllib.utils.check_env(rllib_fund_env)
+rllib_fund_env_v2 = gym.make('rllib_FundQuantTradeEnv-v0.2', **env_config)
+ray.rllib.utils.check_env(rllib_fund_env_v2)
 
 
 # %%
@@ -107,9 +106,9 @@ ray.init(address='auto')
 
 # %%
 def env_creator(env_config):
-    return rllib_fund_env
+    return rllib_fund_env_v2
 
-env_name = 'rllib_fund_env'
+env_name = 'rllib_fund_env_v2'
 register_env(env_name, env_creator)
 
 
@@ -151,7 +150,7 @@ config = ( # 1. Configure the algorithm,
 
 
 # %%
-checkpoint_dir = Path(current_dir) / 'trader_bot/Media/V1'
+checkpoint_dir = Path(current_dir) / 'trader_bot/Media/V2'
 
 # if checkpoint_dir.exists() and any(checkpoint_dir.glob('*')):
 #     algo = Algorithm.from_checkpoint(checkpoint_dir)
@@ -195,7 +194,7 @@ checkpoint_dir = Path(current_dir) / 'trader_bot/Media/V1'
 # ========================================
 # %%
 algo = Algorithm.from_checkpoint(checkpoint_dir)
-fund_env = FundQuantTradeEnv(config=env_kwargs)
+fund_env = FundQuantTradeEnv_V2(config=env_kwargs)
 # reset 默认返回两个元素
 obs, acct_info = fund_env.reset(seed=42)
 

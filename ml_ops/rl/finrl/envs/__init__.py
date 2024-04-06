@@ -9,6 +9,7 @@ sys.path.append(env_path)
 
 from mlops.ml_ops.rl.finrl.envs.rllib_StockTradeEnv import StockTradeEnv
 from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv import FundQuantTradeEnv
+from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V2 import FundQuantTradeEnv_V2
 
 
 """

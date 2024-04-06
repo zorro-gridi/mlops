@@ -53,37 +53,7 @@ env_config = dict(
     sell_cost_pct=[3/10000, 3/10000],
     )
 # 加载已经注册的 env
-gym.make('sb3_StockTradeEnv-v0.1', **env_config)
-
-
-env_kwargs = dict(
-    df=stock_data,
-    initial_amount=100000,
-    # 初始持仓。 注意：持仓 & 交易手续费 的顺序要和 dataframe 中的股票名称顺序一致
-    num_stock_shares=[0, 0],
-    buy_cost_pct=[3/10000, 3/10000],
-    sell_cost_pct=[3/10000, 3/10000],
-    reward_scaling=0.6, # reward discount 系数
-    tech_indicator_list=None,
-    print_verbosity=10,
-    day=0,
-    initial=True,
-    window_size=30,
-    future_days=30,
-    hmax=200,
-    model_name="rl_trade_bot",
-    mode="train",
-    iteration=1000,
-    per_buy_order_max_amt=20000, # 单笔买入的最大金额
-    per_unit_qty=100, # 单笔交易最小交易量，例如股票100股
-    per_unit_amount=10, # 单笔交易的最小金额，例如基金1～10元
-    output_dir=Path(env_path) / 'rl_results',
-    )
-
-env_config = {'config': env_kwargs}
-rllib_trade_env = gym.make('rllib_StockTradeEnv-v0.1', **env_config)
-
-
+gym.make('sb3_StockTradeEnv-v0.2', **env_config)
 
 
 # %%
@@ -142,4 +112,4 @@ env_kwargs = dict(
 
 # %%
 env_config = {'config': env_kwargs}
-rllib_fund_env = gym.make('rllib_FundQuantTradeEnv-v0.1', disable_env_checker=False, **env_config)
+rllib_fund_env = gym.make('rllib_FundQuantTradeEnv-v0.2', disable_env_checker=False, **env_config)

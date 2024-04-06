@@ -34,7 +34,10 @@ class BaseTradeEnv(gym.Env):
 
     def __init__(self, config: EnvContext):
         '''
-        config key of Args:
+        Remark:
+            1. 在初始化 env 的时候, 使用了_initial 类函数，例如 _initial_acct_info() 和 _initiate_state()
+               函数中引用的一些变量，一定要提前定义
+        Args of config:
             df: pd.DataFrame, 必须包含以下字段:
                 'date': trade date
                 'tic': stock or fund code
@@ -46,12 +49,25 @@ class BaseTradeEnv(gym.Env):
             window_size: 输入序列的长度
             future_days: 使用未来多少天的数据计算买入的预期收益率
         '''
+        self.acct_info = config.get('acct_info', None)
         self.day = config.get('day', 0)
         self.df = config['df']
-
-        self.hmax = config['hmax']
         self.num_stock_shares = config['num_stock_shares']
-        self.initial_amount = config['initial_amount']  # get the initial cash
+
+        # TODO: hmax 需要设计一个预期函数，即估计出最大定投次数, 换算得到
+        self.hmax = config.get('hmax', 200)                                     # base model 的配置
+        self.base_amount = 10000                                                # 用来训练 base trade bot
+        self.initial_amount = config.get('initial_amount', self.base_amount)    # get the initial cash
+        self.p = round(self.initial_amount / self.base_amount, 1)               # 交易放大的系数
+
+        # 单笔的最大买入金额，主要和 action 的分布有关:
+        # 本 env action 分布范围~[-5, 5], hmax=100, 最大 500 元
+        # 设置 per_buy_order_max_amt 的目的在于，当 action 的分布范围更广时，例如到10，则分布的最高可买入金额为 1000元
+        # 若此时限制 per_buy_order_max_amt = 800， 则最高买入额为 800 元，意义在此 !
+        self.per_buy_order_max_amt = config.get('per_buy_order_max_amt', self.p * self.hmax * 5 / 2) # 5 是 action 的极值
+        self.per_unit_qty = config['per_unit_qty']       # 每笔交易最小的股数，股票为100
+        self.per_unit_amount = config['per_unit_amount'] # 每笔最小的交易额，基金一般为10元
+
         self.buy_cost_pct = config['buy_cost_pct']
         self.sell_cost_pct = config.get('sell_cost_pct', [None])
         self.reward_scaling = config['reward_scaling']
@@ -89,27 +105,17 @@ class BaseTradeEnv(gym.Env):
         self.mode = config['mode']
         self.iteration = config['iteration']
 
-        # initialize reward
         self.reward = 0
         self.cost = 0
         self.trades = 0
         self.episode = 0
         self.soldout = 0
-        self.goal_achieved = 0
-
-        self.pfo_ratio_guideline = config.get('pfo_ratio_guideline', 1)     # 账户的仓位警戒线
-
-        self.goal_yield = config.get('goal_yield', 0.1)
-        self.phase_yield = config.get('phase_yield', 0.02)
+        self.goal_achieved = False
 
         self.rewards_memory = []
         self.actions_memory = []
         self.date_memory = [self._get_date()]
         self._seed()
-
-        self.per_buy_order_max_amt = config['per_buy_order_max_amt']
-        self.per_unit_qty = config['per_unit_qty']       # 每笔交易最小的股数，股票为100
-        self.per_unit_amount = config['per_unit_amount'] # 每笔最小的交易额，基金一般为10元
 
         self.output_dir = config['output_dir']
         if self.output_dir:
@@ -166,9 +172,9 @@ class BaseTradeEnv(gym.Env):
                 1==1
                 ):
                 # 判断当前是否有该股票的持仓 & 股价是否大于 0
-                if profit_shares_rest > 0 and close_price > 0 and stock_shares > 0:
+                if profit_shares_rest > 0:
                     # Sell only if current asset is > 0
-                    sell_num_shares = min(abs(action), stock_shares, profit_shares_rest)
+                    sell_num_shares = min(abs(action), profit_shares_rest)
 
                     if sell_num_shares > 0:
                         # 记录累计已卖出的盈利头寸
@@ -249,9 +255,9 @@ class BaseTradeEnv(gym.Env):
     def step(self, actions):
         '''
         Desc:
-            在环境中执行一个动作
+            在环境中执行一个动作。函数调用的 _sell_stock 和 _byu_stock 函数的 index 参数来源于对 actions 的排序
         Args:
-            actions: 交易的份额列表
+            actions: Union[np.array, list], 交易的份额列表
         '''
         # logging.warning(f'sample actions {actions}')
         # 是否 TimeLimit & truncate
@@ -259,7 +265,7 @@ class BaseTradeEnv(gym.Env):
         self.terminal = self.day == len(self.df.iloc[:-self.future_days].index.unique()) - self.per_batch_size
         begin_total_asset = self._get_acct_asset()
 
-        if self.terminal or self.goal_achieved == 1:
+        if self.terminal:
             # 交易后的累计资产
             end_total_asset = begin_total_asset
 
@@ -327,7 +333,8 @@ class BaseTradeEnv(gym.Env):
             # actions initially is scaled between 0 to 1
             # self.hmax 表示每一笔交易需要买入的最低股票数量
             # 不能买入分数的份额
-            actions = actions * self.hmax
+            # actions = actions * self.hmax
+            actions = actions * self.hmax * self.p
             actions = actions // self.per_unit_qty * self.per_unit_qty
 
             # action 就是股票交易的份额，包含每一支股票对应买卖份额的数组。其中，正为买入，负为卖出，0 为持有
@@ -368,9 +375,8 @@ class BaseTradeEnv(gym.Env):
             self.date_memory.append(self._get_date())
             # 记录真实的账户盈亏记录
             self.rewards_memory.append(self.reward)
-
-        # truncate = False
-        return self.state, self.reward, self.terminal, False, self.acct_info
+            # logging.warning(f'step logging total acct asset --------> {self.asset_memory[-1]}')
+            return self.state, self.reward, self.terminal, False, self.acct_info
 
 
     # 每个 espisode 之后要重新收集资料。俗话说，”一个人的美酒可能是另一个人的毒药“
@@ -380,6 +386,7 @@ class BaseTradeEnv(gym.Env):
             重置环境数据，从头开始一个新的 episode
         Args:
             *: 表示接受任意数量的可变参数
+            seed: 随机种子
         '''
         super().reset(seed=seed, options=options)
         # initiate state
@@ -454,6 +461,9 @@ class BaseTradeEnv(gym.Env):
                 }
             }
         '''
+        if self.acct_info is not None:
+            return self.acct_info
+
         acct_info = {
             'cash_asset': [self.initial_amount],
             'pfo_holding': {}, # 持仓的变化流水
@@ -473,7 +483,8 @@ class BaseTradeEnv(gym.Env):
             # 记录对应持仓的价格
             acct_info['pfo_price'].setdefault(tic, [0])
             acct_info['profit_shares_sold'].setdefault(tic, 0)
-            acct_info['pfo_shares_redeem'].setdefault(tic, init_holding)
+            # acct_info['pfo_shares_redeem'].setdefault(tic, init_holding)
+
         return acct_info
 
 
@@ -530,7 +541,7 @@ class BaseTradeEnv(gym.Env):
     def _get_pfo_ratio(self):
         '''
         Desc:
-            获取仓位的比例
+            计算账户的仓位
         '''
         return 0
 
@@ -547,13 +558,14 @@ class BaseTradeEnv(gym.Env):
         state = state.reshape(1, -1).tolist()[0]
 
         # 是否添加 持仓信息 & 账户现金 到 obs 中
-        acct_cash_asset = sum(self.acct_info['cash_asset'])
+        # 将 acct_cash_asset 统一放缩到标准大小
+        acct_cash_asset = round(sum(self.acct_info['cash_asset']) / self.p, 0)
+        # TODO: 添加加仓空间为环境的一部分
+        acct_pfo_ratio = round(self._get_pfo_ratio(), 1)
         # holding_shares = [sum(shares) for _, shares in self.acct_info['pfo_holding'].items()]
-
-        pfo_ratio_gap = self.pfo_ratio_guideline - self._get_pfo_ratio()
         # state.extend(holding_shares)
         state.append(acct_cash_asset)
-        state.append(pfo_ratio_gap)
+        state.append(acct_pfo_ratio)
         # logging.warning(f'state cash asset ---------> {acct_cash_asset}')
         state = np.array(state, dtype='float32')
         return state
