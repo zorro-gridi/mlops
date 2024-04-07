@@ -1,8 +1,0 @@
-project_type: .py
-source_dir: /Users/zorro/project/pycharm/mlops/ml_ops/rl/finrl/envs
-target_file: /Users/zorro/project/pycharm/mlops/ml_ops/rl/test/output.txt
-urls: /Users/zorro/project/pycharm/mlops/ml_ops/rl/test/make_env.py
-
-query: |
-    运行 make_env.py 代码文件，出现“AttributeError: 'FundQuantTradeEnv' object has no attribute 'pfo_ratio_guideline'”
-    需要支持：修复上述的bug

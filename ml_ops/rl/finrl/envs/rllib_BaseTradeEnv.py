@@ -265,7 +265,7 @@ class BaseTradeEnv(gym.Env):
         self.terminal = self.day == len(self.df.iloc[:-self.future_days].index.unique()) - self.per_batch_size
         begin_total_asset = self._get_acct_asset()
 
-        if self.terminal:
+        if self.terminal or self.goal_achieved:
             # 交易后的累计资产
             end_total_asset = begin_total_asset
 
