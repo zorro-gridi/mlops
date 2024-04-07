@@ -70,6 +70,7 @@ class FundQuantTradeEnv(BaseTradeEnv):
         # self.complete_times = 3 # 仓位不足时，补仓的倒数比例，这个比例应该和牛熊点位的仓位比例相匹配
         # 例如，市场由牛转猴、熊，仓位比例需要从80%下降到60%，如果初始仓位20%，则 20% + 80% / 3 < 60%，那么这个 3 的比例就是合理的
         # 这个数的具体值还需要调整, 都是主观设置，取消！！！
+        self.min_yield = config.get('min_yield', 1/100)
 
 
     def _update_acct_holdings_debit_yield(self):
@@ -157,7 +158,10 @@ class FundQuantTradeEnv(BaseTradeEnv):
     def step(self, actions):
         '''
         Desc:
-            继承父类的 step 方法
+            继承并改写父类的 step 方法，主要功能如下：
+            1. 更新 actions 的分布
+            2. 执行agent的买卖策略之前, 先执行账户自定义管理策略：检查账户的持仓收益率和清仓累计收益率，达到预期则清仓
+            3. 判断是否清仓的条件后, 再执行agent的买卖策略
         '''
         # MultiDiscrete start 参数在实际运行中不起作用，需要手动调节 actions
         actions = actions - 5
@@ -571,7 +575,7 @@ class FundQuantTradeEnv(BaseTradeEnv):
         # logging.warning(f'当前账户持仓 ---------------> 现金: {cash_asset}, 份额: {stock_shares}')
 
         # 1. 当前可卖出的最大盈利持仓
-        max_profit_shares = self._get_max_yield_shares(stock_name, min_yield=1/100)
+        max_profit_shares = self._get_max_yield_shares(stock_name, min_yield=self.min_yield)
         # logging.warning(f'当前盈利持仓 ---------------> {max_profit_shares}')
 
         # check if the stock is able to sell, for simlicity we just add it in techical index

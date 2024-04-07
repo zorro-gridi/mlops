@@ -29,7 +29,7 @@ from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V2 import FundQuantTradeEnv_V
 from tools.DB_Client import DB_Client
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename=current_dir / 'fund_trader_bot.log', level=logging.WARNING)
+logging.basicConfig(filename=current_dir / 'fund_trader_bot_v2.log', level=logging.WARNING)
 
 
 """
@@ -78,12 +78,12 @@ env_kwargs = dict(
     initial=True,
     window_size=1,
     future_days=5,
-    model_name="rl_fund_bot",
+    model_name="rl_fund_bot_v2",
     mode="train",
     iteration=1000,
     per_unit_qty=10,                # 单笔交易最小交易量，例如股票100股
     per_unit_amount=200,            # 单笔交易的最小金额，例如基金1～10元
-    output_dir=Path(env_path) / 'rl_results',
+    output_dir=Path(env_path) / 'rl_results_v2',
     goal_yield=0.07,              # 训练模式，不用设置
     phase_yield=0.02,
     )
@@ -163,7 +163,7 @@ checkpoint_dir = Path(current_dir) / 'trader_bot/Media/V2'
 
 # # %%
 # start_time = time.time()
-# time_steps = 1000
+# time_steps = 30
 
 # for epoch in range(time_steps):
 #     epoch_start_time = time.time()
@@ -228,38 +228,38 @@ while True:
             total_reward: {sum(fund_env.rewards_memory):0.2f}
             cost: {fund_env.cost:0.2f}
             trades: {fund_env.trades}
-            acct holding: \n{acct_holdings_df}
             soldout: {fund_env.soldout}
+            acct holding:\n {acct_holdings_df}
             yield goal achieved: {fund_env.goal_achieved}
             ''')
         break
 
 
-# %%
-idx_point_df = stock_data[['date', 'tic', 'close', 'closed']]
-buy_shares_df = acct_holdings_df.groupby(
-    by=['buy_date', 'tic'], as_index=False)['shares'].sum()
-selling_shares_df = acct_holdings_df.groupby(
-    by=['selling_date', 'tic'], as_index=False)['sold_shares'].sum()
+# # %%
+# idx_point_df = stock_data[['date', 'tic', 'close', 'closed']]
+# buy_shares_df = acct_holdings_df.groupby(
+#     by=['buy_date', 'tic'], as_index=False)['shares'].sum()
+# selling_shares_df = acct_holdings_df.groupby(
+#     by=['selling_date', 'tic'], as_index=False)['sold_shares'].sum()
 
 
-backtest_df = pd.merge(idx_point_df, buy_shares_df,
-    how='left', left_on=['date', 'tic'], right_on=['buy_date', 'tic']
-    ).merge(selling_shares_df,
-        how='left', left_on=['date', 'tic'], right_on=['selling_date', 'tic']
-    ).drop(columns=['buy_date', 'selling_date'])
+# backtest_df = pd.merge(idx_point_df, buy_shares_df,
+#     how='left', left_on=['date', 'tic'], right_on=['buy_date', 'tic']
+#     ).merge(selling_shares_df,
+#         how='left', left_on=['date', 'tic'], right_on=['selling_date', 'tic']
+#     ).drop(columns=['buy_date', 'selling_date'])
 
-backtest_df['close'] = backtest_df['close'].cumsum()
-logging.warning(f'backtest df ------>\n{backtest_df}')
+# backtest_df['close'] = backtest_df['close'].cumsum()
+# logging.warning(f'backtest df ------>\n{backtest_df}')
 
-to_cons = ['mysql_centos', 'pg_centos', 'pg_aliyun']
-for con in to_cons:
-    db_client = DB_Client(con_type=con)
-    db_client.data_load(
-        df=backtest_df,
-        schema='report',
-        table_name='gridi_quant_fund_strategy_backtest',
-        operation='replace',
-        )
+# to_cons = ['mysql_centos', 'pg_centos', 'pg_aliyun']
+# for con in to_cons:
+#     db_client = DB_Client(con_type=con)
+#     db_client.data_load(
+#         df=backtest_df,
+#         schema='report',
+#         table_name='gridi_quant_fund_strategy_backtest_v2',
+#         operation='replace',
+#         )
 
-backtest_df.to_csv(current_dir / 'gridi_quant_fund_strategy_backtest.csv', index=False)
+# backtest_df.to_csv(current_dir / 'gridi_quant_fund_strategy_backtest_v2.csv', index=False)
