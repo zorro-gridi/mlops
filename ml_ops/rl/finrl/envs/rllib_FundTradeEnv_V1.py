@@ -42,7 +42,7 @@ matplotlib.use("Agg")
 """
 
 
-class FundQuantTradeEnv(BaseTradeEnv):
+class FundQuantTradeEnv_V1(BaseTradeEnv):
     """
     Desc:
         A fund trading environment for OpenAI gym
@@ -56,6 +56,9 @@ class FundQuantTradeEnv(BaseTradeEnv):
         Desc:
             1. 添加、并修改父类的属性: 写在 super() 继承的后面
             2. 增加属性依赖: 写在 super() 继承的前面
+        Features:
+            1. 买入时进行仓位压缩，即买入后的总仓位不能超过仓位策略指导线
+            2. 增加持续满仓的早停技术, 主要在 infer mode 下使用
         '''
         super().__init__(config)
 
@@ -481,7 +484,13 @@ class FundQuantTradeEnv(BaseTradeEnv):
         pfo_ratio_guideline = self._set_pfo_ratio()
         pfo_ratio = self._get_pfo_ratio()
         if pfo_ratio > pfo_ratio_guideline:
-            logging.warning(f'-------> 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!')
+            logging.warning(f'-------> 当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!')
+
+            self.stop_buying += 1
+            if self.stop_buying >= self.early_stop_times:
+                self.truncate = True
+                logging.warning(f'meet stop buying times -----------> {self.stop_buying}')
+
             return 0, 0
 
         stock_name = self.current_data.tic.to_list()[index]
@@ -506,19 +515,22 @@ class FundQuantTradeEnv(BaseTradeEnv):
                 # 基于单笔最大交易限制的买入策略
                 # logging.warning(f'acct cash list ----------> {self.acct_info["cash_asset"]}')
                 cash_asset = sum(self.acct_info['cash_asset'])
-                available_cash = min(cash_asset, self.per_buy_order_max_amt)
+                # 最大可补的仓位
+                pfo_amount = round(self.initial_amount * (pfo_ratio_guideline - pfo_ratio), 1)
+                available_cash = min(cash_asset, self.per_buy_order_max_amt, pfo_amount)
+
                 # 注意：与股票不同，基金直接使用买卖金额，模型输出金额后再换算份额
                 available_shares = available_cash
 
                 # 计算可买入的最多股票数量（基于单笔交易金额限制的）
                 if available_shares > 0:
-                    # 控仓技术
+                    # 控仓技术, pfo_ratio_adj: 仓位需要补足的比例，正为加仓，负减仓
                     pfo_ratio_adj = pfo_ratio_guideline - pfo_ratio - action / self.initial_amount
                     # 仓位补偿：补偿比例太主观，取消！！！TODO: 考虑在牛熊转换的时候加重仓
                     if pfo_ratio_adj > 0:
                         # 暂时不做操作
                         buy_num_shares = min(available_shares, action)
-                    # 仓位压缩
+                    # 仓位压缩，一次买入太多，超过仓位指导需要压缩 TODO: 调控的合理性？？？
                     else:
                         action_adj = self.initial_amount * (pfo_ratio_guideline - pfo_ratio)
                         buy_num_shares = min(available_shares, action_adj)
@@ -603,7 +615,7 @@ class FundQuantTradeEnv(BaseTradeEnv):
                 if max_profit_shares > 0 and stock_shares > 0:
                     # Sell only if current asset is > 0
                     # 此处与股票不同，注意 ！！！
-                    logging.warning(f'action vs max_profit: {abs(action)}, {max_profit_shares:0.2f}')
+                    # logging.warning(f'action vs max_profit: {abs(action)} vs {max_profit_shares:0.2f}')
                     sell_num_shares = max(abs(action), max_profit_shares)
 
                     if sell_num_shares > 0:

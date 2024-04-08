@@ -13,13 +13,13 @@ home_dir = '/'.join([dirname for dirname in dir_list[:dir_list.index('zorro')+1]
 env_path = '/'.join([dirname for dirname in dir_list[:dir_list.index('pycharm')+1]])
 sys.path.append(env_path)
 
-from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv import FundQuantTradeEnv
+from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V1 import FundQuantTradeEnv_V1
 
 
 
-class FundQuantTradeEnv_V2(FundQuantTradeEnv):
+class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
     '''
-    FundTrader Env 第二版
+    基于版本一的 FundTrader Env 第二版
     '''
     def __init__(self, config: EnvContext):
         '''
@@ -63,7 +63,7 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv):
         # logging.warning(f'当前账户持仓 ---------------> 现金: {cash_asset}, 份额: {stock_shares}')
 
         # 1. 当前可卖出的最大盈利持仓
-        max_profit_shares = self._get_max_yield_shares(stock_name, min_yield=1/100)
+        max_profit_shares = self._get_max_yield_shares(stock_name, min_yield=self.min_yield)
         # logging.warning(f'当前盈利持仓 ---------------> {max_profit_shares}')
 
         # check if the stock is able to sell, for simlicity we just add it in techical index

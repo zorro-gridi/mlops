@@ -404,8 +404,8 @@ class AbstractMLOps(metaclass=ABCMeta):
             ''')
         logging.warning(f'当前训练的 {model_arch} 模型已保存.')
         return {
-            'training_loss': training_loss,
-            'test_loss': tune_model_metric,
+            'training_loss': round(training_loss, 6),
+            'test_loss': round(tune_model_metric, 6),
             'best_model': best_model,
             'best_mlops': self,
             }

@@ -8,8 +8,10 @@ env_path = '/'.join([dirname for dirname in dir_list[:dir_list.index('pycharm')+
 sys.path.append(env_path)
 
 from mlops.ml_ops.rl.finrl.envs.rllib_StockTradeEnv import StockTradeEnv
-from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv import FundQuantTradeEnv
+from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V1 import FundQuantTradeEnv_V1
 from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V2 import FundQuantTradeEnv_V2
+from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V3 import FundQuantTradeEnv_V3
+from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V4 import FundQuantTradeEnv_V4
 
 
 """

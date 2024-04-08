@@ -24,7 +24,7 @@ sys.path.append(env_path)
 
 # finrl 必须导入到 runtime
 from mlops.ml_ops.rl import finrl
-from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv import FundQuantTradeEnv
+from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V1 import FundQuantTradeEnv
 # from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V2 import FundQuantTradeEnv_V2
 from tools.DB_Client import DB_Client
 

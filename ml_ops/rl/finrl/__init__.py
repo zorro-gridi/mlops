@@ -31,7 +31,7 @@ register(
 
 register(
     id='rllib_FundQuantTradeEnv-v0.1',
-    entry_point='mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv:FundQuantTradeEnv',
+    entry_point='mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V1:FundQuantTradeEnv_V1',
     max_episode_steps=300,
     )
 
@@ -39,5 +39,19 @@ register(
 register(
     id='rllib_FundQuantTradeEnv-v0.2',
     entry_point='mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V2:FundQuantTradeEnv_V2',
+    max_episode_steps=300,
+    )
+
+
+register(
+    id='rllib_FundQuantTradeEnv-v0.3',
+    entry_point='mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V3:FundQuantTradeEnv_V3',
+    max_episode_steps=300,
+    )
+
+
+register(
+    id='rllib_FundQuantTradeEnv-v0.4',
+    entry_point='mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V4:FundQuantTradeEnv_V4',
     max_episode_steps=300,
     )

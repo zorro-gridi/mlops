@@ -1,4 +1,4 @@
-
+# %%
 from __future__ import annotations
 import logging
 from pathlib import Path
@@ -64,7 +64,8 @@ class BaseTradeEnv(gym.Env):
         # 本 env action 分布范围~[-5, 5], hmax=100, 最大 500 元
         # 设置 per_buy_order_max_amt 的目的在于，当 action 的分布范围更广时，例如到10，则分布的最高可买入金额为 1000元
         # 若此时限制 per_buy_order_max_amt = 800， 则最高买入额为 800 元，意义在此 !
-        self.per_buy_order_max_amt = config.get('per_buy_order_max_amt', self.p * self.hmax * 5 / 2) # 5 是 action 的极值
+        self.per_buy_order_max_amt = config.get('per_buy_order_max_amt', self.initial_amount)
+
         self.per_unit_qty = config['per_unit_qty']       # 每笔交易最小的股数，股票为100
         self.per_unit_amount = config['per_unit_amount'] # 每笔最小的交易额，基金一般为10元
 
@@ -100,6 +101,7 @@ class BaseTradeEnv(gym.Env):
         # self.action_space = spaces.Discrete(21, start=-10)
 
         self.terminal = False
+        self.truncate = False
         self.print_verbosity = config['print_verbosity']
         self.model_name = config['model_name']
         self.mode = config['mode']
@@ -111,6 +113,10 @@ class BaseTradeEnv(gym.Env):
         self.episode = 0
         self.soldout = 0
         self.goal_achieved = False
+
+        # 暂停加仓的触发 early stop 的次数
+        self.stop_buying = 0
+        self.early_stop_times = config.get('early_stop_times', np.inf)
 
         self.rewards_memory = []
         self.actions_memory = []
@@ -206,11 +212,11 @@ class BaseTradeEnv(gym.Env):
         '''
         stock_name = self.current_data.tic.to_list()[index]
         close_price = self.current_data.close.to_list()[index]
-        stock_shares = sum(self.acct_info['pfo_holding'][stock_name])
 
-        # holding_price: 平均持仓成本
-        pfo_asset = sum(np.array(self.acct_info['pfo_holding'][stock_name]) * np.array(self.acct_info['pfo_price'][stock_name]))
-        holding_price = round(pfo_asset / stock_shares, 3) if stock_shares > 0 else close_price # 因为初始仓位为 0
+        # # holding_price: 平均持仓成本
+        # stock_shares = sum(self.acct_info['pfo_holding'][stock_name])
+        # pfo_asset = sum(np.array(self.acct_info['pfo_holding'][stock_name]) * np.array(self.acct_info['pfo_price'][stock_name]))
+        # holding_price = round(pfo_asset / stock_shares, 3) if stock_shares > 0 else close_price # 因为初始仓位为 0
 
         def _do_buy():
             buy_num_shares = 0
@@ -265,7 +271,8 @@ class BaseTradeEnv(gym.Env):
         self.terminal = self.day == len(self.df.iloc[:-self.future_days].index.unique()) - self.per_batch_size
         begin_total_asset = self._get_acct_asset()
 
-        if self.terminal or self.goal_achieved:
+        if any([self.terminal, self.goal_achieved, self.truncate]):
+            logging.warning(f'is truncate env -------> {self.truncate}')
             # 交易后的累计资产
             end_total_asset = begin_total_asset
 
@@ -376,7 +383,8 @@ class BaseTradeEnv(gym.Env):
             # 记录真实的账户盈亏记录
             self.rewards_memory.append(self.reward)
             # logging.warning(f'step logging total acct asset --------> {self.asset_memory[-1]}')
-            return self.state, self.reward, self.terminal, False, self.acct_info
+            # 系统默认第4个返回的对象是 self.truncate
+            return self.state, self.reward, self.terminal, self.truncate, self.acct_info
 
 
     # 每个 espisode 之后要重新收集资料。俗话说，”一个人的美酒可能是另一个人的毒药“
@@ -420,6 +428,9 @@ class BaseTradeEnv(gym.Env):
         self.cost = 0
         self.trades = 0
         self.terminal = False
+        self.truncate = False
+        self.stop_buying = 0
+
         self.rewards_memory = []
         self.actions_memory = []
         self.date_memory = [self._get_date()] # _get_date 依赖 self.data, 上文已经更新, 因此仍然是从头开始
@@ -565,7 +576,9 @@ class BaseTradeEnv(gym.Env):
         # holding_shares = [sum(shares) for _, shares in self.acct_info['pfo_holding'].items()]
         # state.extend(holding_shares)
         state.append(acct_cash_asset)
+        # TODO: 将仓位加入 state 存在弊端：当仓位已满时，环境不会自己重置???
         state.append(acct_pfo_ratio)
+
         # logging.warning(f'state cash asset ---------> {acct_cash_asset}')
         state = np.array(state, dtype='float32')
         return state
