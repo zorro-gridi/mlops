@@ -5,7 +5,6 @@ import logging
 import numpy as np
 
 
-
 class BaseSeqToClassDt(AbstractDatasetFactory):
     '''
     Desc:

@@ -57,8 +57,11 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             1. 添加、并修改父类的属性: 写在 super() 继承的后面
             2. 增加属性依赖: 写在 super() 继承的前面
         Features:
-            1. 买入时进行仓位压缩，即买入后的总仓位不能超过仓位策略指导线
-            2. 增加持续满仓的早停技术, 主要在 infer mode 下使用
+            1. 买入时，进行仓位压缩。即买入后的总仓位不能超过仓位策略指导线
+            2. 遇到持续满仓时触发早停技术, 主要在 infer mode 推理的情况下使用，节省推理时间
+            3. 卖出时，【策略建议份额】与【盈利持仓】取最大数
+        Conclusion:
+            continue...
         '''
         super().__init__(config)
 
@@ -472,6 +475,39 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             return 0
 
 
+    def buying_signal(self, index):
+        '''
+        Desc:
+            判断买入的市场条件
+        '''
+        _mark_point = self.current_data.y_point.tolist()[index]
+        _pred_points = self.current_data.y_pred.tolist()[index]
+
+        return any([
+            # 1. 抄底
+            _mark_point < 0 and abs(_mark_point) >= abs(_pred_points) * self.temperature,
+            # 2. 追涨
+            _mark_point > 0 and _mark_point <= _pred_points * (1 - self.temperature)
+            ])
+
+
+    def selling_signal(self, index):
+        '''
+        Desc:
+            判断卖出的市场条件
+        '''
+        _mark_point = self.current_data.y_point.tolist()[index]
+        _pred_points = self.current_data.y_pred.tolist()[index]
+
+        # 判断卖出的条件: 刚好与买入相反
+        return any([
+            # 1. 止盈
+            _mark_point > 0 and _mark_point >= _pred_points * self.temperature,
+            # 2. 杀跌
+            _mark_point < 0 and abs(_mark_point) <= abs(_pred_points) * (1 - self.temperature)
+            ])
+
+
     def _buy_stock(self, index, action):
         '''
         Desc:
@@ -497,44 +533,24 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         # 基金使用收盘涨跌幅，收盘价在基金的模拟环境中没有实际使用
         # close_price = self.current_data.close.to_list()[index]
 
-        _mark_point = self.current_data.y_point.tolist()[index]
-        _pred_points = self.current_data.y_pred.tolist()[index]
-
         def _do_buy():
             buy_num_shares = 0
             buy_amount = 0
 
             # 判断买入的条件:
-            if any([
-                # 1. 抄底
-                _mark_point < 0 and abs(_mark_point) >= abs(_pred_points) * self.temperature,
-                # 2. 追涨
-                _mark_point > 0 and _mark_point <= _pred_points * (1 - self.temperature)
-                ]):
-
+            if self.buying_signal(index):
                 # 基于单笔最大交易限制的买入策略
                 # logging.warning(f'acct cash list ----------> {self.acct_info["cash_asset"]}')
                 cash_asset = sum(self.acct_info['cash_asset'])
                 # 最大可补的仓位
                 pfo_amount = round(self.initial_amount * (pfo_ratio_guideline - pfo_ratio), 1)
                 available_cash = min(cash_asset, self.per_buy_order_max_amt, pfo_amount)
-
                 # 注意：与股票不同，基金直接使用买卖金额，模型输出金额后再换算份额
                 available_shares = available_cash
 
                 # 计算可买入的最多股票数量（基于单笔交易金额限制的）
                 if available_shares > 0:
-                    # 控仓技术, pfo_ratio_adj: 仓位需要补足的比例，正为加仓，负减仓
-                    pfo_ratio_adj = pfo_ratio_guideline - pfo_ratio - action / self.initial_amount
-                    # 仓位补偿：补偿比例太主观，取消！！！TODO: 考虑在牛熊转换的时候加重仓
-                    if pfo_ratio_adj > 0:
-                        # 暂时不做操作
-                        buy_num_shares = min(available_shares, action)
-                    # 仓位压缩，一次买入太多，超过仓位指导需要压缩 TODO: 调控的合理性？？？
-                    else:
-                        action_adj = self.initial_amount * (pfo_ratio_guideline - pfo_ratio)
-                        buy_num_shares = min(available_shares, action_adj)
-
+                    buy_num_shares = min(available_shares, action)
                     if buy_num_shares > self.per_unit_amount:
                         buy_amount = buy_num_shares * (1 - self.buy_cost_pct[index])
                         buy_fee = buy_num_shares * self.buy_cost_pct[index]
@@ -542,10 +558,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                         # 更新账户的可用本金
                         # 买入股票，现金账户减少金额
                         self.acct_info['cash_asset'].append(round(-buy_num_shares, 2))
-                        # 买入股票，增加持仓
-                        # self.acct_info['pfo_holding'][stock_name].append(buy_amount)
-                        # self.acct_info['pfo_price'][stock_name].append(close_price)
-
                         # 记录持仓的买入日期
                         self.acct_info['pfo_shares_redeem'].setdefault(stock_name, [])
                         self.acct_info['pfo_shares_redeem'][stock_name].append({
@@ -579,6 +591,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             index 是一个索引，用于从 self.state 中取出对应的股票的持仓份额 或着 股价
             action 是一个标量数值，表示针对制定 index 股票进行加减仓操作；在 self.action_space 中定义
         '''
+        action = abs(action)
         stock_name = self.current_data['tic'].to_list()[index]
         close_price = self.current_data['close'].to_list()[index]
         # 当前的剩余累计持仓
@@ -600,21 +613,13 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             sell_num_shares = 0 # 卖出份额，默认等于 sell_amount，输出后再转换，不影响
             sell_amount = 0
 
-            _mark_point = self.current_data.y_point.tolist()[index]
-            _pred_points = self.current_data.y_pred.tolist()[index]
-
             # 判断卖出的条件: 刚好与买入相反
-            if any([
-                # 1. 止盈
-                _mark_point > 0 and _mark_point > _pred_points * self.temperature,
-                # 2. 杀跌
-                _mark_point < 0 and abs(_mark_point) < abs(_pred_points) * (1 - self.temperature)
-                ]):
-
+            if self.selling_signal(index):
                 # 判断当前是否有该股票的持仓 & 股价是否大于 0
                 if max_profit_shares > 0 and stock_shares > 0:
                     # Sell only if current asset is > 0
                     # 此处与股票不同，注意 ！！！
+                    # 只能卖出盈利的持仓
                     # logging.warning(f'action vs max_profit: {abs(action)} vs {max_profit_shares:0.2f}')
                     sell_num_shares = max(abs(action), max_profit_shares)
 

@@ -20,25 +20,22 @@ from sklearn.preprocessing import MinMaxScaler
 from functools import partial
 
 
-
 class AbstractDatasetFactory(metaclass=ABCMeta):
     '''
     基础数据集抽象工厂方法
     '''
-    def __init__(self, features=None, categoric_features=None, target=None, preprocess_func=None):
+    def __init__(self, features=None, categoric_features=None, target=None):
         '''
         Args:
             features: 数据默认输入特征
             target: str or int
                 when is str: 表示目标变量名称
                 when is int: 目标变量的索引值; [= 1: 表示单步预测; > 1: 表示多步预测]
-            preprocess_func: 数据进行特征工程之前的预处理函数
             categoric_features: 数据中的分类特征
         '''
         self.features = features
         self.target = target
-        self.preprocess_func = preprocess_func
-        self.is_imbalanced = True
+        self.is_imbalanced = False # 默认为 False, 因为分层抽样会打乱数据集
         self.categoric_features = categoric_features
 
 
@@ -52,7 +49,11 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
         self.__dict__.update(new_config)
 
 
-    def data_split(self, X, y, test_size=0.2, random_state=42):
+    def data_split(self, X, y, test_size=0.2, random_state=42, shuffle=True, **kwargs):
+        '''
+        Desc:
+            可处理不平衡数据集
+        '''
         if self.is_imbalanced:
             logging.warning(f'the dataset is set imbalanced! ')
             # 因为数据集的标签不均衡，所以使用 StratifiedShuffleSplit 分层抽样
@@ -70,13 +71,16 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
 
         else:
             x_train, x_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, random_state=random_state)
+                X, y, test_size=test_size, random_state=random_state, shuffle=shuffle, **kwargs)
         return x_train, x_test, y_train, y_test
 
 
     def load_test_data(self, data, inst_config=None):
         '''
-        # inst_config: 类实例化的参数;可为历史模型参数, 或new model 的参数
+        Desc:
+            inst_config: 类实例化的参数; 可为历史模型参数, 或new model 的参数
+        Remark: TODO
+            1. 此处有个问题, 即加载历史模型评估损失，由于数据集被打乱，无法获取历史的损失数据，对比有可能失真
         '''
         if inst_config is not None:
             self.set_attr(inst_config)
@@ -84,7 +88,7 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
         model_datas = self.feature_engineering(data)
         # 同时传入 X, y
         if isinstance(model_datas, tuple):
-            x_train, x_test, y_train, y_test = self.data_split(*model_datas)
+            x_train, x_test, y_train, y_test = self.data_split(*model_datas, )
             test_data = (x_test, y_test)
         # 只传入 X
         else:

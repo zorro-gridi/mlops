@@ -23,9 +23,15 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
     '''
     def __init__(self, config: EnvContext):
         '''
-        更新如下:
-        1. 继续修改 selling 策略，当仓位策略提示应减仓时，无论是否盈利，应卖出部分持仓, 降低仓位
-        2. 更新买入策略，当仓位策略提示加仓时，加满到仓位线指导线
+        Update 更新如下:
+            1. 继续更新 selling 策略，当仓位策略提示减仓时，无论是否盈利，应卖出部分持仓, 降低仓位
+            2. 更新买入策略
+                2.1 当仓位策略线转换到提示加仓时，主动补偿仓位的差额
+                2.2 当策略加的仓位超过指导线时，压缩仓位至指导线
+        Remark:
+            目前的仓位管理策略比较主观，需要建模决策
+        Conclusion:
+            continue...
         '''
         super().__init__(config)
         self.action_space = spaces.MultiDiscrete([6] * self.stock_dim)
@@ -100,12 +106,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                     ''')
 
             # 判断卖出的条件: 刚好与买入相反
-            if any([
-                # 1. 止盈
-                _mark_point > 0 and _mark_point > _pred_points * self.temperature,
-                # 2. 杀跌
-                _mark_point < 0 and abs(_mark_point) < abs(_pred_points) * (1 - self.temperature)
-                ]):
+            if self.selling_signal(index):
                 # 判断当前是否有该股票的持仓 & 股价是否大于 0
                 if max_profit_shares > 0 and stock_shares > 0:
                     # Sell only if current asset is > 0
@@ -153,16 +154,19 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
         pfo_ratio = self._get_pfo_ratio()
 
         last_day = max(self.day-1, 0)
-        plus_pfo_ratio = 0
-        plus_buy_amount = 0
+        plus_pfo_ratio = 0  # 补仓空间初始化
+        plus_buy_amount = 0 # 最大可补的仓位初始化
+
         if self.pfo_ratio_guide:
             last_pfo_ratio_guide = self.pfo_ratio_guide[last_day]
             plus_pfo_ratio = last_pfo_ratio_guide - pfo_ratio_guideline
             plus_buy_amount = round(self.initial_amount * plus_pfo_ratio, 1)
 
+        # 如果当前已到仓位指导线，则停止加仓
         if pfo_ratio > pfo_ratio_guideline:
             logging.warning(f'-------> 当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!')
 
+            # 碰到连续达到仓位记录线附近则提前终止学习
             self.stop_buying += 1
             if self.stop_buying >= self.early_stop_times:
                 self.truncate = True
@@ -182,46 +186,34 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
             buy_amount = 0
 
             # 判断买入的条件:
-            if any([
-                # 1. 抄底
-                _mark_point < 0 and abs(_mark_point) >= abs(_pred_points) * self.temperature,
-                # 2. 追涨
-                _mark_point > 0 and _mark_point <= _pred_points * (1 - self.temperature)
-                ]):
-
+            if self.buying_signal(index):
                 # 基于单笔最大交易限制的买入策略
                 # logging.warning(f'acct cash list ----------> {self.acct_info["cash_asset"]}')
                 cash_asset = sum(self.acct_info['cash_asset'])
-                # 最大可补的仓位
-                pfo_amount = round(self.initial_amount * (pfo_ratio_guideline - pfo_ratio), 1)
-                available_cash = min(cash_asset, self.per_buy_order_max_amt, pfo_amount)
-
-                # 注意：与股票不同，基金直接使用买卖金额，模型输出金额后再换算份额
-                available_shares = max(available_cash, plus_buy_amount)
+                available_cash = min(cash_asset, self.per_buy_order_max_amt)
+                available_shares = available_cash
 
                 # 计算可买入的最多股票数量（基于单笔交易金额限制的）
                 if available_shares > 0:
-                    # 控仓技术
+                    # 控仓技术: 加到策略的仓位线，最大可补的仓位
                     pfo_ratio_adj = pfo_ratio_guideline - pfo_ratio - action / self.initial_amount
-                    # 仓位补偿：补偿比例太主观，取消！！！TODO: 考虑在牛熊转换的时候加重仓
+                    # 仓位补偿
                     if pfo_ratio_adj > 0:
                         # 暂时不做操作
-                        buy_num_shares = min(available_shares, action)
-                    # 仓位压缩
+                        max_plus_amount = min(self.initial_amount * pfo_ratio_adj, plus_buy_amount)
+                        buy_num_shares = min(available_shares, action + max_plus_amount)
+                    # pfo_ratio_adj < 0, 仓位压缩，表示加仓会超仓位线，将仓位压缩到仓位线
                     else:
                         action_adj = self.initial_amount * (pfo_ratio_guideline - pfo_ratio)
                         buy_num_shares = min(available_shares, action_adj)
 
-                    if buy_num_shares > self.per_unit_amount:
+                    if buy_num_shares >= self.per_unit_amount:
                         buy_amount = buy_num_shares * (1 - self.buy_cost_pct[index])
                         buy_fee = buy_num_shares * self.buy_cost_pct[index]
 
                         # 更新账户的可用本金
                         # 买入股票，现金账户减少金额
                         self.acct_info['cash_asset'].append(round(-buy_num_shares, 2))
-                        # 买入股票，增加持仓
-                        # self.acct_info['pfo_holding'][stock_name].append(buy_amount)
-                        # self.acct_info['pfo_price'][stock_name].append(close_price)
 
                         # 记录持仓的买入日期
                         self.acct_info['pfo_shares_redeem'].setdefault(stock_name, [])

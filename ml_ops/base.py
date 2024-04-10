@@ -1,9 +1,10 @@
 from abc import ABCMeta, abstractclassmethod
-from matplotlib.pyplot import isinteractive
+import datetime
 import xgboost as xgb
 from catboost import Pool
 from torch.utils.data import DataLoader
 import numpy as np
+from copy import copy
 
 from mlops.utils import mlflow_utils
 import mlflow
@@ -166,13 +167,13 @@ class AbstractMLOps(metaclass=ABCMeta):
             logging.warning(f'No dataset inst intansiate mode')
             return best_checkpoint
 
-        self.best_data_args.update(self.dataset_inst.__dict__)
+        self.best_data_args.update(copy(self.dataset_inst.__dict__))
         logging.warning(f'更新后的 MLOps 的 best_data_args: {self.best_data_args}')
         return best_checkpoint
 
 
     # 一般情况
-    def test_hist_model(self, reg_model_name, model_version='1', model_frame=None):
+    def test_hist_model(self, reg_model_name, model_version='1', model_frame=None, update_interval=5):
         '''
         Desc:
             该方法实现以下功能：
@@ -183,16 +184,31 @@ class AbstractMLOps(metaclass=ABCMeta):
             =======================================
             ps1. 加载模型方面, mlflow已经实现了统一接口。
             ps2. 加载测试数据集方面, 如果模型需要定制方法, 可以通过子类继承改写此方法！！
+        Remark:
+            1. log to mlflow number type option: ["float", "int", ...]
+        Args:
+            update_interval: default 5. 模型测试更新的天数，超过该时间，使用最新测试数据测试一次
         Return:
             training_loss: 训练损失
             hist_eval_metric: 测试损失
         '''
-        model_arch = self.model_task.model_arch
+        # model_arch = self.model_task.model_arch
         hist_regis_model = model_frame.load_model(
             f"models:/{reg_model_name}/{model_version}")
         # 下载历史模型的参数
         hist_model_config = mlflow_utils.load_register_model_args(reg_model_name, model_version)
         training_loss = hist_model_config['training_loss']
+        current_date = datetime.datetime.today()
+        regist_date = hist_model_config['regist_date']
+        days_diff = (current_date - datetime.datetime.strptime(regist_date, '%Y-%m-%d')).days
+        if days_diff <= update_interval:
+            logging.warning(f'----------> 历史模型刚注册未超过 {update_interval} 天，不使用最新数据测试')
+            if self.model_task.custom_loss_func:
+                metric_name = self.model_task.custom_loss_func.loss_name
+            else:
+                metric_name = self.model_task.model_eval_metric
+            test_loss = hist_model_config[f'test_{metric_name}']
+            return training_loss, test_loss
 
         # 如果历史没有配置数据参数,就直接加载传入的数据
         if self.dataset_inst is None:
@@ -226,15 +242,18 @@ class AbstractMLOps(metaclass=ABCMeta):
             loss_strategy:
                 'SUM': 使用 train + test 的损失综合比较, 可避免 train loss 过大的问题
                 'UNIT': 仅使用 test 损失比较
+                'WEIGHT': 加权损失
         '''
         # find_best_model_args 的 checkpoint metric 指标不带 test 前缀
         if self.model_task.custom_loss_func:
             metric_name = self.model_task.custom_loss_func.loss_name
         else:
             metric_name = self.model_task.model_eval_metric
+
         tune_model_metric = checkpoint[metric_name]
         training_loss = checkpoint['training_loss']
         tune_sum_loss = tune_model_metric + training_loss
+        tune_weight_loss = tune_model_metric * 0.8 + training_loss * 0.2
 
         model_arch = self.model_task.model_arch
         best_model = checkpoint['best_model']
@@ -306,12 +325,18 @@ class AbstractMLOps(metaclass=ABCMeta):
             hist_training_loss, hist_eval_metric = self.test_hist_model(
                 reg_model_name, model_version=model_version, model_frame=model_frame)
             hist_sum_loss = hist_training_loss + hist_eval_metric
+            hist_weight_loss = hist_training_loss * 0.2 + hist_eval_metric * 0.8
 
             if loss_strategy == 'UNIT':
                 if self.model_task.optimize_mode == 'min':
                     compare_bools_result = -tune_model_metric <= -hist_eval_metric
                 else:
                     compare_bools_result = tune_model_metric <= hist_eval_metric
+            elif loss_strategy == 'WEIGHT':
+                if self.model_task.optimize_mode == 'min':
+                    compare_bools_result = -tune_weight_loss <= -hist_weight_loss
+                else:
+                    compare_bools_result = tune_weight_loss <= hist_weight_loss
             else:
                 if self.model_task.optimize_mode == 'min':
                     compare_bools_result = -tune_sum_loss <= -hist_sum_loss
@@ -324,8 +349,8 @@ class AbstractMLOps(metaclass=ABCMeta):
                 self.output_model = hist_regis_model
 
                 logging.warning(f'''
-                    tune {model_arch} model {metric_name}: {tune_model_metric:,.3f}, sum loss: {tune_sum_loss:,.3f}
-                    hist {model_arch} model {metric_name}: {hist_eval_metric:,.3f}, sum loss: {hist_sum_loss:,.3f}
+                    tune {model_arch} model {metric_name}: {tune_model_metric:,.3f}, {loss_strategy} loss: {tune_sum_loss:,.3f}
+                    hist {model_arch} model {metric_name}: {hist_eval_metric:,.3f}, {loss_strategy} loss: {hist_sum_loss:,.3f}
                     --> 使用历史最优模型推理......
                     ''')
                 return {
@@ -350,21 +375,29 @@ class AbstractMLOps(metaclass=ABCMeta):
             raise Exception
 
         # 在 hist 步，将 dataset_inst 调整到了 hist 模式
-        # 因此, 如果tune模式最优，则将 dataset_inst 更新为当前最优配置
+        # 因此, 如果 tune 模式最优，则将 dataset_inst 更新为当前最优配置
         if self.dataset_inst is not None:
             self.dataset_inst.set_attr(self.best_data_args)
+
+        # logging.warning(f'best_data_args params ---------> {self.best_data_args}')
 
         # 记录模型的关键参数
         params_config = self.best_model_args
         params_config.update(self.best_data_args)
+        # logging.warning(f'log mlflow params ---------> {type(params_config["chunk_point"])}')
+
         params_config = {
             k: v for k, v in params_config.items()
             if v is not None
             # 筛选 data args 的类型
-            and type(v) in [bool, str, int, float, list, dict, np.array, np.ndarray]
+            and type(v) in [
+                bool, str, int, float, list, dict, np.array, np.ndarray, np.float64
+                ]
             }
         params_config['training_loss'] = training_loss
         params_config[f'test_{metric_name}'] = tune_model_metric
+        # 登记模型的注册日期
+        params_config['regist_date'] = time.strftime('%Y-%m-%d')
 
         if model_arch == 'nn':
             best_model.eval()

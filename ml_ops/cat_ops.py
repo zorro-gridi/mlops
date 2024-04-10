@@ -32,9 +32,9 @@ class CatBoostOps(AbstractMLOps):
         # best_model_args 和 best_data_args 都要更新
         self.best_model_args = copy(self.model_task.model_init_params)
         if self.dataset_inst:
-            self.best_data_args = copy(self.dataset_inst.__dict__)
-
+            self.best_data_args.update(copy(self.dataset_inst.__dict__))
         return best_checkpoint
+
 
     def save_checkpoint(self, *args, **kwargs):
         return super().save_checkpoint(*args, model_frame=mlflow.catboost, **kwargs)

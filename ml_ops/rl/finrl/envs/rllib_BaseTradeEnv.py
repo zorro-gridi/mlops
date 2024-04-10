@@ -397,12 +397,11 @@ class BaseTradeEnv(gym.Env):
             seed: 随机种子
         '''
         super().reset(seed=seed, options=options)
-        # initiate state
-        # ===============
         self.day = 0
-        # ==============================================================================
-        # 可以在这个地方添加 self.data 的重定义逻辑, 结合 self.episode 索引，切换不同的股票股价序列
-        # ==============================================================================
+        # ======================================================================================
+        # 可以在这个地方添加 self.data 的重定义逻辑, 结合 self.episode 索引，切换不同的股票股价序列：想法❌
+        # “一个人的美酒🍷可能是另一个人的毒药💊”
+        # ======================================================================================
         # self.data 是 self.df 数据的动态切片
         # 记录股价与指标的序列信息
         self.data = self.df.iloc[self.day * self.per_batch_size : (self.day+1) * self.per_batch_size]
@@ -410,8 +409,6 @@ class BaseTradeEnv(gym.Env):
         # 记录股票当前最新的股价信息
         self.current_data = self.data.iloc[-self.stock_dim:]
         self.future_data = self.df.iloc[(self.day+1) * self.per_batch_size : (self.day+1) * self.per_batch_size + self.future_days]
-        # 先重新初始化状态
-        self.state = self._initiate_state()
         # ===================================
 
         # 先计算当前的账户累计金额
@@ -420,10 +417,14 @@ class BaseTradeEnv(gym.Env):
         # =================================================================
         if self.initial:
             self.acct_info = self._initial_acct_info()
-
         begin_total_asset = self._get_acct_asset()
         self.asset_memory = [begin_total_asset]
         # =================================================================
+
+        # initiate state
+        # ===============
+        # 再重新初始化状态。注意：初始化账户要在 state 之前，因为 state 中要添加 cahs_asset 信息
+        self.state = self._initiate_state()
 
         self.cost = 0
         self.trades = 0

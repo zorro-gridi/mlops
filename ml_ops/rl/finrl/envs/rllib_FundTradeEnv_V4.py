@@ -1,11 +1,11 @@
 # %%
 from gymnasium import spaces
 import logging
+from ray.rllib.env import EnvContext
+
 
 import sys
 from pathlib import Path
-
-from ray.rllib.env import EnvContext
 
 current_dir = Path(__file__).resolve().parent
 dir_list = [dname for dname in current_dir.as_posix().split('/')]
@@ -23,8 +23,12 @@ class FundQuantTradeEnv_V4(FundQuantTradeEnv_V1):
     '''
     def __init__(self, config: EnvContext):
         '''
-        更新如下:
-        1. 返璞归真版: 买入时，根据策略空间优化；卖出时，当前无盈利持仓时，再根据策略空间优化
+        Update 更新如下:
+            1. 返璞归真版:
+                1.1 买入时，根据策略空间优化（但是依然有最大单笔金额限制）；
+                1.2 卖出时，当前若无盈利持仓时，再根据策略空间优化
+        Conclusion:
+            貌似适合测试单边下跌的指数，不适合作为执行策略，策略收益比较不稳定。
         '''
         super().__init__(config)
 
@@ -32,7 +36,7 @@ class FundQuantTradeEnv_V4(FundQuantTradeEnv_V1):
     def _sell_stock(self, index, action):
         '''
         Desc:
-            卖出持仓
+            基于策略建议, 卖出持仓
         '''
         action = abs(action)
         stock_name = self.current_data['tic'].to_list()[index]
@@ -52,23 +56,18 @@ class FundQuantTradeEnv_V4(FundQuantTradeEnv_V1):
             sell_num_shares = 0 # 卖出份额，默认等于 sell_amount，输出后再转换，不影响
             sell_amount = 0
 
-            _mark_point = self.current_data.y_point.tolist()[index]
-            _pred_points = self.current_data.y_pred.tolist()[index]
-
             # 判断卖出的条件: 刚好与买入相反
-            if any([
-                # 1. 止盈
-                _mark_point > 0 and _mark_point > _pred_points * self.temperature,
-                # 2. 杀跌
-                _mark_point < 0 and abs(_mark_point) < abs(_pred_points) * (1 - self.temperature)
-                ]):
+            if self.selling_signal(index):
                 # 判断当前是否有该股票的持仓 & 股价是否大于 0
                 if stock_shares > 0:
+                    # 判断是否有盈利的持仓
                     if max_profit_shares > 0:
-                        sell_amount = max(abs(action), max_profit_shares)
+                        # 先取策略与盈利之大
+                        sell_amount = max(action, max_profit_shares)
+                        # 再大中取小
                         sell_amount = min(sell_amount, stock_shares)
                     else:
-                        sell_amount = min(abs(action), stock_shares)
+                        sell_amount = min(action, stock_shares)
 
                     return_ratio = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
                     self.trades += 1
@@ -91,6 +90,7 @@ class FundQuantTradeEnv_V4(FundQuantTradeEnv_V1):
         pfo_ratio_guideline = self._set_pfo_ratio()
         pfo_ratio = self._get_pfo_ratio()
 
+        # 控制仓位
         if pfo_ratio > pfo_ratio_guideline:
             logging.warning(f'-------> 当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!')
 
@@ -102,21 +102,13 @@ class FundQuantTradeEnv_V4(FundQuantTradeEnv_V1):
             return 0, 0
 
         stock_name = self.current_data.tic.to_list()[index]
-        _mark_point = self.current_data.y_point.tolist()[index]
-        _pred_points = self.current_data.y_pred.tolist()[index]
 
         def _do_buy():
             buy_num_shares = 0
             buy_amount = 0
 
             # 判断买入的条件:
-            if any([
-                # 1. 抄底
-                _mark_point < 0 and abs(_mark_point) >= abs(_pred_points) * self.temperature,
-                # 2. 追涨
-                _mark_point > 0 and _mark_point <= _pred_points * (1 - self.temperature)
-                ]):
-
+            if self.buying_signal(index):
                 # 基于单笔最大交易限制的买入策略
                 # logging.warning(f'acct cash list ----------> {self.acct_info["cash_asset"]}')
                 cash_asset = sum(self.acct_info['cash_asset'])

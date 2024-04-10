@@ -23,8 +23,10 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
     '''
     def __init__(self, config: EnvContext):
         '''
-        更新如下:
-        1. 修改策略空间，只对买入策略进行训练，卖出策略遵守人选的规则
+        Update 更新如下:
+            1. 取消卖出的策略空间，改为遵守人选的[止盈、止损]规则
+        Conclusion:
+            目前在具有波动性的指数上回测收益较好，例如传媒指数
         '''
         super().__init__(config)
         self.action_space = spaces.MultiDiscrete([6] * self.stock_dim)
@@ -32,11 +34,11 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
 
     def step(self, actions):
         '''
-        Desc:
+        Update 更新如下:
             继承并更新父类的 step 方法, 主要改进如下：
             1. 取消 actions 的卖出策略分布，改为如下规则：
-            1.1 按照用户自定义策略卖出，即清仓是否达到预期收益率
-            1.2 是否有达到预期盈利的持仓可卖出
+                1.1 按照用户自定义策略卖出，即清仓是否达到预期收益率
+                1.2 是否有达到预期盈利的持仓可卖出
         '''
         # acct_holdings = self.acct_info['pfo_shares_redeem']
         # logging.warning(f'acct holdings ------------> {acct_holdings}')
@@ -76,22 +78,13 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
             sell_num_shares = 0 # 卖出份额，默认等于 sell_amount，输出后再转换，不影响
             sell_amount = 0
 
-            _mark_point = self.current_data.y_point.tolist()[index]
-            _pred_points = self.current_data.y_pred.tolist()[index]
-
             # 判断卖出的条件: 刚好与买入相反
-            if any([
-                # 1. 止盈
-                _mark_point > 0 and _mark_point > _pred_points * self.temperature,
-                # 2. 杀跌
-                _mark_point < 0 and abs(_mark_point) < abs(_pred_points) * (1 - self.temperature)
-                ]):
-
+            if self.selling_signal(index):
                 # 判断当前是否有该股票的持仓 & 股价是否大于 0
                 if max_profit_shares > 0 and stock_shares > 0:
                     # Sell only if current asset is > 0
                     # 此处与股票不同，注意 ！！！
-                    logging.warning(f'action vs max_profit: {abs(action)}, {max_profit_shares:0.2f}')
+                    # logging.warning(f'max_profit: {max_profit_shares:0.2f}')
                     sell_num_shares = max_profit_shares
 
                     if sell_num_shares > 0:
