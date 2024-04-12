@@ -49,16 +49,14 @@ class BaseTradeEnv(gym.Env):
             window_size: 输入序列的长度
             future_days: 使用未来多少天的数据计算买入的预期收益率
         '''
-        self.acct_info = config.get('acct_info', None)
+        self.acct_info = config.get('acct_info', None)                          # 是否用户自定义初始化账户信息
         self.day = config.get('day', 0)
         self.df = config['df']
         self.num_stock_shares = config['num_stock_shares']
 
         # TODO: hmax 需要设计一个预期函数，即估计出最大定投次数, 换算得到
         self.hmax = config.get('hmax', 200)                                     # base model 的配置
-        self.base_amount = 10000                                                # 用来训练 base trade bot
-        self.initial_amount = config.get('initial_amount', self.base_amount)    # get the initial cash
-        self.p = round(self.initial_amount / self.base_amount, 1)               # 交易放大的系数
+        self.initial_amount = config.get('initial_amount', 10000)               # get the initial cash
 
         # 单笔的最大买入金额，主要和 action 的分布有关:
         # 本 env action 分布范围~[-5, 5], hmax=100, 最大 500 元
@@ -341,7 +339,7 @@ class BaseTradeEnv(gym.Env):
             # self.hmax 表示每一笔交易需要买入的最低股票数量
             # 不能买入分数的份额
             # actions = actions * self.hmax
-            actions = actions * self.hmax * self.p
+            actions = actions * self.hmax
             actions = actions // self.per_unit_qty * self.per_unit_qty
 
             # action 就是股票交易的份额，包含每一支股票对应买卖份额的数组。其中，正为买入，负为卖出，0 为持有
@@ -463,31 +461,27 @@ class BaseTradeEnv(gym.Env):
                 },
                 'pfo_shares_redeem': {
                     '000001': [{
-                        'buy_date': '1900-01-01',
-                        'shares': 0,
-                        'hold': 0,
-                        'yield': 0,
-                        'soldout': 1,
-                        'selling_date': '2500-01-01',
-                    }]
+                        'buy_date': '1900-01-01',       # 持仓买入日期
+                        'shares': 0,                    # 买入份额, 对于卖部分仓位的时候, shares会被拆分
+                        'hold': 0,                      # 持仓剩余的份额
+                        'yield': 0,                     # 扣除卖出手续费的持仓净收益率
+                        'soldout': 1,                   # 持仓是否被清仓
+                        'selling_date': '2500-01-01',   # 持仓卖出日期
+                    }] # 记录单只基金的每一笔定投
                 }
             }
         '''
+        # 如果传入了初始化的 acct info，则不使用默认的初始化
         if self.acct_info is not None:
             return self.acct_info
 
         acct_info = {
             'cash_asset': [self.initial_amount],
-            'pfo_holding': {}, # 持仓的变化流水
-            'pfo_price': {},  # 买卖的价格流水
-            'profit_shares_sold': {}, # 已卖出的盈利份额
-            'pfo_shares_redeem': {},  # 记录持仓买入的时间，同时，卖出时更新对应的持仓变化；主要应用于基金统计
+            'pfo_holding': {},          # 持仓的变化流水
+            'pfo_price': {},            # 买卖的价格流水
+            'profit_shares_sold': {},   # 已卖出的盈利份额
+            'pfo_shares_redeem': {},    # 记录持仓买入的时间，同时，卖出时更新对应的持仓变化；主要应用于基金统计
             }
-
-        init_holding = [{
-            'buy_date': '1900-01-01', 'shares': 0, 'hold': 0,
-            'yield': 0, 'soldout': 1, 'selling_date': '2500-01-01'
-            }]
         # 此处需要注意股票列表与持仓列表的mapping
         for idx, tic in enumerate(self.stock_pools):
             # 记录持仓量变化
@@ -495,7 +489,6 @@ class BaseTradeEnv(gym.Env):
             # 记录对应持仓的价格
             acct_info['pfo_price'].setdefault(tic, [0])
             acct_info['profit_shares_sold'].setdefault(tic, 0)
-            # acct_info['pfo_shares_redeem'].setdefault(tic, init_holding)
 
         return acct_info
 
@@ -571,7 +564,7 @@ class BaseTradeEnv(gym.Env):
 
         # 是否添加 持仓信息 & 账户现金 到 obs 中
         # 将 acct_cash_asset 统一放缩到标准大小
-        acct_cash_asset = round(sum(self.acct_info['cash_asset']) / self.p, 0)
+        acct_cash_asset = round(sum(self.acct_info['cash_asset']), 0)
         # TODO: 添加加仓空间为环境的一部分
         acct_pfo_ratio = round(self._get_pfo_ratio(), 1)
         # holding_shares = [sum(shares) for _, shares in self.acct_info['pfo_holding'].items()]

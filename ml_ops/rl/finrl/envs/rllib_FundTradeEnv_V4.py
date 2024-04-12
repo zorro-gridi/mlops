@@ -25,10 +25,11 @@ class FundQuantTradeEnv_V4(FundQuantTradeEnv_V1):
         '''
         Update 更新如下:
             1. 返璞归真版:
-                1.1 买入时，根据策略空间优化（但是依然有最大单笔金额限制）；
-                1.2 卖出时，当前若无盈利持仓时，再根据策略空间优化
+                1.1 买入时，根据策略空间优化决策（但是, 依然有最大单笔金额限制）；
+                1.2 卖出时，当前若无盈利持仓时，再根据策略空间决策
         Conclusion:
-            貌似适合测试单边下跌的指数，不适合作为执行策略，策略收益比较不稳定。
+            1. 交易频率中等，收益率温和
+            2. 貌似适合测试单边下跌的指数，不适合作为执行策略，策略收益比较不稳定。
         '''
         super().__init__(config)
 
@@ -68,9 +69,7 @@ class FundQuantTradeEnv_V4(FundQuantTradeEnv_V1):
                         sell_amount = min(sell_amount, stock_shares)
                     else:
                         sell_amount = min(action, stock_shares)
-
                     return_ratio = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
-                    self.trades += 1
 
             return sell_num_shares, sell_amount
 

@@ -24,14 +24,16 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
     def __init__(self, config: EnvContext):
         '''
         Update 更新如下:
-            1. 继续更新 selling 策略，当仓位策略提示减仓时，无论是否盈利，应卖出部分持仓, 降低仓位
+            1. 继续更新 selling 策略
+                1.1 当仓位策略提示减仓时，如果策略没有卖出行动，无论持仓是否盈利，应卖出部分持仓, 主动降低仓位。
+                    主要解决问题：因为仓位控制原因，当仓位达到控制线之后，系统规定无法继续加仓，导致策略无法继续训练
             2. 更新买入策略
                 2.1 当仓位策略线转换到提示加仓时，主动补偿仓位的差额
-                2.2 当策略加的仓位超过指导线时，压缩仓位至指导线
         Remark:
             目前的仓位管理策略比较主观，需要建模决策
         Conclusion:
-            continue...
+            1. 交易频率很高，手续费占比大
+            2. 此策略依赖有效的仓位策略配合，待完善了量化仓位策略，再尝试...
         '''
         super().__init__(config)
         self.action_space = spaces.MultiDiscrete([6] * self.stock_dim)
@@ -85,9 +87,6 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
             sell_num_shares = 0 # 卖出份额，默认等于 sell_amount，输出后再转换，不影响
             sell_amount = 0
 
-            _mark_point = self.current_data.y_point.tolist()[index]
-            _pred_points = self.current_data.y_pred.tolist()[index]
-
             last_day = max(self.day-1, 0)
             over_pfo_ratio = 0
             pfo_ratio_guide = self._set_pfo_ratio()
@@ -99,18 +98,11 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                 # over_pfo_ratio = round(pfo_ratio_act - pfo_ratio_guide, 3)
                 # 方案二: 仓位策略线下移，才减仓
                 over_pfo_ratio = round(last_pfo_ratio_guide - pfo_ratio_guide, 3)
-                logging.warning(f'''
-                    -------->
-                    当前建议仓位: {pfo_ratio_guide}, 上次建议仓位: {last_pfo_ratio_guide}
-                    当前实际仓位: {pfo_ratio_act}, 当前超建议仓位: {over_pfo_ratio}
-                    ''')
 
             # 判断卖出的条件: 刚好与买入相反
             if self.selling_signal(index):
                 # 判断当前是否有该股票的持仓 & 股价是否大于 0
                 if max_profit_shares > 0 and stock_shares > 0:
-                    # Sell only if current asset is > 0
-                    # 此处与股票不同，注意 ！！！
                     logging.warning(f'action vs max_profit: {abs(action)}, {max_profit_shares:0.2f}')
                     sell_num_shares = max_profit_shares
 
@@ -118,22 +110,22 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                         # 计算卖出可获得的金额，已经考虑交易费用
                         sell_amount = sell_num_shares
 
-                # 只在杀跌模式下卖出仓位
-                if _mark_point < 0 and abs(_mark_point) < abs(_pred_points) * (1 - self.temperature):
-                    # 在仓位策略转换的时候，如果当前的仓位策略提示减仓，主动降低仓位
-                    decrease_pfo_amount = 0
-                    if over_pfo_ratio > 0:
-                        logging.warning(f'当前仓位过高，主动减仓 -------> {over_pfo_ratio}')
-                        decrease_pfo_amount = round(self.initial_amount * over_pfo_ratio, 2)
+                # 如果策略不建议卖出, 则主动降低仓位
+                # 在仓位策略转换的时候，如果当前的仓位策略提示减仓，主动降低仓位
+                if sell_amount == 0 and over_pfo_ratio > 0:
+                    decrease_pfo_amount = round(self.initial_amount * over_pfo_ratio, 2)
+                    sell_amount =  min(decrease_pfo_amount, stock_shares, 0)
+                    logging.warning(f'''
+                        -------->
+                        当前建议仓位: {pfo_ratio_guide}, 上次建议仓位: {last_pfo_ratio_guide}
+                        当前实际仓位: {pfo_ratio_act}, 当前超建议仓位: {over_pfo_ratio}
+                        ''')
+                    logging.warning(f'当前仓位过高，主动减仓 ----> {over_pfo_ratio},  decrease_pfo_amount: {sell_amount}')
 
-                # 优先取策略空间的 sell_amount
-                logging.warning(f'---------> sell_amount vs decrease_pfo_amount: {sell_amount} vs {decrease_pfo_amount}')
-                sell_amount = sell_amount if sell_amount > 0 else decrease_pfo_amount
-                # 卖出股票，仓位减少
-                self.acct_info['pfo_holding'][stock_name].append(-sell_num_shares)
-                self.acct_info['pfo_price'][stock_name].append(close_price)
-                return_ratio = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
-                self.trades += 1
+                if sell_amount > 0:
+                    self.acct_info['pfo_holding'][stock_name].append(-sell_num_shares)
+                    self.acct_info['pfo_price'][stock_name].append(close_price)
+                    return_ratio = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
 
             return sell_num_shares, sell_amount
 
@@ -177,9 +169,6 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
         stock_name = self.current_data.tic.to_list()[index]
         # 基金使用收盘涨跌幅，收盘价在基金的模拟环境中没有实际使用
         # close_price = self.current_data.close.to_list()[index]
-
-        _mark_point = self.current_data.y_point.tolist()[index]
-        _pred_points = self.current_data.y_pred.tolist()[index]
 
         def _do_buy():
             buy_num_shares = 0

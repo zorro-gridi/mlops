@@ -1,11 +1,10 @@
 # %%
 from gymnasium import spaces
 import logging
+from ray.rllib.env import EnvContext
 
 import sys
 from pathlib import Path
-
-from ray.rllib.env import EnvContext
 
 current_dir = Path(__file__).resolve().parent
 dir_list = [dname for dname in current_dir.as_posix().split('/')]
@@ -26,9 +25,12 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
         Update 更新如下:
             1. 取消卖出的策略空间，改为遵守人选的[止盈、止损]规则
         Conclusion:
-            目前在具有波动性的指数上回测收益较好，例如传媒指数
+            1. 目前, 在具有波动性的指数上回测收益较好。例如, 传媒指数
+            2. 因为严格限制了买入，感觉在低点抄底力度不够
+            3. 交易频率很高，手续费占比很大
         '''
         super().__init__(config)
+        # 策略空间最高到5
         self.action_space = spaces.MultiDiscrete([6] * self.stock_dim)
 
 
@@ -98,7 +100,6 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
                         self.acct_info['pfo_holding'][stock_name].append(-sell_num_shares)
                         self.acct_info['pfo_price'][stock_name].append(close_price)
                         return_ratio = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
-                        self.trades += 1
 
             return sell_num_shares, sell_amount
 

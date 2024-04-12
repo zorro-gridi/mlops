@@ -24,7 +24,7 @@ sys.path.append(env_path)
 
 # finrl 必须导入到 runtime
 from mlops.ml_ops.rl import finrl
-from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V1 import FundQuantTradeEnv
+from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V1 import FundQuantTradeEnv_V1
 # from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V2 import FundQuantTradeEnv_V2
 from tools.DB_Client import DB_Client
 
@@ -147,6 +147,7 @@ config = ( # 1. Configure the algorithm,
     .training(model={"fcnet_hiddens": [64, 64]}, train_batch_size=int(512),)
     # .callbacks(MemoryTrackingCallbacks)
     .evaluation(evaluation_interval=100, evaluation_num_workers=1,)
+    .offline_data()
     )
 
 

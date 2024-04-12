@@ -37,8 +37,6 @@ matplotlib.use("Agg")
 @Date: 2024-01-01
 @Desc:
     本代码定义了基于 rllib 强化学习训练框架的 gym 环境模型
-@Release log:
-    1. 尝试了将“加仓空间=仓位红线-当前仓位”加入环境观察，并且主动在 action 中补一些仓位，重新训练后，发现效果并不好
 """
 
 
@@ -59,14 +57,15 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         Features:
             1. 买入时，进行仓位压缩。即买入后的总仓位不能超过仓位策略指导线
             2. 遇到持续满仓时触发早停技术, 主要在 infer mode 推理的情况下使用，节省推理时间
-            3. 卖出时，【策略建议份额】与【盈利持仓】取最大数
+            3. 卖出时，【策略建议份额】与【盈利持仓】取最大数 (不取最小的原因，因为策略空间有范围限制)
         Conclusion:
-            continue...
+            1. 交易频率较低，整体收益相对温和
+            2. 对于单边行情，该策略表现出不适应。特别是，单边下跌行情中，当仓位达到控制线之后，因为限制了策略空间，不能主动有效的减仓，导致策略无法继续训练
         '''
         super().__init__(config)
 
         # 增加或修改的属性可以写在 super() 后面
-        self.goal_yield = config.get('goal_yield', 1.0) # 训练的时候要保障数据训练完，推理的时候需要定义
+        self.goal_yield = config.get('goal_yield', np.inf) # 训练的时候要保障数据训练完，推理的时候需要定义
         self.phase_yield = config.get('phase_yield', 0.02)
         # 基金的净值很小，而且可以买很少的份数，可以使用连续空间; 缺点：训练太慢
         # self.action_space = spaces.Box(low=-1, high=1, shape=(self.stock_dim,), dtype="float32")
@@ -463,12 +462,13 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 # 卖出股票，现金账户增加金额
                 self.acct_info['cash_asset'].append(round(selling_return, 2))
                 self.cost += selling_cost
+                self.trades += 1
 
                 logging.warning(f'''
                     ---------->
                     卖出日期: {selling_date}, 卖出份额: {selling_shares:0.2f}, 回收现金: {selling_return:0.2f}, 卖出手续费: {selling_cost:0.2f}
                     卖出收益率: {return_ratio:0.4f}, 仓位: {self._get_pfo_ratio():0.2f}, 仓位控制线: {self._set_pfo_ratio():0.2f}
-                    trades: {self.trades + 1}
+                    trades: {self.trades}
                     ''')
             return return_ratio
         else:
@@ -484,10 +484,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         _pred_points = self.current_data.y_pred.tolist()[index]
 
         return any([
-            # 1. 抄底
-            _mark_point < 0 and abs(_mark_point) >= abs(_pred_points) * self.temperature,
-            # 2. 追涨
-            _mark_point > 0 and _mark_point <= _pred_points * (1 - self.temperature)
+            # 1. 抄底 & 2. 追涨
+            _mark_point <= _pred_points * self.temperature
             ])
 
 
@@ -501,10 +499,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
         # 判断卖出的条件: 刚好与买入相反
         return any([
-            # 1. 止盈
-            _mark_point > 0 and _mark_point >= _pred_points * self.temperature,
-            # 2. 杀跌
-            _mark_point < 0 and abs(_mark_point) <= abs(_pred_points) * (1 - self.temperature)
+            # 1. 止盈 & 2. 杀跌
+            _mark_point >= _pred_points * self.temperature,
             ])
 
 
@@ -550,6 +546,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
                 # 计算可买入的最多股票数量（基于单笔交易金额限制的）
                 if available_shares > 0:
+                    # logging.warning(f'-----------> buying amont choices: rule: {available_shares} vs action: {action}')
                     buy_num_shares = min(available_shares, action)
                     if buy_num_shares > self.per_unit_amount:
                         buy_amount = buy_num_shares * (1 - self.buy_cost_pct[index])
@@ -634,7 +631,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                         self.acct_info['pfo_holding'][stock_name].append(-sell_num_shares)
                         self.acct_info['pfo_price'][stock_name].append(close_price)
                         return_ratio = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
-                        self.trades += 1
 
             return sell_num_shares, sell_amount
 
