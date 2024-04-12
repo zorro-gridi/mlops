@@ -16,7 +16,6 @@ from ray.rllib.env import EnvContext
 from datetime import datetime
 from copy import copy
 
-
 import sys
 from pathlib import Path
 
@@ -27,7 +26,6 @@ env_path = '/'.join([dirname for dirname in dir_list[:dir_list.index('pycharm')+
 sys.path.append(env_path)
 
 from mlops.ml_ops.rl.finrl.envs.rllib_BaseTradeEnv import BaseTradeEnv
-
 
 matplotlib.use("Agg")
 
@@ -77,6 +75,9 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         # 这个数的具体值还需要调整, 都是主观设置，取消！！！
         self.min_yield = config.get('min_yield', 1/100)
 
+        # 记录仓位控制红线
+        self.pfo_ratio_guide = {}
+
 
     def _update_acct_holdings_debit_yield(self):
         ''''
@@ -111,6 +112,11 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         '''
         Desc: Importan!
             账户的仓位控制策略。基于上证指数的相对牛熊点位判断
+            主要更新点:
+            1. 添加仓位记录
+        Features:
+            1. 根据指数和大盘的牛熊点位，动态更新仓位线
+            2. 根据点位线的相对百分数，作为调仓的加权百分比。这样做的好处是让仓位管理线控制的更平滑，避免断崖，导致突然无法加、减仓，策略无法学习
         '''
         ratio_strategy = {
             0: 0.8,
@@ -118,8 +124,17 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             2: 0.3,
             }
         sz_point_phase = self.current_data['sz_closed_phase'].unique()[0]
+        sz_point_percentile = self.current_data['sz_closed_phase_percentile'].unique()[0]
+
         idx_pint_phase = self.current_data['closed_phase'].unique()[0]
-        pfo_ratio_guideline = (ratio_strategy[sz_point_phase] + ratio_strategy[idx_pint_phase]) / 2
+        idx_point_percentile = self.current_data['closed_phase_percentile'].unique()[0]
+
+        pfo_ratio_guideline = round(
+            (ratio_strategy[sz_point_phase] * (1 - sz_point_percentile)
+            + ratio_strategy[idx_pint_phase] * (1 - idx_point_percentile)
+            ) / 2, 3)
+        # 记录仓位
+        self.pfo_ratio_guide[self.day] = pfo_ratio_guideline
         return pfo_ratio_guideline
 
 

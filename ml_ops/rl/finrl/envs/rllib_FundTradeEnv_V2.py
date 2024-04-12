@@ -15,7 +15,6 @@ sys.path.append(env_path)
 from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V1 import FundQuantTradeEnv_V1
 
 
-
 class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
     '''
     基于版本一的 FundTrader Env 第二版

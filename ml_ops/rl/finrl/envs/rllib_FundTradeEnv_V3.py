@@ -37,28 +37,6 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
         '''
         super().__init__(config)
         self.action_space = spaces.MultiDiscrete([6] * self.stock_dim)
-        # 记录仓位控制红线
-        self.pfo_ratio_guide = {}
-
-
-    def _set_pfo_ratio(self):
-        '''
-        Desc: Importan!
-            账户的仓位控制策略。基于上证指数的相对牛熊点位判断
-            主要更新点:
-            1. 添加仓位记录
-        '''
-        ratio_strategy = {
-            0: 0.8,
-            1: 0.5,
-            2: 0.3,
-            }
-        sz_point_phase = self.current_data['sz_closed_phase'].unique()[0]
-        idx_pint_phase = self.current_data['closed_phase'].unique()[0]
-        pfo_ratio_guideline = (ratio_strategy[sz_point_phase] + ratio_strategy[idx_pint_phase]) / 2
-        # 记录仓位
-        self.pfo_ratio_guide[self.day] = pfo_ratio_guideline
-        return pfo_ratio_guideline
 
 
     def _sell_stock(self, index, action):
