@@ -56,7 +56,8 @@ class BaseTradeEnv(gym.Env):
 
         # TODO: hmax 需要设计一个预期函数，即估计出最大定投次数, 换算得到
         self.hmax = config.get('hmax', 200)                                     # base model 的配置
-        self.initial_amount = config.get('initial_amount', 10000)               # get the initial cash
+        self.base_amount = 10000
+        self.initial_amount = config.get('initial_amount', self.base_amount)    # get the initial cash
 
         # 单笔的最大买入金额，主要和 action 的分布有关:
         # 本 env action 分布范围~[-5, 5], hmax=100, 最大 500 元
@@ -111,10 +112,6 @@ class BaseTradeEnv(gym.Env):
         self.episode = 0
         self.soldout = 0
         self.goal_achieved = False
-
-        # 暂停加仓的触发 early stop 的次数
-        self.stop_buying = 0
-        self.early_stop_times = config.get('early_stop_times', np.inf)
 
         self.rewards_memory = []
         self.actions_memory = []
@@ -270,7 +267,7 @@ class BaseTradeEnv(gym.Env):
         begin_total_asset = self._get_acct_asset()
 
         if any([self.terminal, self.goal_achieved, self.truncate]):
-            logging.warning(f'is truncate env -------> {self.truncate}')
+            # logging.warning(f'is truncate env -------> {self.truncate}')
             # 交易后的累计资产
             end_total_asset = begin_total_asset
 
@@ -371,7 +368,7 @@ class BaseTradeEnv(gym.Env):
             # 同上, 再计算一次期末的累计资产，因为, 进行了买卖交易
             end_total_asset = self._get_acct_asset()
 
-            # 当前reward的定义: 使用资产增值的数额，可以处理多股票的组合任务
+            # 当前 reward 的定义: 使用资产增值的数额，可以处理多股票的组合任务
             # 这种 reward 定义的就是短期激励!!!
             self.reward = end_total_asset - begin_total_asset
 
@@ -398,7 +395,7 @@ class BaseTradeEnv(gym.Env):
         self.day = 0
         # ======================================================================================
         # 可以在这个地方添加 self.data 的重定义逻辑, 结合 self.episode 索引，切换不同的股票股价序列：想法❌
-        # “一个人的美酒🍷可能是另一个人的毒药💊”
+        # “一个人的美酒🍷可能是另一个人的毒药💊”。 因此，不同股票，基金的走势不能混用
         # ======================================================================================
         # self.data 是 self.df 数据的动态切片
         # 记录股价与指标的序列信息
@@ -413,8 +410,9 @@ class BaseTradeEnv(gym.Env):
         # 更新 self.asset_memory
         # 需要区分是首次 reset 还是 episode 之后 reset
         # =================================================================
-        if self.initial:
+        if self.initial: # 这个 initial 表示每次 reset 都重新重置账户信息
             self.acct_info = self._initial_acct_info()
+
         begin_total_asset = self._get_acct_asset()
         self.asset_memory = [begin_total_asset]
         # =================================================================
@@ -428,7 +426,6 @@ class BaseTradeEnv(gym.Env):
         self.trades = 0
         self.terminal = False
         self.truncate = False
-        self.stop_buying = 0
 
         self.rewards_memory = []
         self.actions_memory = []
@@ -563,13 +560,13 @@ class BaseTradeEnv(gym.Env):
         state = state.reshape(1, -1).tolist()[0]
 
         # 是否添加 持仓信息 & 账户现金 到 obs 中
-        # 将 acct_cash_asset 统一放缩到标准大小
         acct_cash_asset = round(sum(self.acct_info['cash_asset']), 0)
         # TODO: 添加加仓空间为环境的一部分
         acct_pfo_ratio = round(self._get_pfo_ratio(), 1)
         # holding_shares = [sum(shares) for _, shares in self.acct_info['pfo_holding'].items()]
         # state.extend(holding_shares)
-        state.append(acct_cash_asset)
+        # 将 acct_cash_asset 统一放缩到标准大小, 将账户金额的观察值放缩到以 base_amount 为单位
+        state.append(round(acct_cash_asset / self.base_amount, 2))
         # TODO: 将仓位加入 state 存在弊端：当仓位已满时，环境不会自己重置???
         state.append(acct_pfo_ratio)
 

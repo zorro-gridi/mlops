@@ -92,12 +92,6 @@ class FundQuantTradeEnv_V4(FundQuantTradeEnv_V1):
         # 控制仓位
         if pfo_ratio > pfo_ratio_guideline:
             logging.warning(f'-------> 当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!')
-
-            self.stop_buying += 1
-            if self.stop_buying >= self.early_stop_times:
-                self.truncate = True
-                logging.warning(f'meet stop buying times -----------> {self.stop_buying}')
-
             return 0, 0
 
         stock_name = self.current_data.tic.to_list()[index]

@@ -1,11 +1,10 @@
 # %%
 from gymnasium import spaces
 import logging
+from ray.rllib.env import EnvContext
 
 import sys
 from pathlib import Path
-
-from ray.rllib.env import EnvContext
 
 current_dir = Path(__file__).resolve().parent
 dir_list = [dname for dname in current_dir.as_posix().split('/')]
@@ -28,7 +27,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                 1.1 当仓位策略提示减仓时，如果策略没有卖出行动，无论持仓是否盈利，应卖出部分持仓, 主动降低仓位。
                     主要解决问题：因为仓位控制原因，当仓位达到控制线之后，系统规定无法继续加仓，导致策略无法继续训练
             2. 更新买入策略
-                2.1 当仓位策略线转换到提示加仓时，主动补偿仓位的差额
+                2.1 当仓位策略线转换到提示加仓时，主动补偿仓位的差额。TODO: 差额的确定方式还可以优化
         Remark:
             目前的仓位管理策略比较主观，需要建模决策
         Conclusion:
@@ -69,13 +68,13 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
             over_pfo_ratio = 0
             pfo_ratio_guide = self._set_pfo_ratio()
             pfo_ratio_act = self._get_pfo_ratio()
-            last_pfo_ratio_guide = self.pfo_ratio_guide[last_day]
 
             if self.pfo_ratio_guide:
+                last_pfo_ratio_guide = self.pfo_ratio_guide[last_day]
                 # 方案一: 实际仓位超过仓位策略，即减仓
-                # over_pfo_ratio = round(pfo_ratio_act - pfo_ratio_guide, 3)
+                over_pfo_ratio = round(pfo_ratio_act - pfo_ratio_guide, 3)
                 # 方案二: 仓位策略线下移，才减仓
-                over_pfo_ratio = round(last_pfo_ratio_guide - pfo_ratio_guide, 3)
+                # over_pfo_ratio = round(last_pfo_ratio_guide - pfo_ratio_guide, 3)
 
             # 判断卖出的条件: 刚好与买入相反
             if self.selling_signal(index):
@@ -90,9 +89,9 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
 
                 # 如果策略不建议卖出, 则主动降低仓位
                 # 在仓位策略转换的时候，如果当前的仓位策略提示减仓，主动降低仓位
-                if sell_amount == 0 and over_pfo_ratio > 0:
+                if sell_amount == 0 and over_pfo_ratio >= 0.05:
                     decrease_pfo_amount = round(self.initial_amount * over_pfo_ratio, 2)
-                    sell_amount =  min(decrease_pfo_amount, stock_shares, 0)
+                    sell_amount =  min(decrease_pfo_amount, stock_shares)
                     logging.warning(f'''
                         -------->
                         当前建议仓位: {pfo_ratio_guide}, 上次建议仓位: {last_pfo_ratio_guide}
@@ -134,14 +133,12 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
 
         # 如果当前已到仓位指导线，则停止加仓
         if pfo_ratio > pfo_ratio_guideline:
-            logging.warning(f'-------> 当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!')
-
-            # 碰到连续达到仓位记录线附近则提前终止学习
-            self.stop_buying += 1
-            if self.stop_buying >= self.early_stop_times:
-                self.truncate = True
-                logging.warning(f'meet stop buying times -----------> {self.stop_buying}')
-
+            logging.warning(f'''
+                ------->
+                trade date: {self._get_date()}
+                指数牛熊位置: {self.current_data['closed_phase'].max()}, 百分位: {self.current_data['closed_phase_percentile'].max()}
+                当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!
+                ''')
             return 0, 0
 
         stock_name = self.current_data.tic.to_list()[index]

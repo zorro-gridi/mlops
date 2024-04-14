@@ -55,6 +55,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         Features:
             1. 买入时，进行仓位压缩。即买入后的总仓位不能超过仓位策略指导线
             2. 遇到持续满仓时触发早停技术, 主要在 infer mode 推理的情况下使用，节省推理时间
+                @release log: 2024-04-12 删除！原因：早停导致策略无法学习，训练和推理环节都不能使用
             3. 卖出时，【策略建议份额】与【盈利持仓】取最大数 (不取最小的原因，因为策略空间有范围限制)
         Conclusion:
             1. 交易频率较低，整体收益相对温和
@@ -77,6 +78,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
         # 记录仓位控制红线
         self.pfo_ratio_guide = {}
+        # 初始化仓位记录
+        self._set_pfo_ratio()
 
 
     def _update_acct_holdings_debit_yield(self):
@@ -187,7 +190,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         actions = actions - 5
         # logging.warning(f'actions ---------------> {actions}')
 
-        # 达到目标收益清仓
         # TODO: 写一个触发清仓的条件
         pfo_yield = self._get_pfo_soldout_yield()
         cumsum_yield = self._get_acct_cumsum_yield()
@@ -199,6 +201,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
             # 达到整体收益率目标，发出停止交易的信号: self.goal_achieved = 1
             # 注意，这个信号只能在交易的时候使用
+            # 达到目标收益清仓
             if cumsum_yield >= self.goal_yield:
                 logging.warning(f'当前账户【清仓累计收益率】: {cumsum_yield:0.4f}, 达到【预期收益率】目标: {self.goal_yield}, 账户清仓 !!!')
                 self.goal_achieved = True
@@ -253,6 +256,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             min_yield: 最小盈利阈值
         Return:
             max_yield_shares: 当前可卖出的已盈利的最大持仓数量
+        TODO:
+            持仓的最大止盈策略写的太死，低位买入的持仓可以适度提高止盈限制
         '''
         update_holdings = self._update_acct_holdings_debit_yield()
         max_yield_shares = 0
@@ -443,7 +448,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                     rest_value = sell_amount * (1 + shares_yield)
                     selling_value += rest_value
 
-                    # TODO: 这一步更新有错
                     # 卖出金额小于当前日期的持有份额，则减去卖出金额
                     update_item = copy(sorted_holdings[i])
                     # 拆分卖空的部分
@@ -531,12 +535,13 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         pfo_ratio_guideline = self._set_pfo_ratio()
         pfo_ratio = self._get_pfo_ratio()
         if pfo_ratio > pfo_ratio_guideline:
-            logging.warning(f'-------> 当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!')
+            logging.warning(f'-------> trade date: {self._get_date()}, 当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!')
 
-            self.stop_buying += 1
-            if self.stop_buying >= self.early_stop_times:
-                self.truncate = True
-                logging.warning(f'meet stop buying times -----------> {self.stop_buying}')
+            # 取消早停，不合理，策略必须一直进行下去
+            # self.stop_buying += 1
+            # if self.stop_buying >= self.early_stop_times:
+            #     self.truncate = True
+            #     logging.warning(f'meet stop buying times -----------> {self.stop_buying}')
 
             return 0, 0
 
