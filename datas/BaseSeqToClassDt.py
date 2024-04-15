@@ -59,7 +59,6 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
             return X_arr_list
 
 
-
     def feature_engineering(self, raw_data, split_name='train'):
         '''
         Args:

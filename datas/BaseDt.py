@@ -4,6 +4,8 @@ from sklearn.model_selection import (
     train_test_split,
     StratifiedShuffleSplit,
     )
+from typing import List, Union
+from copy import copy
 
 import xgboost as xgb
 import numpy as np
@@ -19,6 +21,9 @@ import torch
 from sklearn.preprocessing import MinMaxScaler
 from functools import partial
 
+StrOrInt = Union[str, int]
+StrOrIntList = List[StrOrInt]
+
 
 class AbstractDatasetFactory(metaclass=ABCMeta):
     '''
@@ -27,11 +32,13 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
     def __init__(self, features=None, categoric_features=None, target=None):
         '''
         Args:
-            features: 数据默认输入特征
+            features: StrOrIntList, 数据的输入部特征列表
             target: str or int
                 when is str: 表示目标变量名称
                 when is int: 目标变量的索引值; [= 1: 表示单步预测; > 1: 表示多步预测]
-            categoric_features: 数据中的分类特征
+            categoric_features: StrOrIntList, 指定数据中的分类特征列表
+                when is str: 表示特征名称列表
+                when is int: 表示特征名在 dataframe columns 中的索引
         '''
         self.features = features
         self.target = target
@@ -45,7 +52,12 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
 
 
     def set_attr(self, inst_config):
-        new_config = {k: v for k, v in inst_config.items() if k in self.__dict__.keys()}
+        '''
+        Desc:
+            更新类的属性
+        '''
+        new_config = copy(
+            {k: v for k, v in inst_config.items() if k in self.__dict__.keys()})
         self.__dict__.update(new_config)
 
 

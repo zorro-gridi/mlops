@@ -4,10 +4,10 @@ import numpy as np
 import logging
 
 
-
 class SeqToBinaryDt(BaseSeqToClassDt):
     '''
-    主要特征：将时间序列预测问题变为二分类问题
+    Desc:
+        主要特征：将时间序列预测问题变为二分类问题
     '''
     def __init__(self, y_threshold=10, **kwargs):
         '''
@@ -20,7 +20,9 @@ class SeqToBinaryDt(BaseSeqToClassDt):
 
     def categoric_engineering(self, raw_data, split_name='train'):
         '''
-        将序列汇聚成类别变量, 聚合函数: np.amax, np.amin, np.median, ...;
+        Desc:
+            将部分 feature 的序列汇聚成 categoric 类别变量
+            可选的聚合函数: ["np.amax", "np.amin", "np.median", ...];
         '''
         X_arr_list = super().categoric_engineering(raw_data, split_name)
 
@@ -31,6 +33,14 @@ class SeqToBinaryDt(BaseSeqToClassDt):
 
 
     def feature_engineering(self, raw_data, split_name='train'):
+        '''
+        Desc:
+            特征预处理函数
+        Args:
+            raw_data: 原始数据
+            split_name: 返回的数据集的名称
+        '''
+        # 如果预处理函数不为空，则先对原始数据进行数据预处理
         if self.preprocess_func is not None:
             raw_data = self.preprocess_func(raw_data)
 
@@ -46,6 +56,7 @@ class SeqToBinaryDt(BaseSeqToClassDt):
             X_cate = self.categoric_engineering(raw_data, split_name=split_name)
             X = np.concatenate([X, X_cate], axis=1)
 
+        # 将目标连续变量变为离散的分类变量
         if split_name == 'train':
             y = np.array([1 if np.max(y) >= self.y_threshold / 100 else 0 for y in y_list])
             return X, y
