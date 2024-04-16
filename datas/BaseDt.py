@@ -6,6 +6,7 @@ from sklearn.model_selection import (
     )
 from typing import List, Union
 from copy import copy
+import pandas as pd
 
 import xgboost as xgb
 import numpy as np
@@ -29,11 +30,17 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
     '''
     基础数据集抽象工厂方法
     '''
-    def __init__(self, features=None, categoric_features=None, target=None):
+    def __init__(self,
+        features=None,
+        categoric_features=None,
+        target=None,
+        preprocess_func=None,
+        is_imbalanced=False,
+        ):
         '''
         Args:
             features: StrOrIntList, 数据的输入部特征列表
-            target: str or int
+            target: str or int, 目标变量的索引或者名称
                 when is str: 表示目标变量名称
                 when is int: 目标变量的索引值; [= 1: 表示单步预测; > 1: 表示多步预测]
             categoric_features: StrOrIntList, 指定数据中的分类特征列表
@@ -42,8 +49,10 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
         '''
         self.features = features
         self.target = target
-        self.is_imbalanced = False # 默认为 False, 因为分层抽样会打乱数据集
+        self.is_imbalanced = is_imbalanced # 默认为 False, 因为分层抽样会打乱数据集
         self.categoric_features = categoric_features
+        self.preprocess_func = preprocess_func
+        self.target = self.target if isinstance(self.target, int) else self.features.index(self.target)
 
 
     @abstractclassmethod
@@ -71,8 +80,11 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
             # 因为数据集的标签不均衡，所以使用 StratifiedShuffleSplit 分层抽样
             sss = StratifiedShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
             for i, (train_idx, test_idx) in enumerate(sss.split(X, y)):
-                x_train, y_train = X[train_idx], y[train_idx]
-                x_test, y_test = X[test_idx], y[test_idx]
+                if isinstance(X, pd.DataFrame):
+                    x_train, x_test = X.iloc[train_idx, :], X.iloc[test_idx, :]
+                else:
+                    x_train, x_test = X[train_idx], X[test_idx]
+                y_train, y_test = y[train_idx], y[test_idx]
 
             assert len(X) == len(x_train) + len(x_test)
             train_pos_ratio = sum(y_train) / len(y_train)

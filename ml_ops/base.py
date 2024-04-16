@@ -136,6 +136,7 @@ class AbstractMLOps(metaclass=ABCMeta):
             **kwargs
             )
 
+        # 获取测试指标对比情况
         report_metric_name = f'test_{self.model_task.model_eval_metric}'
         best_result = tune_results.get_best_result(
             metric=report_metric_name, mode=self.model_task.optimize_mode)
@@ -201,9 +202,11 @@ class AbstractMLOps(metaclass=ABCMeta):
         current_date = datetime.datetime.today()
         regist_date = hist_model_config['regist_date']
         days_diff = (current_date - datetime.datetime.strptime(regist_date, '%Y-%m-%d')).days
+
         if days_diff <= update_interval:
             logging.warning(f'----------> 历史模型刚注册未超过 {update_interval} 天，不使用最新数据测试')
             if self.model_task.custom_loss_func:
+                # 自定义损失函数名
                 metric_name = self.model_task.custom_loss_func.loss_name
             else:
                 metric_name = self.model_task.model_eval_metric
@@ -215,7 +218,9 @@ class AbstractMLOps(metaclass=ABCMeta):
             logging.warning(f'无数据参数调参模式, 使用当前测试数据测试历史模型...')
             test_data = self.test_data
         else:
+            # load_test_data 加载历史模型的测试集
             # 加载 dataset hist cnofig, 更新当前的 dataset_inst 为历史模式
+            logging.warning(f'----------> 历史模型刚注册已超过 {update_interval} 天，最新数据重新测试')
             test_data = self.dataset_inst.load_test_data(self.raw_data, inst_config=hist_model_config)
 
         # 历史模型不用更新参数，不用返回 model signature, 所以 params_config 可为 None
@@ -227,7 +232,10 @@ class AbstractMLOps(metaclass=ABCMeta):
 
 
     def save_checkpoint(
-            self, checkpoint, reg_model_name, model_version='1', model_alias=None, model_frame=None, loss_strategy='UNIT'):
+            self, checkpoint, reg_model_name,
+            model_version='1', model_alias=None,
+            model_frame=None, loss_strategy='UNIT'
+            ):
         '''
         Desc:
             该方法实现了如下统一接口功能:
@@ -289,7 +297,7 @@ class AbstractMLOps(metaclass=ABCMeta):
                     signature = infer_signature(
                         input_examples[:5], label[:5], params_config)
                 elif isinstance(test_data[0], np.ndarray):
-                    # np.ndarray 中不能设置分类变量
+                    # 因为 np.ndarray 中不能设置文本分类变量
                     test_loader = Pool(
                         pd.DataFrame(test_data[0]), label=test_data[1], cat_features=params_config.get('categoric_features', None))
                     X, y = test_data
@@ -327,6 +335,7 @@ class AbstractMLOps(metaclass=ABCMeta):
             hist_sum_loss = hist_training_loss + hist_eval_metric
             hist_weight_loss = hist_training_loss * 0.2 + hist_eval_metric * 0.8
 
+            # 比较是测试指标
             if loss_strategy == 'UNIT':
                 if self.model_task.optimize_mode == 'min':
                     compare_bools_result = -tune_model_metric <= -hist_eval_metric
@@ -358,6 +367,7 @@ class AbstractMLOps(metaclass=ABCMeta):
                     'test_loss': hist_eval_metric,
                     'best_model': hist_regis_model,
                     'best_mlops': self,
+                    'save_mode': 'hist',
                     }
             else:
                 # 将针对数据实例的更改撤回
@@ -441,4 +451,5 @@ class AbstractMLOps(metaclass=ABCMeta):
             'test_loss': round(tune_model_metric, 6),
             'best_model': best_model,
             'best_mlops': self,
+            'save_mode': 'new',
             }

@@ -28,6 +28,7 @@ class CatboostTask(AbstractModelFactory):
             model_init_params: 实例化 catbooost 的参数字典
             model_train_params: 传入 fit 函数的参数字典
             model_loss_func: for catboost "loss_function"
+            custom_loss_func: 自定义的 loss_functions
             model_eval_metric: for catboost "eval_metric"
         '''
         super().__init__(**kwargs)
@@ -51,7 +52,12 @@ class CatboostTask(AbstractModelFactory):
         self.model_init_params.update(earlystop_params)
         self.model_arch = 'cat'
 
+
     def convert_data(self, train_data, test_data):
+        '''
+        Desc:
+            判断输入数据的类型，并自动转换为模型需要的类型
+        '''
         # 当有分类特征时，最好提前构造好 Pool 格式的数据集
         if type(train_data).__name__ == 'Pool':
             # logging.warning(f'train data alread be cat Pool type...')
@@ -59,12 +65,17 @@ class CatboostTask(AbstractModelFactory):
             test_pool = test_data
         else:
             # pool 对象本身会分批次加载数据集进行模型训练
+            # 此情况下不能在 fit 中指定 cat_features
             train_pool = Pool(*train_data)
             test_pool = Pool(*test_data)
         return train_pool, test_pool
 
 
     def train_job(self, config, train_data, test_data):
+        '''
+        Desc:
+            启动训练 job
+        '''
         config_device = config.pop('device', 'CPU')
         model_params = copy(config)
 
@@ -91,7 +102,9 @@ class CatboostTask(AbstractModelFactory):
         # cv 返回交叉验证的评估指标
         cv_loss = np.min(cv_data[f'test-{self.model_eval_metric}-mean'])
         if self.optimize_mode == 'max':
-            cv_loss = 1 / cv_loss
+            cv_loss = np.max(cv_data[f'test-{self.model_eval_metric}-mean'])
+        else:
+            cv_loss = np.min(cv_data[f'test-{self.model_eval_metric}-mean'])
         # 精度控制
         return round(cv_loss, 6)
 
@@ -144,9 +157,21 @@ class CatboostTask(AbstractModelFactory):
 
 
     def test_job(self, model: CatBoost, test_pool: Pool):
+        '''
+        Desc:
+            返回指定模型在测试集上的测试指标
+        '''
         loss_result = model.eval_metrics(test_pool, [self.model_eval_metric])
+        # loss_result 是一个字典或者 NamedTuple
         test_loss = loss_result[self.model_eval_metric][0]
         return test_loss
+
+
+    def predict(self, *args, **kwargs):
+        '''
+        @Url: https://catboost.ai/en/docs/concepts/python-reference_catboost_predict#prediction_type
+        '''
+        pass
 
 
 
