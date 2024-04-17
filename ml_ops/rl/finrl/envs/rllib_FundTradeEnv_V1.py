@@ -703,7 +703,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
     def _caculate_holding_min_yield(self, buy_date):
         '''
         Desc:
-            计算每一笔买入持仓的最小预期收益率
+            计算每一笔买入持仓的最小预期收益率, 特别是对于在反弹、反转底部买入的持仓，需要扩大期望收益率
         Args:
             buy_date: 买入日期
         '''
