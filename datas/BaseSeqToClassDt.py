@@ -28,7 +28,7 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
         '''
         Args:
             raw_data: pd.Dataframe group 对象
-            split_name: 数据集名称
+            split_name: 数据集名称, Union['train', 'test', 'pred']
         '''
         X_seq_len = self.X_seq_len
         y_seq_len = self.y_seq_len
@@ -44,13 +44,24 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
 
         if split_name == 'train':
             X_arr_list = [
-                g_arr[i:i+X_seq_len, :]
+                g_arr[i-X_seq_len:i, :]
                 for g_arr in tqdm(
                     groups_arr,
                     desc='get categoric features data -->',
                     )
-                for i in range(len(g_arr) - X_seq_len - y_seq_len)
+                for i in range(X_seq_len, len(g_arr) - y_seq_len)
                 ]
+            return X_arr_list
+
+        elif split_name == 'test':
+            logging.warning(f'-----> split name: "test" mode, 默认使用所有记录')
+            X_arr_list = [
+                g_arr[i-X_seq_len:i, :]
+                for g_arr in tqdm(groups_arr, desc='get features data -->',)
+                # 每一个 group 是一个股票/基金的历史指标集合趋势
+                for i in range(X_seq_len, len(g_arr))
+                if len(g_arr) >= X_seq_len
+            ]
             return X_arr_list
 
         else:
@@ -68,7 +79,7 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
         '''
         Args:
             raw_data: pd.Dataframe grouper 对象
-            split_name: 数据集的名称
+            split_name: 数据集的名称, Union['train', 'test', 'pred']
         '''
         # 固定灿哥参数
         X_seq_len = self.X_seq_len
@@ -85,19 +96,23 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
         # logging.warning(f'groups_arr length ---------------------------> {len(groups_arr)}')
 
         if split_name == 'train':
+            '''
+            "train" mode 用于训练模型
+            '''
             X_y_data_arr = [
                 (
-                    g_arr[i:i+X_seq_len, :],
+                    g_arr[i-X_seq_len:i, :],
                     # 计算持有期（y_seq_len）序列内的涨跌幅
                     # 此处是用数组除标量，所以得到的 y 先是一个 list 对象
-                    g_arr[i+X_seq_len+1:i+X_seq_len+y_seq_len, self.target] / g_arr[i+X_seq_len, self.target] -  1
+                    # 为什么额外 +1：因为计算的是次日的涨跌幅，当日的数据无用
+                    g_arr[i+1:i+y_seq_len, self.target] / g_arr[i, self.target] -  1
                     )
                 for g_arr in tqdm(
                     groups_arr,
                     desc='get features data ---->',
                     )
                 # 每一个 group 是一个股票/基金的历史指标集合趋势
-                for i in range(len(g_arr) - X_seq_len - y_seq_len)
+                for i in range(X_seq_len, len(g_arr) - y_seq_len)
                 if len(g_arr) >= X_seq_len + y_seq_len
                 ]
             if len(X_y_data_arr) == 0:
@@ -109,7 +124,24 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
             y_list = [y for _, y in X_y_data_arr]
             return X_arr_list, y_list
 
+        elif split_name == 'test':
+            ''''
+            "test" mode 用于生成包含原始数据的全量预测数据集
+            '''
+            logging.warning(f'-----> split name: "test" mode, 默认使用所有记录')
+            X_arr_list = [
+                g_arr[i-X_seq_len:i, :]
+                for g_arr in tqdm(groups_arr, desc='get features data -->',)
+                # 每一个 group 是一个股票/基金的历史指标集合趋势
+                for i in range(X_seq_len, len(g_arr))
+                if len(g_arr) >= X_seq_len # 此处是关键：test mode 不对 y_seq_len 进行限制
+            ]
+            return X_arr_list, None
         else:
+            '''
+            "pred" mode 用于迭代模型的预测
+            '''
+            logging.warning(f'-----> split name: "pred" mode, 默认只预测最后一条记录')
             X_arr_list = [
                 g_arr[-X_seq_len:, :]
                 for g_arr in tqdm(groups_arr, desc='get features data -->',)

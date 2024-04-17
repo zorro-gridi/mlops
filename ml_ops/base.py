@@ -177,14 +177,15 @@ class AbstractMLOps(metaclass=ABCMeta):
     def test_hist_model(self, reg_model_name, model_version='1', model_frame=None, update_interval=5):
         '''
         Desc:
+            该方法提供 BaseOps 测试历史注册模型的一般化方法，如果需要在应用中定制化，可以通过继承重写灵活满足实际需要。
             该方法实现以下功能：
-            1. 加载历史注册模型
-            2. 加载历史模型的最新数据输入
-            3. 计算历史模型损失函数
+                1. 加载历史注册模型
+                2. 加载历史模型的最新数据输入
+                3. 计算历史模型损失函数
             设计模式
             =======================================
-            ps1. 加载模型方面, mlflow已经实现了统一接口。
-            ps2. 加载测试数据集方面, 如果模型需要定制方法, 可以通过子类继承改写此方法！！
+                ps1. 加载模型方面: mlflow已经实现了统一接口。
+                ps2. 加载测试数据集方面: 如果模型需要定制方法, 可以通过子类继承改写此方法！！!
         Remark:
             1. log to mlflow number type option: ["float", "int", ...]
         Args:
@@ -245,8 +246,9 @@ class AbstractMLOps(metaclass=ABCMeta):
             4. 更新 mlops 类的 best_model_args, best_data_args
             5. 更新 mlops 类的 dataset_inst 类的属性
         Args:
-            model_frame: 模型框架, 需要在 ops 实现的 save_checkpoint 方法中指定默认值
-                例如 lstmops 中, model_frame=mlflow.pytorch
+            model_frame: 模型框架, 在 BaseOps 中为参数占位符。
+                在对应框架的 ops 实现的 save_checkpoint 方法中已经指定默认值
+                例如 LstmOps 中, model_frame=mlflow.pytorch
             loss_strategy:
                 'SUM': 使用 train + test 的损失综合比较, 可避免 train loss 过大的问题
                 'UNIT': 仅使用 test 损失比较
@@ -380,9 +382,10 @@ class AbstractMLOps(metaclass=ABCMeta):
         else:
             logging.warning(f'没有注册的历史模型...')
 
-        if tune_model_metric == 0:
-            logging.warning(f'新模型同时训练失败,请调整数据,重新训练......')
-            raise Exception
+        # TODO: 之前应该是误会了，评估指标可以为 0, 不代表训练失败
+        # if tune_model_metric == 0:
+        #     logging.warning(f'新模型同时训练失败,请调整数据,重新训练......')
+        #     raise Exception
 
         # 在 hist 步，将 dataset_inst 调整到了 hist 模式
         # 因此, 如果 tune 模式最优，则将 dataset_inst 更新为当前最优配置
