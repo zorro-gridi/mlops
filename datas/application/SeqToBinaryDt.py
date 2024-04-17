@@ -28,6 +28,7 @@ class SeqToBinaryDt(BaseSeqToClassDt):
         '''
         X_arr_list = super().categoric_engineering(raw_data, split_name)
 
+        # 原始写法过死，不够灵活，子类无法修改
         # # X_list = [np.median(MinMaxScaler().fit_transform(X), axis=1).reshape(1, -1) for X in X_arr_list]
         # X_list = [np.median(X, axis=1).reshape(1, -1) for X in X_arr_list]
         # X_cate = np.concatenate(X_list, axis=0)
