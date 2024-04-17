@@ -38,6 +38,11 @@ class SeqToBinaryDt(BaseSeqToClassDt):
 
 
     def categoric_processing(self, cate_arr_list):
+        '''
+        Desc:
+            categoric_engineering 方法的 postprocessing 方法，对数据进行后处理。
+            同样可以通过继承改写该方法
+        '''
         # X_list = [np.median(MinMaxScaler().fit_transform(X), axis=1).reshape(1, -1) for X in X_arr_list]
         X_list = [np.median(X, axis=1).reshape(1, -1) for X in cate_arr_list]
         X_cate = np.concatenate(X_list, axis=0)
