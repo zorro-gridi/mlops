@@ -89,6 +89,11 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
                         # 在反转/反弹点处，一次加满仓位
                         pfo_ratio_room = int(self.initial_amount * (pfo_ratio_guideline - pfo_ratio))
                         buy_num_shares = min(available_shares, pfo_ratio_room)
+                        logging.warning(f'''
+                            -------->
+                            到达反弹或反转的底部位置，加满策略仓位线 !
+                            当前仓位: {pfo_ratio}, 指导线: {pfo_ratio_guideline}, 加仓金额: {buy_num_shares}
+                            ''')
 
                     elif pfo_ratio_adj > 0 and not is_reverse_point:
                         # 补偿动态的仓位百分位缺口

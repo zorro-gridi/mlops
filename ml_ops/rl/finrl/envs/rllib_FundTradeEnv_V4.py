@@ -88,6 +88,7 @@ class FundQuantTradeEnv_V4(FundQuantTradeEnv_V1):
         # 更新仓位控制线
         pfo_ratio_guideline = self._set_pfo_ratio()
         pfo_ratio = self._get_pfo_ratio()
+        is_buying_accept = self.buying_signal(index)
 
         # 控制仓位
         if pfo_ratio > pfo_ratio_guideline:
@@ -101,7 +102,7 @@ class FundQuantTradeEnv_V4(FundQuantTradeEnv_V1):
             buy_amount = 0
 
             # 判断买入的条件:
-            if self.buying_signal(index):
+            if is_buying_accept:
                 # 基于单笔最大交易限制的买入策略
                 # logging.warning(f'acct cash list ----------> {self.acct_info["cash_asset"]}')
                 cash_asset = sum(self.acct_info['cash_asset'])

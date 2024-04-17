@@ -125,6 +125,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
         last_day = max(self.day-1, 0)
         plus_pfo_ratio = 0  # 补仓空间初始化
         plus_buy_amount = 0 # 最大可补的仓位初始化
+        is_buying_accept = self.buying_signal(index)
 
         if self.pfo_ratio_guide:
             last_pfo_ratio_guide = self.pfo_ratio_guide[last_day]
@@ -150,7 +151,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
             buy_amount = 0
 
             # 判断买入的条件:
-            if self.buying_signal(index):
+            if is_buying_accept:
                 # 基于单笔最大交易限制的买入策略
                 # logging.warning(f'acct cash list ----------> {self.acct_info["cash_asset"]}')
                 cash_asset = sum(self.acct_info['cash_asset'])
