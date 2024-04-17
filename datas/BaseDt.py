@@ -102,7 +102,10 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
     def load_test_data(self, data, inst_config=None):
         '''
         Desc:
+            data: 输入为 mlops 的 raw_data
             inst_config: 类实例化的参数; 可为历史模型参数, 或new model 的参数
+        Remark: Important !!! 设计模式
+            如果对于需要额外处理的数据集，可以通过继承重写的方式，来实现加载历史模型的测试数据集
         Remark: TODO
             1. 此处有个问题, 即加载历史模型评估损失，由于数据集被打乱，无法获取历史的损失数据，对比有可能失真
         '''

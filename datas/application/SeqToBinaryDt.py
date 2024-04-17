@@ -77,14 +77,14 @@ class SeqToBinaryDt(BaseSeqToClassDt):
         if split_name == 'train':
             return X, y
         else:
-            return X
+            return X, None
 
 
     def seq2class_fn(self, X_list, y_list):
         '''
         Desc:
             定义 seq2class 的具体逻辑。该方法可以通过继承重写
-        Guide:
+        Guide: Important !!!
             如果需要针对数据集进行定制化的处理，可以继续继承该类，修改对应的类方法
         Args:
             X_list, y_list: self.feature_engineering 返回的结果
@@ -92,5 +92,9 @@ class SeqToBinaryDt(BaseSeqToClassDt):
         # 将 X  concatenate & reshape
         X_arr_list = [MinMaxScaler().fit_transform(X).reshape(1, -1) for X in X_list]
         X = np.concatenate(X_arr_list, axis=0)
-        y = np.array([1 if np.max(y) >= self.y_threshold / 100 else 0 for y in y_list])
+
+        if y_list:
+            y = np.array([1 if np.max(y) >= self.y_threshold / 100 else 0 for y in y_list])
+        else:
+            y = None
         return X, y
