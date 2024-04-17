@@ -78,7 +78,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
         # 记录仓位控制红线
         self.pfo_ratio_guide = {}
-        # 初始化仓位记录
+        # 初始化仓位记录, 接着在 self.step 中每次也要先更新仓位
         self._set_pfo_ratio()
 
 
@@ -201,6 +201,9 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             2. 执行agent的买卖策略之前, 先执行账户自定义管理策略：检查账户的持仓收益率和清仓累计收益率，达到预期则清仓
             3. 判断是否清仓的条件后, 再执行agent的买卖策略
         '''
+        # 每一步先更新当前的仓位控制线
+        self._set_pfo_ratio()
+
         # MultiDiscrete start 参数在实际运行中不起作用，需要手动调节 actions
         actions = actions - 5
         # logging.warning(f'actions ---------------> {actions}')
@@ -671,3 +674,13 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
         sell_num_shares, sell_amount = _do_sell_normal()
         return sell_num_shares, sell_amount
+
+
+    def _caculate_holding_min_yield(self, buy_date):
+        '''
+        Desc:
+            计算每一笔买入持仓的最小预期收益率
+        Args:
+            buy_date: 买入日期
+        '''
+        pass

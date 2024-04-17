@@ -13,13 +13,14 @@ home_dir = '/'.join([dirname for dirname in dir_list[:dir_list.index('zorro')+1]
 env_path = '/'.join([dirname for dirname in dir_list[:dir_list.index('pycharm')+1]])
 sys.path.append(env_path)
 
-from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V3 import FundQuantTradeEnv_V3
+from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V2 import FundQuantTradeEnv_V2
 
 
 
-class FundQuantTradeEnv_V5(FundQuantTradeEnv_V3):
+class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
     '''
-    基于版本三的 FundTrader Env 第五版
+    基于版本二的 FundTrader Env 第五版
+    不能继承自版本三。因为版本三针对卖出进行超仓位主动降仓，会导致在反转点买入的仓位，立马遭到卖出
     '''
     def __init__(self, config: EnvContext):
         '''
