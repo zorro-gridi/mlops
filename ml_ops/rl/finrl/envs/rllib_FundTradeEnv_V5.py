@@ -48,6 +48,8 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
         plus_pfo_ratio = 0  # 补仓空间初始化
         plus_buy_amount = 0 # 最大可补的仓位初始化
 
+        is_buying_accept = self.buying_signal(index)
+
         if self.pfo_ratio_guide:
             last_pfo_ratio_guide = self.pfo_ratio_guide[last_day]
             plus_pfo_ratio = last_pfo_ratio_guide - pfo_ratio_guideline
@@ -73,7 +75,7 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
             buy_amount = 0
 
             # 判断买入的条件:
-            if self.buying_signal(index):
+            if is_buying_accept:
                 # 基于单笔最大交易限制的买入策略
                 # logging.warning(f'acct cash list ----------> {self.acct_info["cash_asset"]}')
                 cash_asset = sum(self.acct_info['cash_asset'])
@@ -88,7 +90,9 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
                     if is_reverse_point:
                         # 在反转/反弹点处，一次加满仓位
                         pfo_ratio_room = int(self.initial_amount * (pfo_ratio_guideline - pfo_ratio))
-                        buy_num_shares = min(available_shares, pfo_ratio_room)
+                        # 特殊：取账户现金和建议买入仓位的最小
+                        # 由反转预测模型可以知道，在底部预测的点比较稠密，通过分批买入可以买到更低的点，同时减少预测错误的风险成本，一举多得！！！
+                        buy_num_shares = int(min(cash_asset, pfo_ratio_room) / 3)
                         logging.warning(f'''
                             -------->
                             到达反弹或反转的底部位置，加满策略仓位线 !
@@ -104,6 +108,7 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
                     else:
                         action_adj = self.initial_amount * (pfo_ratio_guideline - pfo_ratio)
                         buy_num_shares = min(available_shares, action_adj)
+
 
                     if buy_num_shares >= self.per_unit_amount:
                         buy_amount = buy_num_shares * (1 - self.buy_cost_pct[index])

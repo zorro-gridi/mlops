@@ -141,9 +141,10 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             idx_pint_phase = self.current_data['closed_phase'].tolist()[index]
             idx_point_percentile = self.current_data['closed_phase_percentile'].tolist()[index]
 
-            # 反弹 / 反转点处一次性提高仓位, 但是仍然用百分位线加权
+            # 反弹 / 反转点处一次性提高仓位
             if self.current_data['is_reverse_point'].tolist()[index] == 1:
-                idx_pfo_ratio = ratio_strategy[idx_pint_phase] * (1 - idx_point_percentile)
+                idx_pfo_ratio = ratio_strategy[idx_pint_phase]
+
             else:
                 idx_pfo_ratio = round(
                     (ratio_strategy[sz_point_phase] * (1 - sz_point_percentile)
@@ -285,6 +286,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
         if not update_holdings:
             return 0
+
         holdings = update_holdings[fund_code]
         holdings = [
             s for s in holdings
@@ -705,4 +707,4 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         Args:
             buy_date: 买入日期
         '''
-        pass
+        is_reverse_point = self.data.loc[self.data['date'] == buy_date]['is_reverse_point']
