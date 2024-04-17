@@ -80,7 +80,7 @@ class SeqToBinaryDt(BaseSeqToClassDt):
             X = np.concatenate([X, X_cate], axis=1)
 
         # 将目标连续变量变为离散的分类变量
-        if split_name == 'train':
+        if split_name != 'pred':
             return X, y
         else:
             return X, None

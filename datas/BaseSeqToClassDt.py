@@ -137,6 +137,7 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
                 if len(g_arr) >= X_seq_len # 此处是关键：test mode 不对 y_seq_len 进行限制
             ]
             return X_arr_list, None
+
         else:
             '''
             "pred" mode 用于迭代模型的预测
