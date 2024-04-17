@@ -3,8 +3,11 @@ from torch.utils.data import (
     )
 
 
-
 class Custom_UnitVars_Datasets(Dataset):
+    '''
+    Desc:
+        时间序列单变量预测数据集
+    '''
     def __init__(self, data):
         self.data = data
 
@@ -18,6 +21,10 @@ class Custom_UnitVars_Datasets(Dataset):
 
 
 class Custom_MultiVars_Datasets(Dataset):
+    '''
+    Desc:
+        时间序列多步预测数据集
+    '''
     def __init__(self, data):
         self.data = data
 
