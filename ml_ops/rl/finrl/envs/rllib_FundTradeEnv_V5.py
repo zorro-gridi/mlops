@@ -3,6 +3,7 @@ from gymnasium import spaces
 import logging
 from ray.rllib.env import EnvContext
 
+
 import sys
 from pathlib import Path
 
@@ -12,102 +13,22 @@ home_dir = '/'.join([dirname for dirname in dir_list[:dir_list.index('zorro')+1]
 env_path = '/'.join([dirname for dirname in dir_list[:dir_list.index('pycharm')+1]])
 sys.path.append(env_path)
 
-from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V2 import FundQuantTradeEnv_V2
+from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V3 import FundQuantTradeEnv_V3
 
 
 
-class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
+class FundQuantTradeEnv_V5(FundQuantTradeEnv_V3):
     '''
-    基于版本二的 FundTrader Env 第三版
+    基于版本三的 FundTrader Env 第五版
     '''
     def __init__(self, config: EnvContext):
         '''
         Update 更新如下:
-            1. 继续更新 selling 策略
-                1.1 当仓位策略提示减仓时，如果策略没有卖出行动，无论持仓是否盈利，应卖出部分持仓, 主动降低仓位。
-                    主要解决问题：因为仓位控制原因，当仓位达到控制线之后，系统规定无法继续加仓，导致策略无法继续训练
-            2. 更新买入策略
-                2.1 当仓位策略线转换到提示加仓时, 主动补偿仓位的差额。TODO: 差额的确定方式还可以优化
-        Remark:
-            目前的仓位管理策略比较主观，需要建模决策
+            1. 买入时，如果碰到反弹、反转点，立即加满到仓位知道线，进行一次性补仓
         Conclusion:
-            1. 交易频率很高，手续费占比大
-            2. 此策略依赖有效的仓位策略配合，待完善了量化仓位策略，再尝试...
+            待实验结论...
         '''
         super().__init__(config)
-        self.action_space = spaces.MultiDiscrete([6] * self.stock_dim)
-
-
-    def _sell_stock(self, index, action):
-        '''
-        Desc:
-            主动卖出超过仓位红线的多余仓位
-        '''
-        stock_name = self.current_data['tic'].to_list()[index]
-        close_price = self.current_data['close'].to_list()[index]
-        # 当前的剩余累计持仓
-        # cash_asset = sum(self.acct_info['cash_asset'])
-        stock_shares, _ = self._get_acct_pfo_shares()
-        # logging.warning(f'当前账户持仓 ---------------> 现金: {cash_asset}, 份额: {stock_shares}')
-
-        # 1. 当前可卖出的最大盈利持仓
-        max_profit_shares = self._get_max_yield_shares(stock_name, min_yield=self.min_yield)
-        # logging.warning(f'当前盈利持仓 ---------------> {max_profit_shares}')
-
-        # check if the stock is able to sell, for simlicity we just add it in techical index
-        # 也就是说，对应的股票是否可以交易，在技术指标中内置了。因为可能有些股票当日停牌，不可交易
-        def _do_sell_normal():
-            '''
-            Desc:
-                定义卖出交易的前提逻辑，例如：账户是否还有持仓？股票当前是否可以交易？
-            '''
-            sell_num_shares = 0 # 卖出份额，默认等于 sell_amount，输出后再转换，不影响
-            sell_amount = 0
-
-            last_day = max(self.day-1, 0)
-            over_pfo_ratio = 0
-            pfo_ratio_guide = self._set_pfo_ratio()
-            pfo_ratio_act = self._get_pfo_ratio()
-
-            if self.pfo_ratio_guide:
-                last_pfo_ratio_guide = self.pfo_ratio_guide[last_day]
-                # 方案一: 实际仓位超过仓位策略，即减仓
-                over_pfo_ratio = round(pfo_ratio_act - pfo_ratio_guide, 3)
-                # 方案二: 仓位策略线下移，才减仓
-                # over_pfo_ratio = round(last_pfo_ratio_guide - pfo_ratio_guide, 3)
-
-            # 判断卖出的条件: 刚好与买入相反
-            if self.selling_signal(index):
-                # 判断当前是否有该股票的持仓 & 股价是否大于 0
-                if max_profit_shares > 0 and stock_shares > 0:
-                    logging.warning(f'action vs max_profit: {abs(action)}, {max_profit_shares:0.2f}')
-                    sell_num_shares = max_profit_shares
-
-                    if sell_num_shares > 0:
-                        # 计算卖出可获得的金额，已经考虑交易费用
-                        sell_amount = sell_num_shares
-
-                # 如果策略不建议卖出, 则主动降低仓位
-                # 在仓位策略转换的时候，如果当前的仓位策略提示减仓，主动降低仓位
-                if sell_amount == 0 and over_pfo_ratio >= 0.05:
-                    decrease_pfo_amount = round(self.initial_amount * over_pfo_ratio, 2)
-                    sell_amount =  min(decrease_pfo_amount, stock_shares)
-                    logging.warning(f'''
-                        -------->
-                        当前建议仓位: {pfo_ratio_guide}, 上次建议仓位: {last_pfo_ratio_guide}
-                        当前实际仓位: {pfo_ratio_act}, 当前超建议仓位: {over_pfo_ratio}
-                        ''')
-                    logging.warning(f'当前仓位过高，主动减仓 ----> {over_pfo_ratio},  decrease_pfo_amount: {sell_amount}')
-
-                if sell_amount > 0:
-                    self.acct_info['pfo_holding'][stock_name].append(-sell_num_shares)
-                    self.acct_info['pfo_price'][stock_name].append(close_price)
-                    return_ratio = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
-
-            return sell_num_shares, sell_amount
-
-        sell_num_shares, sell_amount = _do_sell_normal()
-        return sell_num_shares, sell_amount
 
 
     def _buy_stock(self, index, action):
@@ -132,7 +53,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
             plus_buy_amount = round(self.initial_amount * plus_pfo_ratio, 1)
 
         # 如果当前已到仓位指导线，则停止加仓
-        if pfo_ratio > pfo_ratio_guideline:
+        if pfo_ratio >= pfo_ratio_guideline:
             logging.warning(f'''
                 ------->
                 trade date: {self._get_date()}
@@ -142,6 +63,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
             return 0, 0
 
         stock_name = self.current_data.tic.to_list()[index]
+        is_reverse_point = self.current_data['is_reverse_point'].tolist()[index] == 1
         # 基金使用收盘涨跌幅，收盘价在基金的模拟环境中没有实际使用
         # close_price = self.current_data.close.to_list()[index]
 
@@ -162,10 +84,16 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                     # 控仓技术: 加到策略的仓位线，最大可补的仓位
                     pfo_ratio_adj = pfo_ratio_guideline - pfo_ratio - action / self.initial_amount
                     # 仓位补偿
-                    if pfo_ratio_adj > 0:
+                    if is_reverse_point:
+                        # 在反转/反弹点处，一次加满仓位
+                        pfo_ratio_room = int(self.initial_amount * (pfo_ratio_guideline - pfo_ratio))
+                        buy_num_shares = min(available_shares, pfo_ratio_room)
+
+                    elif pfo_ratio_adj > 0 and not is_reverse_point:
                         # 补偿动态的仓位百分位缺口
                         max_plus_amount = min(self.initial_amount * pfo_ratio_adj, plus_buy_amount)
                         buy_num_shares = min(available_shares, action + max_plus_amount)
+
                     # pfo_ratio_adj < 0, 仓位压缩，表示加仓会超仓位线，将仓位压缩到仓位线
                     else:
                         action_adj = self.initial_amount * (pfo_ratio_guideline - pfo_ratio)
@@ -202,5 +130,6 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
 
         buy_num_shares, buy_amount = _do_buy()
         return buy_num_shares, buy_amount
+
 
 # %%

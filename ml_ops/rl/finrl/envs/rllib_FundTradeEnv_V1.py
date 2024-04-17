@@ -113,32 +113,47 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
     def _set_pfo_ratio(self):
         '''
-        Desc: Importan!
+        Desc: Importan !!!
             账户的仓位控制策略。基于上证指数的相对牛熊点位判断
             主要更新点:
             1. 添加仓位记录
         Features:
             1. 根据指数和大盘的牛熊点位，动态更新仓位线
             2. 根据点位线的相对百分数，作为调仓的加权百分比。这样做的好处是让仓位管理线控制的更平滑，避免断崖，导致突然无法加、减仓，策略无法学习
+        TODO: Important !!!
+            当进行多指数定投时，每个指数对应的仓位不同，在买入时不知道如何分配实际的买入金额
         '''
         ratio_strategy = {
             0: 0.8,
             1: 0.5,
             2: 0.3,
             }
-        sz_point_phase = self.current_data['sz_closed_phase'].unique()[0]
-        sz_point_percentile = self.current_data['sz_closed_phase_percentile'].unique()[0]
 
-        idx_pint_phase = self.current_data['closed_phase'].unique()[0]
-        idx_point_percentile = self.current_data['closed_phase_percentile'].unique()[0]
+        pfo_ratio_guideline = 0
+        # 兼容多指数持仓策略
+        for index in range(self.stock_dim):
+            sz_point_phase = self.current_data['sz_closed_phase'].tolist()[index]
+            sz_point_percentile = self.current_data['sz_closed_phase_percentile'].tolist()[index]
 
-        pfo_ratio_guideline = round(
-            (ratio_strategy[sz_point_phase] * (1 - sz_point_percentile)
-            + ratio_strategy[idx_pint_phase] * (1 - idx_point_percentile)
-            ) / 2, 3)
+            idx_pint_phase = self.current_data['closed_phase'].tolist()[index]
+            idx_point_percentile = self.current_data['closed_phase_percentile'].tolist()[index]
+
+            # 反弹 / 反转点处一次性提高仓位, 但是仍然用百分位线加权
+            if self.current_data['is_reverse_point'].tolist()[index] == 1:
+                idx_pfo_ratio = ratio_strategy[idx_pint_phase] * (1 - idx_point_percentile)
+            else:
+                idx_pfo_ratio = round(
+                    (ratio_strategy[sz_point_phase] * (1 - sz_point_percentile)
+                    + ratio_strategy[idx_pint_phase] * (1 - idx_point_percentile)
+                    ) / 2, 3)
+
+            # 使用持仓指数中建议的最大仓位
+            if idx_pfo_ratio > pfo_ratio_guideline:
+                pfo_ratio_guideline = idx_pfo_ratio
+
         # 记录仓位
         self.pfo_ratio_guide[self.day] = pfo_ratio_guideline
-        return pfo_ratio_guideline
+        return round(pfo_ratio_guideline, 3)
 
 
     def _get_acct_pfo_shares(self):
