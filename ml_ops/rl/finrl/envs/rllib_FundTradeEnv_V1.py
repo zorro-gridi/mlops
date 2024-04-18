@@ -278,6 +278,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             min_yield: 最小盈利阈值
         Return:
             max_yield_shares: 当前可卖出的已盈利的最大持仓数量
+        Release log:
+            1. 2024-04-18: 将每一笔持仓的最小预期收益率改成 _caculate_holding_min_yield 函数动态计算
         TODO:
             持仓的最大止盈策略写的太死，低位买入的持仓可以适度提高止盈限制
         '''
@@ -290,7 +292,10 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         holdings = update_holdings[fund_code]
         holdings = [
             s for s in holdings
-            if s['soldout'] == 0 and s['yield'] >= min_yield
+            if s['soldout'] == 0
+                # and s['yield'] >= min_yield
+                # 动态最小期望收益率
+                and s['yield'] >= self._caculate_holding_min_yield(fund_code, s['buy_date'])
             ]
 
         if holdings:
@@ -700,11 +705,34 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         return sell_num_shares, sell_amount
 
 
-    def _caculate_holding_min_yield(self, buy_date):
+    def _caculate_holding_min_yield(self, fund_code, buy_date):
         '''
         Desc:
-            计算每一笔买入持仓的最小预期收益率, 特别是对于在反弹、反转底部买入的持仓，需要扩大期望收益率
+            计算每一笔买入持仓的最小预期收益率, 特别是对于在反弹、反转底部买入的持仓，需要扩大期望收益率。
+            本预期收益策略仅针对波动性的指数设计，对于指数的单边行情不适用
         Args:
+            fund_code: 交易基金代码，股票代码
             buy_date: 买入日期
+        Release log:
+            1. 2024-04-18: 新增
         '''
-        is_reverse_point = self.data.loc[self.data['date'] == buy_date]['is_reverse_point']
+        is_code = self.df['tic'] == fund_code
+        is_date = self.df['date'] == buy_date
+        fund_data = self.df.loc[(is_code & is_date)]
+
+        is_reverse_point = fund_data['is_reverse_point'].max()
+        idx_percentile = fund_data['closed_phase_percentile'].max()
+        idx_phase = fund_data['closed_phase'].max()
+
+        reverse_rate = 0.06
+        phase_exp_yield = {
+            0: 2 / 100,
+            1: 1 / 100,
+            2: 0.5 / 100,
+            }
+
+        if is_reverse_point == 1:
+            return reverse_rate
+        else:
+            exp_yield = min(round(phase_exp_yield[idx_phase] * (1 / idx_percentile), 3), reverse_rate)
+            return exp_yield
