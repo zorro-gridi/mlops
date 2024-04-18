@@ -726,13 +726,18 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
         reverse_rate = 0.06
         phase_exp_yield = {
-            0: 2 / 100,
-            1: 1 / 100,
-            2: 0.5 / 100,
+            0: [2 / 100, 4 / 100],
+            1: [1 / 100, 2 / 100],
+            2: [0.5 / 100, 1 / 100],
             }
 
         if is_reverse_point == 1:
             return reverse_rate
         else:
-            exp_yield = min(round(phase_exp_yield[idx_phase] * (1 / idx_percentile), 3), reverse_rate)
+            clip_yield = phase_exp_yield[idx_phase][1]
+            if idx_percentile > 0:
+                exp_yield = phase_exp_yield[idx_phase][0] * (1 / idx_percentile)
+                exp_yield = round(min(exp_yield, clip_yield), 3)
+            else:
+                exp_yield = clip_yield
             return exp_yield
