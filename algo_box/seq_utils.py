@@ -18,6 +18,8 @@ def phase_series_point(data: Union[pd.Series, list, np.array], start_point, n_cl
     Return:
         phase_point: 序列中每个点对应的聚类类别
         sorted_label_centers: 经过排序的族类的中心点, 与phase_point匹配
+    TODO:
+        1. 是否需要动态计算牛熊分位线?
     '''
     # 用于聚类分组的序列
     point_kmeans_data = [
@@ -29,14 +31,14 @@ def phase_series_point(data: Union[pd.Series, list, np.array], start_point, n_cl
         KMeans(n_clusters=n_clusters, n_init=2).fit(point_datas)
         for point_datas in point_kmeans_data]
 
-    # 取每组的最后一点标签作为结果。因为，参照的是近期的整体数据
+    # 取每组的最后 1 个点标签作为结果。因为，参照的是近期的整体数据
     k_labels = np.array([eatimator.labels_[-1] for eatimator in eatimator_list])
     assert len(data) - start_point == len(k_labels)
     # 获取【原始的】每个聚类族的中心点
     label_centers = np.array([eatimator.cluster_centers_.squeeze() for eatimator in eatimator_list])
-
-    # 获取取目标点位的【原始的】聚类标签
+    # 获取【原始的】聚类标签的中心点
     point_label_center = [center[label] for center, label in zip(label_centers, k_labels)]
+
     # 重排序后的标签中心点
     sorted_label_centers = np.array([np.sort(center) for center in label_centers])
     # 重新【统一分配】聚类标签，满足牛熊平的固定标签类别
