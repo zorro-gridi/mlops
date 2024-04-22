@@ -85,6 +85,10 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         # 反弹，反转点的起始位置
         self.reverse_point_day = -np.inf
 
+        # verbose 辅助信息
+        self.verbose = config.get('verbose', 0)
+
+
     def _update_acct_holdings_debit_yield(self):
         ''''
         Desc:
@@ -511,12 +515,13 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 self.cost += selling_cost
                 self.trades += 1
 
-                logging.warning(f'''
-                    ---------->
-                    卖出日期: {selling_date}, 卖出份额: {selling_shares:0.2f}, 回收现金: {selling_return:0.2f}, 卖出手续费: {selling_cost:0.2f}
-                    卖出收益率: {return_ratio:0.4f}, 仓位: {self._get_pfo_ratio():0.2f}, 仓位控制线: {self._set_pfo_ratio():0.2f}
-                    trades: {self.trades}
-                    ''')
+                if self.verbose == 1:
+                    logging.warning(f'''
+                        ---------->
+                        卖出日期: {selling_date}, 卖出份额: {selling_shares:0.2f}, 回收现金: {selling_return:0.2f}, 卖出手续费: {selling_cost:0.2f}
+                        卖出收益率: {return_ratio:0.4f}, 仓位: {self._get_pfo_ratio():0.2f}, 仓位控制线: {self._set_pfo_ratio():0.2f}
+                        trades: {self.trades}
+                        ''')
             return return_ratio
         else:
             return 0
