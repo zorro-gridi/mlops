@@ -92,7 +92,8 @@ class FundQuantTradeEnv_V4(FundQuantTradeEnv_V1):
 
         # 控制仓位
         if pfo_ratio > pfo_ratio_guideline:
-            logging.warning(f'-------> 当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!')
+            if self.verbose == 1:
+                logging.warning(f'-------> 当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!')
             return 0, 0
 
         stock_name = self.current_data.tic.to_list()[index]

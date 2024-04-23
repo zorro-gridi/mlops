@@ -57,12 +57,13 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
 
         # 如果当前已到仓位指导线，则停止加仓
         if pfo_ratio >= pfo_ratio_guideline:
-            logging.warning(f'''
-                ------->
-                trade date: {self._get_date()}
-                指数牛熊位置: {self.current_data['closed_phase'].max()}, 百分位: {self.current_data['closed_phase_percentile'].max()}
-                当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!
-                ''')
+            if self.verbose == 1:
+                logging.warning(f'''
+                    ------->
+                    trade date: {self._get_date()}
+                    指数牛熊位置: {self.current_data['closed_phase'].max()}, 百分位: {self.current_data['closed_phase_percentile'].max()}
+                    当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!
+                    ''')
             return 0, 0
 
         stock_name = self.current_data.tic.to_list()[index]
@@ -93,11 +94,13 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
                         # 特殊：取账户现金和建议买入仓位的最小
                         # 由反转预测模型可以知道，在底部预测的点比较稠密，通过分批买入可以买到更低的点，同时减少预测错误的风险成本，一举多得！！！
                         buy_num_shares = int(min(cash_asset, pfo_ratio_room) / 3)
-                        logging.warning(f'''
-                            -------->
-                            到达反弹或反转的底部位置，加满策略仓位线 !
-                            当前仓位: {pfo_ratio}, 指导线: {pfo_ratio_guideline}, 加仓金额: {buy_num_shares}
-                            ''')
+
+                        if self.verbose == 1:
+                            logging.warning(f'''
+                                -------->
+                                到达反弹或反转的底部位置，加满策略仓位线 !
+                                当前仓位: {pfo_ratio}, 指导线: {pfo_ratio_guideline}, 加仓金额: {buy_num_shares}
+                                ''')
 
                     elif pfo_ratio_adj > 0 and not is_reverse_point:
                         # 补偿动态的仓位百分位缺口

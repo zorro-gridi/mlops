@@ -80,7 +80,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
             if self.selling_signal(index):
                 # 判断当前是否有该股票的持仓 & 股价是否大于 0
                 if max_profit_shares > 0 and stock_shares > 0:
-                    logging.warning(f'action vs max_profit: {abs(action)}, {max_profit_shares:0.2f}')
+                    # logging.warning(f'action vs max_profit: {abs(action)}, {max_profit_shares:0.2f}')
                     sell_num_shares = max_profit_shares
 
                     if sell_num_shares > 0:
@@ -134,12 +134,13 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
 
         # 如果当前已到仓位指导线，则停止加仓
         if pfo_ratio > pfo_ratio_guideline:
-            logging.warning(f'''
-                ------->
-                trade date: {self._get_date()}
-                指数牛熊位置: {self.current_data['closed_phase'].max()}, 百分位: {self.current_data['closed_phase_percentile'].max()}
-                当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!
-                ''')
+            if self.verbose == 1:
+                logging.warning(f'''
+                    ------->
+                    trade date: {self._get_date()}
+                    指数牛熊位置: {self.current_data['closed_phase'].max()}, 百分位: {self.current_data['closed_phase_percentile'].max()}
+                    当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!
+                    ''')
             return 0, 0
 
         stock_name = self.current_data.tic.to_list()[index]
@@ -195,7 +196,6 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                         self.cost += buy_fee
                         # 更新交易频次，不能写在 step 函数中
                         self.trades += 1
-
                         # logging.warning(f"acct info ---> {self.acct_info['pfo_shares_redeem']}")
 
             # 返回买入的份额数量

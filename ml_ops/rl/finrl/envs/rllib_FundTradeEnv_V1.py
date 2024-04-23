@@ -587,7 +587,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         is_buying_accept = self.buying_signal(index)
 
         if pfo_ratio > pfo_ratio_guideline:
-            logging.warning(f'-------> trade date: {self._get_date()}, 当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!')
+            if self.verbose == 1:
+                logging.warning(f'-------> trade date: {self._get_date()}, 当前仓位: {pfo_ratio}, 已达到仓位控制线 {pfo_ratio_guideline}, 暂停加仓 !!!')
 
             # 取消早停，不合理，策略必须一直进行下去
             # self.stop_buying += 1
