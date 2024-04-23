@@ -548,9 +548,11 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         _pred_points = self.current_data.y_pred.tolist()[index]
 
         return any([
-            # 1. 抄底 & 2. 追涨
-            _mark_point <= _pred_points * self.temperature,
-            # 反弹 / 反转的地步也可以买入
+            # 1. 抄底
+            _mark_point <= _pred_points * self.temperature and _mark_point < 0,
+            # 2. 追涨
+            _mark_point <= _pred_points * (1 - self.temperature) and _mark_point > 0,
+            # 3. 反弹 / 反转的地步也可以买入
             self.current_data['is_reverse_point'].tolist()[index] == 1
             ])
 
@@ -567,8 +569,11 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
         # 判断卖出的条件: 刚好与买入相反
         return all([
-            # 1. 止盈 & 2. 杀跌
-            _mark_point >= _pred_points * self.temperature,
+            # 1. 止盈
+            _mark_point >= _pred_points * self.temperature and _mark_point > 0,
+            # 2. 杀跌
+            _mark_point >= _pred_points * (1 - self.temperature) and _mark_point < 0,
+            # 3. 反弹、反转期间不卖出
             self.day - self.reverse_point_day >= 3,
             ])
 
