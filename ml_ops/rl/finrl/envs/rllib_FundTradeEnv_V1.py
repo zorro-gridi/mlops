@@ -703,7 +703,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                         # 卖出股票，仓位减少
                         self.acct_info['pfo_holding'][stock_name].append(-sell_num_shares)
                         self.acct_info['pfo_price'][stock_name].append(close_price)
-                        return_ratio = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
+                        _ = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
 
             return sell_num_shares, sell_amount
 
