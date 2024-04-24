@@ -27,6 +27,7 @@ def phase_series_point(data: Union[pd.Series, list, np.array], start_point, n_cl
         for i in range(len(data)-start_point)]
 
     # 只能在循环中实例化
+    # point_datas 中不能有 NaN 值
     eatimator_list = [
         KMeans(n_clusters=n_clusters, n_init=2).fit(point_datas)
         for point_datas in point_kmeans_data]
