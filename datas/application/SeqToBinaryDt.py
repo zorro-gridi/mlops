@@ -63,7 +63,7 @@ class SeqToBinaryDt(BaseSeqToClassDt):
             raw_data = self.preprocess_func(raw_data)
 
         # base dt class return base X, y datas
-        X_arr_list, y_list = super().feature_engineering(raw_data, split_name)
+        X_arr_list, y_list = super().feature_engineering(raw_data, split_name=split_name)
 
         # # 将 X  concatenate & reshape
         # X_arr_list = [MinMaxScaler().fit_transform(X).reshape(1, -1) for X in X_arr_list]
@@ -71,6 +71,7 @@ class SeqToBinaryDt(BaseSeqToClassDt):
         # y = np.array([1 if np.max(y) >= self.y_threshold / 100 else 0 for y in y_list])
 
         # 使用单独定义 seq2class_fn 类方法，方便子类继承重写
+        # 将目标连续变量变为离散的分类变量
         X, y = self.seq2class_fn(X_arr_list, y_list)
 
         # 如果有分类变量，则一起concat
@@ -79,7 +80,6 @@ class SeqToBinaryDt(BaseSeqToClassDt):
             # 将汇聚后形成的分类变量按列 stack
             X = np.concatenate([X, X_cate], axis=1)
 
-        # 将目标连续变量变为离散的分类变量
         if split_name != 'pred':
             return X, y
         else:
@@ -89,7 +89,7 @@ class SeqToBinaryDt(BaseSeqToClassDt):
     def seq2class_fn(self, X_list, y_list):
         '''
         Desc:
-            定义 seq2class 的具体逻辑。该方法可以通过继承重写
+            定义 seq2class 的具体逻辑, 主要与 self.y_threshold 相关。该方法可以通过继承重写
         Guide: Important !!!
             如果需要针对数据集进行定制化的处理，可以继续继承该类，修改对应的类方法
         Args:

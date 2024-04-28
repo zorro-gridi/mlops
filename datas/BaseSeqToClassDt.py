@@ -64,6 +64,7 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
             ]
             return X_arr_list
 
+        # split_name: pred
         else:
             X_arr_list = [
                 g_arr[-X_seq_len:, :]
@@ -99,6 +100,7 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
             '''
             "train" mode 用于训练模型
             '''
+            logging.warning(f'-----> split name: "train" mode')
             X_y_data_arr = [
                 (
                     g_arr[i-X_seq_len:i, :],
@@ -146,5 +148,6 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
             X_arr_list = [
                 g_arr[-X_seq_len:, :]
                 for g_arr in tqdm(groups_arr, desc='get features data -->',)
+                if len(g_arr) >= X_seq_len # 仍要保证 g_arr 的长度大于等于要求输入序列的长度
             ]
             return X_arr_list, None
