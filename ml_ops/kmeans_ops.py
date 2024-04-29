@@ -102,10 +102,13 @@ class KmeansOps(AbstractMLOps):
 
     def test_hist_model(self, reg_model_name, model_version='1', model_frame=None):
         '''
-        此处重写父类的 test_hist_model 方法
+        Desc:
+            此处重写父类的 test_hist_model 方法
         '''
         hist_model = model_frame.load_model(f"models:/{reg_model_name}/{model_version}")
-        hist_model_config = mlflow_utils.load_register_model_args(reg_model_name, model_version)
+        hist_model_config = self.load_hist_model_config(reg_model_name, model_version)
+        trianing_loss = hist_model_config['training_loss']
+
         # 更新数据参数属性为历史参数
         self.dataset_inst.set_attr(hist_model_config)
         X, y = self.dataset_inst.feature_engineering(self.raw_data)
@@ -113,7 +116,7 @@ class KmeansOps(AbstractMLOps):
         pred_labels = hist_model.predict(X)
         best_labels_ratio = self.postprocess_func(pred_labels, y)
         hist_eval_metric = self.model_task.custom_loss_func.caculate(best_labels_ratio)
-        return hist_eval_metric
+        return trianing_loss, hist_eval_metric
 
 
     def save_checkpoint(self, *args, **kwargs):

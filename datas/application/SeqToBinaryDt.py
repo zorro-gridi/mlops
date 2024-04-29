@@ -45,6 +45,7 @@ class SeqToBinaryDt(BaseSeqToClassDt):
             同样可以通过继承改写该方法
         '''
         # X_list = [np.median(MinMaxScaler().fit_transform(X), axis=1).reshape(1, -1) for X in X_arr_list]
+        logging.warning(f'将使用默认的分类变量预处理函数 categoric_processing, 如果需要更新请通过继承重写该方法')
         X_list = [np.median(X, axis=1).reshape(1, -1) for X in cate_arr_list]
         X_cate = np.concatenate(X_list, axis=0)
         return X_cate
@@ -57,6 +58,8 @@ class SeqToBinaryDt(BaseSeqToClassDt):
         Args:
             raw_data: 原始数据
             split_name: 返回的数据集的名称
+        Return:
+            X, y: tuple, 样本与标签的元组
         '''
         # 如果预处理函数不为空，则先对原始数据进行数据预处理
         if self.preprocess_func is not None:

@@ -72,6 +72,7 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
                     groups_arr,
                     desc='get categoric features data -->',
                     )
+                if len(g_arr) >= X_seq_len # 仍要保证 g_arr 的长度大于等于要求输入序列的长度
                 ]
             return X_arr_list
 
