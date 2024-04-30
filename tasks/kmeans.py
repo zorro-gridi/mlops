@@ -122,3 +122,5 @@ class kmeans_task(AbstractModelFactory):
             logging.warning(f'cluster label: {c_label}, truth ratio: {truth_ratio:,.5f}, samples: {cluster_lens}')
 
         return pred_labels, eval_result
+
+

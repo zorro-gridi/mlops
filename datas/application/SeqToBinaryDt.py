@@ -68,14 +68,9 @@ class SeqToBinaryDt(BaseSeqToClassDt):
         # base dt class return base X, y datas
         X_arr_list, y_list = super().feature_engineering(raw_data, split_name=split_name)
 
-        # # 将 X  concatenate & reshape
-        # X_arr_list = [MinMaxScaler().fit_transform(X).reshape(1, -1) for X in X_arr_list]
-        # X = np.concatenate(X_arr_list, axis=0)
-        # y = np.array([1 if np.max(y) >= self.y_threshold / 100 else 0 for y in y_list])
-
         # 使用单独定义 seq2class_fn 类方法，方便子类继承重写
         # 将目标连续变量变为离散的分类变量
-        X, y = self.seq2class_fn(X_arr_list, y_list)
+        X, y = self.seq2class_fn(X_arr_list, y_list, split_name=split_name)
 
         # 如果有分类变量，则一起concat
         if self.categoric_features:
@@ -89,7 +84,7 @@ class SeqToBinaryDt(BaseSeqToClassDt):
             return X, None
 
 
-    def seq2class_fn(self, X_list, y_list):
+    def seq2class_fn(self, X_list, y_list, split_name='train'):
         '''
         Desc:
             定义 seq2class 的具体逻辑, 主要与 self.y_threshold 相关。该方法可以通过继承重写
@@ -97,12 +92,13 @@ class SeqToBinaryDt(BaseSeqToClassDt):
             如果需要针对数据集进行定制化的处理，可以继续继承该类，修改对应的类方法
         Args:
             X_list, y_list: self.feature_engineering 返回的结果
+            split_name: 数据集名称
         '''
         # 将 X  concatenate & reshape
         X_arr_list = [MinMaxScaler().fit_transform(X).reshape(1, -1) for X in X_list]
         X = np.concatenate(X_arr_list, axis=0)
 
-        if y_list:
+        if split_name != 'pred':
             y = np.array([1 if np.max(y) >= self.y_threshold / 100 else 0 for y in y_list])
         else:
             y = None

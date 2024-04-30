@@ -83,6 +83,10 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
             raw_data: pd.Dataframe grouper 对象
             split_name: 数据集的名称, Union['train', 'test', 'pred']
         '''
+        if split_name not in ['train', 'test', 'pred']:
+            logging.warning(f'{split_name}, No define dataset name error !')
+            raise Exception
+
         # 固定灿哥参数
         X_seq_len = self.X_seq_len
         y_seq_len = self.y_seq_len
@@ -116,10 +120,11 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
                     )
                 # 每一个 group 是一个股票/基金的历史指标集合趋势
                 for i in range(X_seq_len, len(g_arr) - y_seq_len)
+                # 保证 g_arr >= X seq + y seq 的长度
                 if len(g_arr) >= X_seq_len + y_seq_len
                 ]
             if len(X_y_data_arr) == 0:
-                logging.warning(f'\n=======> 序列分块数为零！请增大样本数量，或者减少分块序列的长度')
+                logging.warning(f'\n======> 序列分块数为零！请增大样本数量，或者减少分块序列的长度')
                 raise
 
             logging.warning(f'X_y_data_arr length -----------------------> {len(X_y_data_arr)}')

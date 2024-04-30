@@ -16,7 +16,6 @@ from typing import List, Callable
 import torch
 
 
-
 class Iterator(xgb.DataIter):
     def __init__(self, train_data: tuple, num_per_iter=1e4):
         self._x_train, self._y_train = train_data

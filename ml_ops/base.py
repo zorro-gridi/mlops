@@ -205,7 +205,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         else:
             # load_test_data 加载历史模型的测试集
             # 加载 dataset hist cnofig, 更新当前的 dataset_inst 为历史模式
-            logging.warning(f'----------> 历史模型刚注册已超过期，最新数据重新测试')
+            logging.warning(f'----------> 历史模型刚注册已过期，最新数据重新测试')
             test_data = self.dataset_inst.load_test_data(self.raw_data, inst_config=config)
 
         # 历史模型不用更新参数，不用返回 model signature, 所以 params_config 可为 None
