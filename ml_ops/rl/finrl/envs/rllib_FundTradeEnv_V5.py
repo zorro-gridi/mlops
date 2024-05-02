@@ -112,7 +112,6 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
                         action_adj = self.initial_amount * (pfo_ratio_guideline - pfo_ratio)
                         buy_num_shares = min(available_shares, action_adj)
 
-
                     if buy_num_shares >= self.per_unit_amount:
                         buy_amount = buy_num_shares * (1 - self.buy_cost_pct[index])
                         buy_fee = buy_num_shares * self.buy_cost_pct[index]
