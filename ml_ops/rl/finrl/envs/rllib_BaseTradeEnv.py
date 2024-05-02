@@ -343,9 +343,9 @@ class BaseTradeEnv(gym.Env):
             argsort_actions = np.argsort(actions)
             # 获取卖出的清单
             # .shape[0] 取交易卖出的股票数量, 因为 actions 本身只有一维， 即表示持仓股票中每个股票的加减仓数量
-            sell_index = argsort_actions[: np.where(actions < 0)[0].shape[0]]
+            sell_index = argsort_actions[:np.where(actions < 0)[0].shape[0]]
             # 获取买入的清单
-            buy_index = argsort_actions[::-1][: np.where(actions > 0)[0].shape[0]]
+            buy_index = argsort_actions[::-1][:np.where(actions > 0)[0].shape[0]]
 
             # 这里交易一组股票
             for index in sell_index:

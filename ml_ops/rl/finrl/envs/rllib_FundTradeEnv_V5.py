@@ -20,7 +20,7 @@ from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V2 import FundQuantTradeEnv_V
 class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
     '''
     基于版本二的 FundTrader Env 第五版
-    不能继承自版本三。因为版本三针对卖出进行超仓位主动降仓，会导致在反转点买入的仓位，立马遭到卖出
+    不能继承自版本三。因为版本三针对卖出进行了超仓位主动降仓，可能会导致在反转点买入的仓位，立马遭到卖出
     '''
     def __init__(self, config: EnvContext):
         '''

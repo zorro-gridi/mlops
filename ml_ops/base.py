@@ -7,7 +7,7 @@ import numpy as np
 from copy import copy
 
 from mlops.utils import mlflow_utils
-import mlflow
+# import mlflow
 from mlflow.models import infer_signature
 from mlflow.client import MlflowClient
 import logging
@@ -315,7 +315,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         # 首先启动 mlflow 的 session
         # =============================================
         run_name = f'{model_arch}_best_model_and_config'
-        setup_mlflow(run_name=run_name, **self.mlflow_config,)
+        mlflow = setup_mlflow(run_name=run_name, **self.mlflow_config,)
         mlflow_client = MlflowClient(mlflow.get_tracking_uri())
 
         global data_util_map
@@ -491,7 +491,9 @@ class AbstractMLOps(metaclass=ABCMeta):
         mlflow_client.set_registered_model_tag(
             reg_model_name, f'training_loss', str(round(training_loss, 6)))
 
+        # 结束 mlflow session
         mlflow.end_run()
+
         logging.warning(f'''
             {model_arch} model test {metric_name}: {tune_model_metric:,.3f}
             --> 使用当前模型推理......

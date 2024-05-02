@@ -56,7 +56,7 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
     def _sell_stock(self, index, action):
         '''
         Desc:
-            更新的卖出策略，即不从策略空间中探索，而是根据设定的规则
+            更新的卖出策略，即不从策略空间中探索，而是根据用户设定的规则
         '''
         stock_name = self.current_data['tic'].to_list()[index]
         close_price = self.current_data['close'].to_list()[index]

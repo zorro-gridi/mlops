@@ -3,7 +3,6 @@ import logging
 from pathlib import Path
 
 from typing import List
-
 import gymnasium as gym
 import matplotlib
 import matplotlib.pyplot as plt
@@ -72,7 +71,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         # self.action_space = spaces.Box(low=-1, high=1, shape=(self.stock_dim,), dtype="float32")
         # 最终方案 -> action_space: MultiDiscrete, 多维离散空间
         self.action_space = spaces.MultiDiscrete([11] * self.stock_dim)
-        self.temperature = config.get('temperature', 0.5) # 市场交易热度, 影响买卖的频率。其中，0.5-中性; > 0.5-贪婪; < 0.5-谨慎
+        # 市场交易热度, 影响买卖的频率。其中，0.5-中性; > 0.5-贪婪; < 0.5-谨慎
+        self.temperature = config.get('temperature', 0.5)
         # self.complete_times = 3 # 仓位不足时，补仓的倒数比例，这个比例应该和牛熊点位的仓位比例相匹配
         # 例如，市场由牛转猴、熊，仓位比例需要从80%下降到60%，如果初始仓位20%，则 20% + 80% / 3 < 60%，那么这个 3 的比例就是合理的
         # 这个数的具体值还需要调整, 都是主观设置，取消！！！
@@ -548,10 +548,10 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         _pred_points = self.current_data.y_pred.tolist()[index]
 
         return any([
-            # 1. 抄底
-            _mark_point <= _pred_points * self.temperature and _mark_point < 0,
-            # 2. 追涨
-            _mark_point <= _pred_points * (1 - self.temperature) and _mark_point > 0,
+            # 1. 下跌时，抄底
+            _mark_point <= _pred_points * (1 - self.temperature) and _mark_point < 0,
+            # 2. 上涨时，追涨
+            _mark_point <= _pred_points * self.temperature and _mark_point > 0,
             # 3. 反弹 / 反转的地步也可以买入
             self.current_data['is_reverse_point'].tolist()[index] == 1
             ])
@@ -568,12 +568,12 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         _pred_points = self.current_data.y_pred.tolist()[index]
 
         # 判断卖出的条件: 刚好与买入相反
-        return all([
-            # 1. 止盈
+        return any([
+            # 1. 上涨时，止盈
             _mark_point >= _pred_points * self.temperature and _mark_point > 0,
-            # 2. 杀跌
+            # 2. 下跌时，杀跌
             _mark_point >= _pred_points * (1 - self.temperature) and _mark_point < 0,
-            # 3. 反弹、反转期间不卖出
+            # 3. 反弹、反转 3 天内不卖出
             self.day - self.reverse_point_day >= 3,
             ])
 
