@@ -54,11 +54,6 @@ class FundTradeRules_V2(FundTradeRules_V1):
                         # 计算卖出可获得的金额，考虑交易费用
                         sell_amount = sell_num_shares
 
-                        # 卖出股票，仓位减少
-                        self.fund_env.acct_info['pfo_holding'][stock_name].append(-sell_num_shares)
-                        self.fund_env.acct_info['pfo_price'][stock_name].append(close_price)
-                        return_ratio = self.fund_env._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
-
             return sell_num_shares, sell_amount
 
         sell_num_shares, sell_amount = _do_sell_normal()
