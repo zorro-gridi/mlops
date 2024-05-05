@@ -14,6 +14,7 @@ from gymnasium.utils import seeding
 from stable_baselines3.common.vec_env import DummyVecEnv
 from ray.rllib.env import EnvContext
 
+
 matplotlib.use("Agg")
 
 
@@ -82,7 +83,7 @@ class BaseTradeEnv(gym.Env):
         self.per_batch_size = self.stock_dim * self.window_size
 
         # 是否完全重置环境与账户信息
-        self.initial = config['initial']
+        self.initial = config.get('initial', True)
 
         # initalize state
         self.acct_info = self._initial_acct_info()
@@ -129,7 +130,7 @@ class BaseTradeEnv(gym.Env):
         Desc:
             卖出 action. 这个函数交易的是一个股票
         Args:
-            index 是一个索引，从 self.state 中取出对应的股票的持仓份额 或着 股价
+            index 是一个索引，从 self.state 中取出对应的股票的持仓份额、或着股价
             action 是一个标量数值，表示针对制定 index 股票进行加减仓操作；在 self.action_space 中定义
         '''
         stock_name = self.current_data['tic'].to_list()[index]
@@ -479,14 +480,13 @@ class BaseTradeEnv(gym.Env):
             'profit_shares_sold': {},   # 已卖出的盈利份额
             'pfo_shares_redeem': {},    # 记录持仓买入的时间，同时，卖出时更新对应的持仓变化；主要应用于基金统计
             }
-        # 此处需要注意股票列表与持仓列表的mapping
+        # 此处需要注意股票列表与持仓列表的 mapping
         for idx, tic in enumerate(self.stock_pools):
             # 记录持仓量变化
             acct_info['pfo_holding'].setdefault(tic, [self.num_stock_shares[idx]])
             # 记录对应持仓的价格
             acct_info['pfo_price'].setdefault(tic, [0])
             acct_info['profit_shares_sold'].setdefault(tic, 0)
-
         return acct_info
 
 
@@ -571,6 +571,7 @@ class BaseTradeEnv(gym.Env):
         state.append(acct_pfo_ratio)
 
         # logging.warning(f'state cash asset ---------> {acct_cash_asset}')
+        # Vectorized
         state = np.array(state, dtype='float32')
         return state
 
@@ -589,7 +590,6 @@ class BaseTradeEnv(gym.Env):
         else:
             # 获取滚动日期
             date = self.data.date.iloc[0]
-
         # logging.warning(f'date ----------> {date}')
         return date
 

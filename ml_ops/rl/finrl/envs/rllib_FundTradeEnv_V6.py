@@ -12,19 +12,21 @@ home_dir = '/'.join([dirname for dirname in dir_list[:dir_list.index('zorro')+1]
 env_path = '/'.join([dirname for dirname in dir_list[:dir_list.index('pycharm')+1]])
 sys.path.append(env_path)
 
-from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V4 import FundQuantTradeEnv_V4
+from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V1 import FundQuantTradeEnv_V1
+from mlops.ml_ops.rl.finrl.envs.rllib_BaseTradeEnv import BaseTradeEnv
 
 
-class FundQuantTradeEnv_V6(FundQuantTradeEnv_V4):
+class FundQuantTradeEnv_V6(FundQuantTradeEnv_V1):
     '''
-    基于版本4的 FundTrader Env 第6版
+    基于版本 1 的 FundTrader Env 第6版
     '''
     def __init__(self, config: EnvContext):
         '''
         Update 更新如下:
             1. 策略网络自由买卖版本，可结合用户自定义买卖规则的外挂
         Conclusion:
-            待实验结论...
+            实验结论:
+            1. 无效。指数跌幅太多, 导致策略直接选择不投入, 无法下注 !!!
         '''
         super().__init__(config)
 
@@ -44,12 +46,11 @@ class FundQuantTradeEnv_V6(FundQuantTradeEnv_V4):
             buy_amount = 0
 
             cash_asset = sum(self.acct_info['cash_asset'])
-            available_cash = min(cash_asset, self.per_buy_order_max_amt, action)
-            available_shares = available_cash
+            buy_num_shares = min(cash_asset, self.per_buy_order_max_amt, action)
 
-            # 计算可买入的最多股票数量（基于单笔交易金额限制的）
-            if available_shares > 0:
-                if buy_num_shares >= self.per_unit_amount:
+            if self.buying_signal(index):
+                # 计算可买入的最多股票数量（基于单笔交易金额限制的）
+                if buy_num_shares > self.per_unit_amount:
                     buy_amount = buy_num_shares * (1 - self.buy_cost_pct[index])
                     buy_fee = buy_num_shares * self.buy_cost_pct[index]
 
@@ -73,6 +74,7 @@ class FundQuantTradeEnv_V6(FundQuantTradeEnv_V4):
                     # 更新交易频次，不能写在 step 函数中
                     self.trades += 1
                     # logging.warning(f"acct info ---> {self.acct_info['pfo_shares_redeem']}")
+
             # 返回买入的份额数量
             return buy_num_shares, buy_amount
 
@@ -101,15 +103,18 @@ class FundQuantTradeEnv_V6(FundQuantTradeEnv_V4):
             sell_num_shares = 0 # 卖出份额，默认等于 sell_amount，输出后再转换，不影响
             sell_amount = 0
 
-            # 判断卖出的条件: 刚好与买入相反
             if self.selling_signal(index):
                 # 判断当前是否有该股票的持仓 & 股价是否大于 0
                 if stock_shares > 0:
                     sell_amount = min(action, stock_shares)
-                else:
-                    sell_amount = min(action, stock_shares)
-                return_ratio = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
-            return sell_num_shares, sell_amount
+                    return_ratio = self._caculate_selling_return(
+                        stock_name, sell_amount, mode='LiveTrade')
 
+            return sell_num_shares, sell_amount
         sell_num_shares, sell_amount = _do_sell_normal()
         return sell_num_shares, sell_amount
+
+
+    def step(self, actions):
+        actions = actions - 5
+        return BaseTradeEnv.step(self, actions)

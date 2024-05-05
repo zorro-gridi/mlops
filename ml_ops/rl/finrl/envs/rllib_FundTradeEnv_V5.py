@@ -25,7 +25,7 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
     def __init__(self, config: EnvContext):
         '''
         Update 更新如下:
-            1. 买入时，如果碰到【反弹、反转点】，立即加满到仓位知道线，进行一次性补仓
+            1. 附加：买入时，如果碰到【反弹、反转点】，立即加满到仓位知道线，进行一次性补仓
         Conclusion:
             待实验结论...
         '''

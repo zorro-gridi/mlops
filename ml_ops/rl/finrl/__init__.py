@@ -62,3 +62,10 @@ register(
     entry_point='mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V5:FundQuantTradeEnv_V5',
     max_episode_steps=300,
     )
+
+
+register(
+    id='rllib_FundQuantTradeEnv-v0.6',
+    entry_point='mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V6:FundQuantTradeEnv_V6',
+    max_episode_steps=300,
+    )

@@ -23,6 +23,7 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
         '''
         Update 更新如下:
             1. 取消卖出的策略空间，改为遵守人选的[止盈、止损]规则
+            2. 买入规则不变
         Conclusion:
             1. 目前, 在具有波动性的指数上回测收益较好。例如, 传媒指数
             2. 因为严格限制了买入，感觉在低点抄底力度不够
@@ -45,8 +46,9 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
         # logging.warning(f'acct holdings ------------> {acct_holdings}')
         # logging.warning(f'strategy actions test ---------> {actions}')
 
-        # 因为, v1版step要给 actions 减 5，因此，需要提前加回来
+        # 因为, v1版正负双向 actions, step 给 actions 减 5，因此，需要提前加回来
         self.state, self.reward, self.terminal, self.truncate, self.acct_info = super().step(actions+5)
+
         if not (self.terminal or self.truncate):
             for i in range(self.stock_dim):
                 _, _ = self._sell_stock(i, 0)
