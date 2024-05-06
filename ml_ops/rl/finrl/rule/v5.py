@@ -77,7 +77,7 @@ class FundTradeRules_V5(FundTradeRules_V2):
                         pfo_ratio_room = int(self.fund_env.initial_amount * (pfo_ratio_guideline - pfo_ratio))
                         # 特殊：取账户现金和建议买入仓位的最小
                         # 由反转预测模型可以知道，在底部预测的点比较稠密，通过分批买入可以买到更低的点，同时减少预测错误的风险成本，一举多得！！！
-                        buy_num_shares = int(min(cash_asset, pfo_ratio_room) / 3)
+                        buy_num_shares = int(min(cash_asset, pfo_ratio_room / 3))
 
                         if self.fund_env.verbose == 1:
                             logging.warning(f'''
