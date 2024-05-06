@@ -342,11 +342,12 @@ class BaseTradeEnv(gym.Env):
 
             # action 就是股票交易的份额，包含每一支股票对应买卖份额的数组。其中，正为买入，负为卖出，0 为持有
             argsort_actions = np.argsort(actions)
+            # !!! Important: 注意❌: buy_index 或 sell_index 一定要包含 0, 因为虽然策略的action为0, 但是还有人为的规则
             # 获取卖出的清单
             # .shape[0] 取交易卖出的股票数量, 因为 actions 本身只有一维， 即表示持仓股票中每个股票的加减仓数量
-            sell_index = argsort_actions[:np.where(actions < 0)[0].shape[0]]
+            sell_index = argsort_actions[:np.where(actions <= 0)[0].shape[0]]
             # 获取买入的清单
-            buy_index = argsort_actions[::-1][:np.where(actions > 0)[0].shape[0]]
+            buy_index = argsort_actions[::-1][:np.where(actions >= 0)[0].shape[0]]
 
             # 这里交易一组股票
             for index in sell_index:

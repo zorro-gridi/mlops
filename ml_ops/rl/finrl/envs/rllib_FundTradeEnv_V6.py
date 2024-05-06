@@ -26,7 +26,7 @@ class FundQuantTradeEnv_V6(FundQuantTradeEnv_V1):
             1. 策略网络自由买卖版本，可结合用户自定义买卖规则的外挂
         Conclusion:
             实验结论:
-            1. 无效。指数跌幅太多, 导致策略直接选择不投入, 无法下注 !!!
+            1. 实验无效。指数跌幅太多, 导致策略直接选择不投入, 无法下注 !!!
         '''
         super().__init__(config)
 

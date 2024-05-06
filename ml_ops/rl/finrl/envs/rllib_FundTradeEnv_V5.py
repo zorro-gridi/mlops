@@ -93,13 +93,15 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
                         pfo_ratio_room = int(self.initial_amount * (pfo_ratio_guideline - pfo_ratio))
                         # 特殊：取账户现金和建议买入仓位的最小
                         # 由反转预测模型可以知道，在底部预测的点比较稠密，通过分批买入可以买到更低的点，同时减少预测错误的风险成本，一举多得！！！
-                        buy_num_shares = int(min(cash_asset, pfo_ratio_room) / 3)
+                        buy_num_shares = int(min(available_shares, pfo_ratio_room / 3))
 
                         if self.verbose == 1:
                             logging.warning(f'''
                                 -------->
-                                到达反弹或反转的底部位置，加满策略仓位线 !
-                                当前仓位: {pfo_ratio}, 指导线: {pfo_ratio_guideline}, 加仓金额: {buy_num_shares}
+                                当前交易日期: {self._get_date()}, 到达反弹、或反转的底部位置，加满策略仓位线 !
+                                当前仓位: {pfo_ratio}, 指导线: {pfo_ratio_guideline}
+                                账户余额: {cash_asset:0.2f}, 加仓空间: {pfo_ratio_room:0.2f}
+                                可加仓金额: {available_shares}, 实际加仓加仓金额: {buy_num_shares:0.2f}
                                 ''')
 
                     elif pfo_ratio_adj > 0 and not is_reverse_point:

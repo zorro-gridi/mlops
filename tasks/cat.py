@@ -9,6 +9,7 @@ from catboost import (
     # metrics,
     cv,
     )
+import ray
 import hyperopt
 # 调参早停技术
 from hyperopt.early_stop import no_progress_loss

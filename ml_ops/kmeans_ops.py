@@ -12,7 +12,7 @@ from mlops.utils import mlflow_utils
 import ray
 
 
-@ray.remote(num_cpus=1)
+@ray.remote(num_cpus=2)
 class KmeansOps(AbstractMLOps):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

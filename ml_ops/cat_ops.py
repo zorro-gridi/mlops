@@ -10,6 +10,7 @@ from mlflow.client import MlflowClient
 import logging
 import shutil
 from copy import copy
+import ray
 
 
 class CatBoostOps(AbstractMLOps):

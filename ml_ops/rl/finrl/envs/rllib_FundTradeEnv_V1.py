@@ -629,14 +629,15 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 self.trades += 1
 
                 if self.verbose == 1:
+                    task_end = time.time()
                     logging.warning(f'''
                         ---------->
                         卖出日期: {selling_date}, 卖出份额: {selling_shares:0.2f}, 回收现金: {selling_return:0.2f}, 卖出手续费: {holdings_inst.selling_cost:0.2f}
                         卖出收益率: {return_ratio:0.4f}, 仓位: {self._get_pfo_ratio():0.2f}, 仓位控制线: {self._set_pfo_ratio():0.2f}
                         trades: {self.trades}
+                        time consume: {(task_end - task_start):0.2f} s
                         ''')
-                    task_end = time.time()
-                    logging.warning(f'selling yield time consume ----> {(task_end - task_start):0.2f} s')
+                    # logging.warning(f'selling yield time consume ----> {(task_end - task_start):0.2f} s')
             return return_ratio
         else:
             return 0

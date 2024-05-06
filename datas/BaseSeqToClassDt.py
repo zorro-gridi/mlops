@@ -133,8 +133,9 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
             return X_arr_list, y_list
 
         elif split_name == 'test':
-            ''''
+            '''
             "test" mode 用于生成包含原始数据的全量预测数据集
+            特别的: "test" 数据集可以不需要y序列的标签, 使得 x 序列可以延续到最新的数据
             '''
             logging.warning(f'-----> split name: "test" mode, 默认使用所有记录')
             X_arr_list = [
@@ -142,7 +143,8 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
                 for g_arr in tqdm(groups_arr, desc='get features data -->',)
                 # 每一个 group 是一个股票/基金的历史指标集合趋势
                 for i in range(X_seq_len, len(g_arr))
-                if len(g_arr) >= X_seq_len # 此处是关键：test mode 不对 y_seq_len 进行限制
+                # 此处是关键：test mode 不对 y_seq_len 进行限制
+                if len(g_arr) >= X_seq_len
             ]
             return X_arr_list, None
 
