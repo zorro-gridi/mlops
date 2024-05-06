@@ -17,7 +17,6 @@ class FundTradeRules_V5(FundTradeRules_V2):
     def __init__(self, fund_env) -> None:
         self.fund_env = fund_env
 
-
     def buy_rules(self, index, action):
         '''
         Desc:
