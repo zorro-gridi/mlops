@@ -30,7 +30,6 @@ class FundQuantTradeEnv_V6(FundQuantTradeEnv_V1):
         '''
         super().__init__(config)
 
-
     def _buy_stock(self, index, action):
         '''
         Desc:
