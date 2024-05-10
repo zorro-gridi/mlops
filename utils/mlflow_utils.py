@@ -1,6 +1,8 @@
 import mlflow
 from mlflow.client import MlflowClient
 import logging
+import numpy as np
+
 
 tracking_uri = 'http://192.168.0.106:9001/'
 
@@ -16,7 +18,6 @@ def check_model_existence(model_name, tracking_uri=tracking_uri):
     mlflow_client = MlflowClient(tracking_uri)
     registered_models = [
         dict(rm)['name'] for rm in mlflow_client.search_registered_models()]
-
     return model_name in registered_models
 
 
@@ -37,3 +38,44 @@ def load_register_model_args(reg_model_name, model_version, tracking_uri=trackin
 
     logging.warning(f'hist model params details: {hist_model_args}')
     return hist_model_args
+
+
+def get_best_model_version(reg_model_name, eval_metric, optimize_mode):
+    '''
+    Desc:
+        获取最优模型的版本号
+    Args:
+        reg_model_name: 模型名称
+        eval_metric: 模型的比较指标
+    '''
+    mlflow_client = MlflowClient(tracking_uri)
+    best_loss = -np.inf if optimize_mode == 'max' else np.inf
+    best_version = 1
+    best_model_config = None
+
+    for mv in mlflow_client.search_model_versions(f"name='{reg_model_name}'"):
+        mv = dict(mv)
+        cur_version = mv['version']
+        model_config = load_register_model_args(reg_model_name, cur_version)
+        eval_loss = model_config[f'test_{eval_metric}']
+
+        if optimize_mode == 'max':
+            if eval_loss > best_loss:
+                best_loss = eval_loss
+                best_version = cur_version
+                best_model_config = model_config
+            else:
+                mlflow_client.delete_model_version(reg_model_name, cur_version)
+        else:
+            if eval_loss < best_loss:
+                best_loss = eval_loss
+                best_version = cur_version
+                best_model_config = model_config
+            else:
+                mlflow_client.delete_model_version(reg_model_name, cur_version)
+
+    logging.warning(f'最优模型的版本号: {best_version}')
+    return {
+        'config': best_model_config,
+        'version': best_version,
+        }

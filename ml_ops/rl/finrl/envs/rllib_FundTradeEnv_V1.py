@@ -30,6 +30,8 @@ env_path = '/'.join([dirname for dirname in dir_list[:dir_list.index('pycharm')+
 sys.path.append(env_path)
 
 from mlops.ml_ops.rl.finrl.envs.rllib_BaseTradeEnv import BaseTradeEnv
+from mlops.ml_ops.rl.finrl.rule.v2 import FundTradeRules_V2
+from mlops.ml_ops.rl.finrl.rule.v5 import FundTradeRules_V5
 
 matplotlib.use("Agg")
 
@@ -242,7 +244,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         '''
         # 每一步先更新当前的仓位控制线
         self._set_pfo_ratio()
-
         # MultiDiscrete start 参数在实际运行中不起作用，需要手动调节 actions
         actions = actions - 5
         # logging.warning(f'actions ---------------> {actions}')

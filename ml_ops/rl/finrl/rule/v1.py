@@ -3,6 +3,10 @@ import numpy as np
 
 
 class FundTradeRules_V1():
+    '''
+    Desc:
+        定义基础的自定义交易外挂规则函数
+    '''
     def __init__(self, fund_env) -> None:
         self.fund_env = fund_env
 
@@ -56,11 +60,12 @@ class FundTradeRules_V1():
             self.day - self.fund_env.reverse_point_day >= 3,
             ])
 
-    def buy_rule(self):
+    def buy_rule(self, *args, **kwargs):
         pass
 
-    def sell_rule(self):
+    def sell_rule(self, *args, **kwargs):
         pass
+
 
     def transform_action(self, actions):
         '''
@@ -87,12 +92,12 @@ class FundTradeRules_V1():
             actions: 买卖的份额 value 的序列
         '''
         transformed_actions = []
-        for index, action in enumerate(actions):
-            if action > 0:
-                _, trans_action = self.buy_rule(index, action)
+        for index, action in enumerate(list(actions)):
+            if action >= 0:
+                _, trans_action = self.buy_rule(index, action=action)
             elif action < 0:
-                _, trans_action = self.sell_rule(index, action)
+                _, trans_action = self.sell_rule(index, action=action)
             else:
                 trans_action = 0
             transformed_actions.append(trans_action)
-        return transformed_actions
+        return np.array(transformed_actions)

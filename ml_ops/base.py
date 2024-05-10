@@ -24,6 +24,9 @@ import ray
 from ray.air.integrations.mlflow import setup_mlflow
 import pandas as pd
 
+from threading import Lock
+lock = Lock()
+
 
 class AbstractMLOps(metaclass=ABCMeta):
     def __init__(self,
@@ -179,16 +182,17 @@ class AbstractMLOps(metaclass=ABCMeta):
         return best_checkpoint
 
 
-    def load_hist_model_config(self, reg_model_name, model_version='1'):
+    def load_hist_model_config(self, reg_model_name, model_version):
         '''
         Desc:
             加载注册模型的参数
         Remark:
-            如果特殊样例，可以通过继承重写该方法
+            如果需要对模型的config进行特殊处理, 可以通过继承重写该方法
         '''
         # 下载历史模型的参数
         hist_model_config = mlflow_utils.load_register_model_args(reg_model_name, model_version)
         return hist_model_config
+
 
     def _eval_hist_model(self, model, config):
         '''
@@ -277,10 +281,10 @@ class AbstractMLOps(metaclass=ABCMeta):
 
 
     def save_checkpoint(
-            self, checkpoint, reg_model_name,
-            model_version='1', model_alias=None,
-            model_frame=None, loss_strategy='UNIT'
-            ):
+        self, checkpoint, reg_model_name,
+        model_alias=None,
+        model_frame=None, loss_strategy='UNIT',
+        ):
         '''
         Desc:
             该方法实现了如下统一接口功能:
@@ -324,7 +328,7 @@ class AbstractMLOps(metaclass=ABCMeta):
             Args:
                 test_data: 模型输入的的的 test_data
                 params_config: mlflow signature 的 params 参数
-           return:
+        return:
                 test_loader: 供 self.test_job 评估模型
                 signature: 供 mlflow 注册模型
             '''
@@ -350,7 +354,7 @@ class AbstractMLOps(metaclass=ABCMeta):
                     signature = infer_signature(X[:5], y[:5], params_config)
                 else:
                     test_loader = Pool(
-                       *test_data, cat_features=params_config.get('categoric_features', None))
+                    *test_data, cat_features=params_config.get('categoric_features', None))
                     X, y = test_data
                     signature = infer_signature(X[:5], y[:5], params_config)
 
@@ -373,11 +377,16 @@ class AbstractMLOps(metaclass=ABCMeta):
             return test_loader, signature
 
         if mlflow_utils.check_model_existence(reg_model_name):
-            hist_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{model_version}")
+            # 加载最优模型的版本信息
+            model_info = mlflow_utils.get_best_model_version(
+                reg_model_name, f'{metric_name}', self.model_task.optimize_mode)
+
+            best_model_version = model_info['version']
+            hist_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{best_model_version}")
             # 测试历史模型
             # =================================================================
             hist_training_loss, hist_eval_metric = self.test_hist_model(
-                reg_model_name, model_version=model_version, model_frame=model_frame)
+                reg_model_name, model_version=best_model_version, model_frame=model_frame)
             hist_sum_loss = hist_training_loss + hist_eval_metric
             hist_weight_loss = hist_training_loss * 0.2 + hist_eval_metric * 0.8
 
@@ -412,7 +421,6 @@ class AbstractMLOps(metaclass=ABCMeta):
                     'training_loss': hist_training_loss,
                     'test_loss': hist_eval_metric,
                     'best_model': hist_regis_model,
-                    'best_mlops': self,
                     'save_mode': 'hist',
                     }
             else:
@@ -473,6 +481,9 @@ class AbstractMLOps(metaclass=ABCMeta):
         # TODO: current path: file:///home/zorro/project/pycharm/mlruns/0/01de69589f3b45df8c6111899175b97c/artifacts
         logging.warning(f'register model uri: {mlflow.get_registry_uri()}')
         logging.warning(f'tracking model uri: {mlflow.get_tracking_uri()}')
+
+        try: mlflow_client.delete_registered_model(reg_model_name)
+        except: pass
         model_info = model_frame.log_model(
             best_model,
             artifact_path='models',
@@ -483,8 +494,8 @@ class AbstractMLOps(metaclass=ABCMeta):
         mlflow.log_params(params_config)
 
         mlflow.log_metric(f'test_{metric_name}', tune_model_metric)
-        mlflow_client.set_registered_model_alias(reg_model_name, model_alias, model_version)
-        mlflow_client.set_registered_model_alias(reg_model_name, model_arch, model_version)
+        mlflow_client.set_registered_model_alias(reg_model_name, model_alias, '1')
+        mlflow_client.set_registered_model_alias(reg_model_name, model_arch, '1')
 
         mlflow_client.set_registered_model_tag(
             reg_model_name, f'test_{metric_name}', str(round(tune_model_metric, 6)))
@@ -503,6 +514,5 @@ class AbstractMLOps(metaclass=ABCMeta):
             'training_loss': round(training_loss, 6),
             'test_loss': round(tune_model_metric, 6),
             'best_model': best_model,
-            'best_mlops': self,
             'save_mode': 'new',
             }

@@ -14,6 +14,17 @@ from gymnasium.utils import seeding
 from stable_baselines3.common.vec_env import DummyVecEnv
 from ray.rllib.env import EnvContext
 
+import sys
+from pathlib import Path
+
+current_dir = Path(__file__).resolve().parent
+dir_list = [dname for dname in current_dir.as_posix().split('/')]
+home_dir = '/'.join([dirname for dirname in dir_list[:dir_list.index('zorro')+1]])
+env_path = '/'.join([dirname for dirname in dir_list[:dir_list.index('pycharm')+1]])
+sys.path.append(env_path)
+
+from mlops.ml_ops.rl.finrl.rule.v2 import FundTradeRules_V2
+from mlops.ml_ops.rl.finrl.rule.v5 import FundTradeRules_V5
 
 matplotlib.use("Agg")
 
@@ -49,6 +60,7 @@ class BaseTradeEnv(gym.Env):
             action_dim:  仅仅表示维度 int; 本质是股票持仓的数量，或者说交易股票池的数量
             window_size: 输入序列的长度
             future_days: 使用未来多少天的数据计算买入的预期收益率
+            custom_rule_version: default None, 添加用户自定义的交易规则外挂的版本
         '''
         self.acct_info = config.get('acct_info', None)                          # 是否用户自定义初始化账户信息
         self.day = config.get('day', 0)
@@ -68,6 +80,12 @@ class BaseTradeEnv(gym.Env):
 
         self.per_unit_qty = config['per_unit_qty']       # 每笔交易最小的股数，股票为100
         self.per_unit_amount = config['per_unit_amount'] # 每笔最小的交易额，基金一般为10元
+
+        # 使用用户自定义的规则外挂的版本
+        self.custom_rule_version = config.get('custom_rule_version', None)
+        if self.custom_rule_version:
+            self.custom_base_rule = eval(f'FundTradeRules_V{self.custom_rule_version}')(self)
+            logging.warning(f'---------> 使用版本"{self.custom_rule_version}"的自定义交易规则外挂')
 
         self.buy_cost_pct = config['buy_cost_pct']
         self.sell_cost_pct = config.get('sell_cost_pct', [None])
@@ -337,8 +355,14 @@ class BaseTradeEnv(gym.Env):
             # self.hmax 表示每一笔交易需要买入的最低股票数量
             # 不能买入分数的份额
             # actions = actions * self.hmax
+
             actions = actions * self.hmax
             actions = actions // self.per_unit_qty * self.per_unit_qty
+
+            # 此处添加用户自定义的交易 actions 规则
+            # *****************************************
+            if self.custom_rule_version:
+                actions = self.custom_base_rule.apply_trade_rules(actions)
 
             # action 就是股票交易的份额，包含每一支股票对应买卖份额的数组。其中，正为买入，负为卖出，0 为持有
             argsort_actions = np.argsort(actions)

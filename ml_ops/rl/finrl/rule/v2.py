@@ -16,9 +16,16 @@ class FundTradeRules_V2(FundTradeRules_V1):
         self.fund_env = fund_env
 
 
-    def _sell_rule(self, index):
+    def sell_rule(self, index, action=0):
+        '''
+        Desc:
+            经过用户自定义规则转换的交易量
+        Args:
+            index: 交易的目标基金的索引
+        Return:
+            返回用户自定义规则的卖出数量
+        '''
         stock_name = self.fund_env.current_data['tic'].to_list()[index]
-        close_price = self.fund_env.current_data['close'].to_list()[index]
         # 当前的剩余累计持仓
         # cash_asset = sum(self.fund_env.acct_info['cash_asset'])
         stock_shares, _ = self.fund_env._get_acct_pfo_shares()
@@ -40,19 +47,17 @@ class FundTradeRules_V2(FundTradeRules_V1):
 
             # 判断卖出的条件: 刚好与买入相反
             if self.fund_env.selling_signal(index):
-                # 判断当前是否有该股票的持仓 & 股价是否大于 0
+                # 判断当前是否有该股票的持仓
                 if max_profit_shares > 0 and stock_shares > 0:
                     # Sell only if current asset is > 0
                     # 此处与股票不同，注意 ！！！
                     # logging.warning(f'max_profit: {max_profit_shares:0.2f}')
                     sell_num_shares = max_profit_shares
-
-                    if sell_num_shares > 0:
-                        # 记录累计已卖出的盈利头寸
-                        # logging.warning(f'do sell stock action: {sell_num_shares} quantities.')
-                        self.fund_env.acct_info['profit_shares_sold'][stock_name] += sell_num_shares
-                        # 计算卖出可获得的金额，考虑交易费用
-                        sell_amount = sell_num_shares
+                    # 记录累计已卖出的盈利头寸
+                    # logging.warning(f'do sell stock action: {sell_num_shares} quantities.')
+                    self.fund_env.acct_info['profit_shares_sold'][stock_name] += sell_num_shares
+                    # 计算卖出可获得的金额，考虑交易费用
+                    sell_amount = sell_num_shares
 
             return sell_num_shares, sell_amount
 

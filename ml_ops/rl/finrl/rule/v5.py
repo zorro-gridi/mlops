@@ -14,16 +14,22 @@ from mlops.ml_ops.rl.finrl.rule.v2 import FundTradeRules_V2
 
 
 class FundTradeRules_V5(FundTradeRules_V2):
+    '''
+    Desc:
+        基金定投智能交易第5版规则外挂
+    '''
     def __init__(self, fund_env) -> None:
         self.fund_env = fund_env
 
-    def buy_rules(self, index, action):
+    def buy_rule(self, index, action=0):
         '''
         Desc:
-            *
+            经过用户自定义规则转换的交易量
         Args:
-            index:
-            action:
+            index: 交易的目标基金的索引
+            action: RL trade bot 输出的模型交易量
+        Return:
+            经过用户规则转换的交易量
         '''
         # 更新仓位控制线
         pfo_ratio_guideline = self.fund_env._set_pfo_ratio()
