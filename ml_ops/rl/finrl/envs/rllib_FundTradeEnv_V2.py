@@ -48,7 +48,6 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
 
         # 因为, v1版正负双向 actions, step 给 actions 减 5，因此，需要提前加回来
         self.state, self.reward, self.terminal, self.truncate, self.acct_info = super().step(actions+5)
-
         if not (self.terminal or self.truncate):
             for i in range(self.stock_dim):
                 _, _ = self._sell_stock(i, 0)

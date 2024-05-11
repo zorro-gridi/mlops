@@ -18,7 +18,7 @@ class FundTradeRules_V1():
         '''
         is_reverse_point = self.fund_env.current_data['is_reverse_point'].tolist()[index] == 1
         if is_reverse_point:
-            self.fund_env.reverse_point_day = self.day
+            self.fund_env.reverse_point_day = self.fund_env.day
 
 
     def buying_signal(self, index):
@@ -57,7 +57,7 @@ class FundTradeRules_V1():
             # 2. 下跌时，杀跌
             _mark_point >= _pred_points * (1 - self.fund_env.temperature) and _mark_point < 0,
             # 3. 反弹、反转 3 天内不卖出
-            self.day - self.fund_env.reverse_point_day >= 3,
+            self.fund_env.day - self.fund_env.reverse_point_day >= 3,
             ])
 
     def buy_rule(self, *args, **kwargs):
@@ -65,7 +65,6 @@ class FundTradeRules_V1():
 
     def sell_rule(self, *args, **kwargs):
         pass
-
 
     def transform_action(self, actions):
         '''
@@ -93,9 +92,9 @@ class FundTradeRules_V1():
         '''
         transformed_actions = []
         for index, action in enumerate(list(actions)):
-            if action >= 0:
+            if action >= 0 and self.buying_signal(index):
                 _, trans_action = self.buy_rule(index, action=action)
-            elif action < 0:
+            elif action < 0 and self.selling_signal(index):
                 _, trans_action = self.sell_rule(index, action=action)
             else:
                 trans_action = 0

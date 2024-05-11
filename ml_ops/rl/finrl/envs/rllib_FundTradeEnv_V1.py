@@ -133,18 +133,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
              for holding_idx, _ in enumerate(holdings)
              ]
 
-        #     for fund_code, holdings in update_holdings.items():
-        #         for s in holdings:
-        #             buy_date = s['buy_date']
-
-        #             if s['soldout'] == 0:
-        #                 days_diff = self._calculate_date_diff(buy_date, cur_date)
-        #                 # logging.warning(f'buy date: --------> {buy_date}, current date --------> {cur_date}')
-        #                 s['yield'] = round(
-        #                     self._caculate_holding_yield(fund_code, buy_date, cur_date)
-        #                     - self._get_redeem_rate(days_diff)
-        #                     ,4)
-
             self.acct_info['pfo_shares_redeem'] = holding_yield_inst.update_holdings
             return update_holdings
         else:

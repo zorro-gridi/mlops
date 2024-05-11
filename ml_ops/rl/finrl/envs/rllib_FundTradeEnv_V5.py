@@ -31,7 +31,6 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
         '''
         super().__init__(config)
 
-
     def _buy_stock(self, index, action):
         '''
         Desc:
@@ -137,7 +136,6 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
                         self.cost += buy_fee
                         # 更新交易频次，不能写在 step 函数中
                         self.trades += 1
-
                         # logging.warning(f"acct info ---> {self.acct_info['pfo_shares_redeem']}")
 
             # 返回买入的份额数量

@@ -24,7 +24,6 @@ sys.path.append(env_path)
 
 from mlops.ml_ops.rl.finrl.rule.v2 import FundTradeRules_V2
 from mlops.ml_ops.rl.finrl.rule.v5 import FundTradeRules_V5
-
 matplotlib.use("Agg")
 
 
@@ -141,7 +140,6 @@ class BaseTradeEnv(gym.Env):
             if not Path(self.output_dir).exists():
                 Path(self.output_dir).mkdir(exist_ok=True)
 
-
     def _sell_stock(self, index, action):
         '''
         Desc:
@@ -214,7 +212,6 @@ class BaseTradeEnv(gym.Env):
         sell_num_shares, sell_amount = _do_sell_normal()
         return sell_num_shares, sell_amount
 
-
     def _buy_stock(self, index, action):
         '''
         Desc:
@@ -270,7 +267,6 @@ class BaseTradeEnv(gym.Env):
         buy_num_shares, buy_amount = _do_buy()
         return buy_num_shares, buy_amount
 
-
     def step(self, actions):
         '''
         Desc:
@@ -289,8 +285,8 @@ class BaseTradeEnv(gym.Env):
             # 交易后的累计资产
             end_total_asset = begin_total_asset
 
-            # 以下全部为辅助信息：
-            # ==========================================================================
+            # 以下全部为辅助信息:
+            # ================
             df_total_value = pd.DataFrame(self.asset_memory)
             # tot_reward = 当前资产 - 起始资产 （策略当前的累计奖励值）
             tot_reward = end_total_asset - self.initial_amount
@@ -306,7 +302,7 @@ class BaseTradeEnv(gym.Env):
                     (252**0.5)
                     * df_total_value["daily_return"].mean()
                     / df_total_value["daily_return"].std()
-                )
+                    )
 
             if self.episode % self.print_verbosity == 0:
                 print(f"day: {self.day}, episode: {self.episode}")
@@ -348,7 +344,6 @@ class BaseTradeEnv(gym.Env):
             # plt.close()
             # ==========================================================================
             return self.state, self.reward, self.terminal, True, self.acct_info
-
         else:
             # actions initially is scaled between 0 to 1
             # self.hmax 表示每一笔交易需要买入的最低股票数量
@@ -384,6 +379,7 @@ class BaseTradeEnv(gym.Env):
             # 交易的记录
             self.actions_memory.append(actions)
 
+            # ==============================
             # 更新 timetick & env data state
             # ==============================
             # state: s -> s+1
@@ -395,7 +391,8 @@ class BaseTradeEnv(gym.Env):
 
             # 当前 reward 的定义: 使用资产增值的数额，可以处理多股票的组合任务
             # 这种 reward 定义的就是短期激励!!!
-            self.reward = end_total_asset - begin_total_asset
+            # 使用收益率作为reward的好处是在下跌的时候加仓可以平摊收益率, 提高reward, 鼓励加仓; 反之, 鼓励减仓
+            self.reward = round((end_total_asset - begin_total_asset) / self.initial_amount, 3)
 
             # 记录账户的累计资产记录
             self.asset_memory.append(end_total_asset)
