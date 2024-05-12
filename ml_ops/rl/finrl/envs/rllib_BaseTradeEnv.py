@@ -392,7 +392,8 @@ class BaseTradeEnv(gym.Env):
             # 当前 reward 的定义: 使用资产增值的数额，可以处理多股票的组合任务
             # 这种 reward 定义的就是短期激励!!!
             # 使用收益率作为reward的好处是在下跌的时候加仓可以平摊收益率, 提高reward, 鼓励加仓; 反之, 鼓励减仓
-            self.reward = round((end_total_asset - begin_total_asset) / self.initial_amount, 3)
+            # self.reward 是每一步交易的独立收益，所以计算累计收益时是: sum(self.reward)
+            self.reward = round((end_total_asset - begin_total_asset) / self.initial_amount, 7)
 
             # 记录账户的累计资产记录
             self.asset_memory.append(end_total_asset)
