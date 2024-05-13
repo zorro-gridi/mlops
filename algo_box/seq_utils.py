@@ -35,6 +35,7 @@ def phase_series_point(data: Union[pd.Series, list, np.array], start_point, n_cl
     # 取每组的最后 1 个点标签作为结果。因为，参照的是近期的整体数据
     k_labels = np.array([eatimator.labels_[-1] for eatimator in eatimator_list])
     assert len(data) - start_point == len(k_labels)
+
     # 获取【原始的】每个聚类族的中心点
     label_centers = np.array([eatimator.cluster_centers_.squeeze() for eatimator in eatimator_list])
     # 获取【原始的】聚类标签的中心点
