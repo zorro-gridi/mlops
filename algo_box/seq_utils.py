@@ -13,7 +13,9 @@ def phase_series_point(data: Union[pd.Series, list, np.array], start_point, n_cl
              0: 熊; 1: 平; 2: 牛 的固定位置关系
     Args:
         data: 需要分段的序列
-        start_point: 序列中需要聚类的点的起始位置
+        start_point: 序列中需要聚类的点的起始位置。
+            这个参数的潜在bug: 如果需要例如近180天的数据，
+            对于交易日来说，没有180个，因此导致错位，所以在实际查询数据的时候，需要适当的放宽查询的日期范围
         n_clusters: phase point 聚类的个数
     Return:
         phase_point: 序列中每个点对应的聚类类别
@@ -26,7 +28,7 @@ def phase_series_point(data: Union[pd.Series, list, np.array], start_point, n_cl
         np.array(data[i:i+start_point]).reshape(-1, 1)
         for i in range(len(data)-start_point)]
 
-    # 只能在循环中实例化
+    # 只能在循环中实例化: 因为不同族群点位不同
     # point_datas 中不能有 NaN 值
     eatimator_list = [
         KMeans(n_clusters=n_clusters, n_init=2).fit(point_datas)
