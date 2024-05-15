@@ -139,6 +139,22 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             return {}
 
 
+    def _check_holding_duplicate(self, stock_name, trade_date='buy_date'):
+        '''
+        Desc:
+            检查交易日期是否已采取策略行动。主要使用在推理环节
+        Args:
+            stock_name: 交易的标的名称
+            trade_date: 交易日期的类型, 可选参数 ["buy_date", "selling_date"]
+        '''
+        acct_holdings_list = self.acct_info['pfo_shares_redeem'][stock_name]
+        trade_date_log = set([hold[trade_date] for hold in acct_holdings_list])
+        is_traded = self._get_date() in trade_date_log
+        if is_traded:
+            logging.warning(f'Warning ---> 当日已经采取买入交易, 请不要重复交易!!!')
+        return is_traded
+
+
     def _set_pfo_ratio(self):
         '''
         Desc: Important !!!
@@ -741,6 +757,9 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                         self.acct_info['cash_asset'].append(round(-buy_num_shares, 2))
                         # 记录持仓的买入日期
                         self.acct_info['pfo_shares_redeem'].setdefault(stock_name, [])
+
+                        if self.mode == 'infer' and self._check_holding_duplicate(stock_name, trade_date='buy_date'):
+                            return 0, 0
                         self.acct_info['pfo_shares_redeem'][stock_name].append({
                             'buy_date': self._get_date(),
                             'selling_date': '2500-01-01',

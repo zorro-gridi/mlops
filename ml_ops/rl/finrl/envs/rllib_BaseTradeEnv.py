@@ -102,7 +102,10 @@ class BaseTradeEnv(gym.Env):
         self.initial = config.get('initial', True)
 
         # initalize state
-        self.acct_info = self._initial_acct_info()
+        self.acct_info = config.get('acct_info', None)
+        self.acct_info = self.acct_info if self.acct_info else self._initial_acct_info()
+        self.user_id = config.get('user_id', 'Zorro')
+
         # 先重新初始化状态
         self.state = self._initiate_state()
 
@@ -120,7 +123,7 @@ class BaseTradeEnv(gym.Env):
         self.truncate = False
         self.print_verbosity = config['print_verbosity']
         self.model_name = config['model_name']
-        self.mode = config.get('mode', '')
+        self.mode = config.get('mode', None)
         self.iteration = config['iteration']
 
         self.reward = 0
@@ -396,9 +399,9 @@ class BaseTradeEnv(gym.Env):
             # logging.warning(f'step logging total acct asset --------> {self.asset_memory[-1]}')
             # 系统默认第4个返回的对象是 self.truncate
 
-            # ==============================
-            # 更新 timetick & env data state, TODO: 到底应该放哪个位置???
-            # ==============================
+            # =========================================================
+            # 更新 timetick & env data state. Important: 注意放在最后的位置
+            # =========================================================
             # state: s -> s+1
             self.day += 1
             # 更新环境的状态
