@@ -94,8 +94,8 @@ class BaseTradeEnv(gym.Env):
         self.stock_pools = self.df.tic.unique()
         self.stock_dim = len(self.stock_pools)
 
-        self.window_size = config['window_size']
-        self.future_days = config['future_days']
+        self.window_size = config.get('window_size', 1)
+        self.future_days = config.get('future_days', 1)
         self.per_batch_size = self.stock_dim * self.window_size
 
         # 是否完全重置环境与账户信息
@@ -120,7 +120,7 @@ class BaseTradeEnv(gym.Env):
         self.truncate = False
         self.print_verbosity = config['print_verbosity']
         self.model_name = config['model_name']
-        self.mode = config['mode']
+        self.mode = config.get('mode', '')
         self.iteration = config['iteration']
 
         self.reward = 0
@@ -277,7 +277,8 @@ class BaseTradeEnv(gym.Env):
         # logging.warning(f'sample actions {actions}')
         # 是否 TimeLimit & truncate
         # 因为 self.df 的最后 30 行用来计算 cumulative reward，非训练数据需要剔除
-        self.terminal = self.day == len(self.df.iloc[:-self.future_days].index.unique()) - self.per_batch_size
+        self.terminal = self.day == len(self.df.iloc[0:-self.future_days].index.unique())-self.per_batch_size+1
+        # logging.warning(f'is termial ------> {self.terminal}')
         begin_total_asset = self._get_acct_asset()
 
         if any([self.terminal, self.goal_achieved, self.truncate]):
@@ -378,14 +379,6 @@ class BaseTradeEnv(gym.Env):
 
             # 交易的记录
             self.actions_memory.append(actions)
-
-            # ==============================
-            # 更新 timetick & env data state
-            # ==============================
-            # state: s -> s+1
-            self.day += 1
-            # 更新环境的状态
-            self.state = self._update_state()
             # 同上, 再计算一次期末的累计资产，因为, 进行了买卖交易
             end_total_asset = self._get_acct_asset()
 
@@ -402,6 +395,14 @@ class BaseTradeEnv(gym.Env):
             self.rewards_memory.append(self.reward)
             # logging.warning(f'step logging total acct asset --------> {self.asset_memory[-1]}')
             # 系统默认第4个返回的对象是 self.truncate
+
+            # ==============================
+            # 更新 timetick & env data state, TODO: 到底应该放哪个位置???
+            # ==============================
+            # state: s -> s+1
+            self.day += 1
+            # 更新环境的状态
+            self.state = self._update_state()
             return self.state, self.reward, self.terminal, self.truncate, self.acct_info
 
 
@@ -553,6 +554,11 @@ class BaseTradeEnv(gym.Env):
             更新 Env State
         '''
         self.data = self.df.iloc[self.day : (self.day + self.per_batch_size)]
+        # 如果到达 dataframe 的底部, 终止模拟...
+        if len(self.data) == 0:
+            logging.warning(f'Observation Reached Point, Termilated !')
+            return
+
         self.current_data = self.data.iloc[-self.stock_dim:]
         self.future_data = self.df.iloc[
             self.day * self.per_batch_size : self.day * self.per_batch_size + self.future_days]
@@ -611,7 +617,8 @@ class BaseTradeEnv(gym.Env):
         # 单只股票
         else:
             # 获取滚动日期
-            date = self.data.date.iloc[0]
+            # logging.warning(f'{self.data.date.unique()[0]}')
+            date = self.data.date.unique()[0]
         # logging.warning(f'date ----------> {date}')
         return date
 
