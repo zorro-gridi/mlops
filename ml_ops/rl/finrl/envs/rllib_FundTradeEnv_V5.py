@@ -123,7 +123,7 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
 
                         # 记录持仓的买入日期
                         self.acct_info['pfo_shares_redeem'].setdefault(stock_name, [])
-                        if self.mode == 'infer' and self._check_holding_duplicate(stock_name, trade_date='buy_date'):
+                        if self.mode in ['infer', 'live'] and self._check_holding_duplicate(stock_name, trade_date='buy_date'):
                             return 0, 0
 
                         self.acct_info['pfo_shares_redeem'][stock_name].append({

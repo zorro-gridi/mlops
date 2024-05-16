@@ -59,6 +59,10 @@ class BaseTradeEnv(gym.Env):
             window_size: 输入序列的长度
             future_days: 使用未来多少天的数据计算买入的预期收益率
             custom_rule_version: default None, 添加用户自定义的交易规则外挂的版本
+            mode: 三种模式
+                1. train: 策略训练模式
+                2. infer: 策略推理测试模式
+                3. live:  策略生产应用模式
         '''
         self.acct_info = config.get('acct_info', None)                          # 是否用户自定义初始化账户信息
         self.day = config.get('day', 0)
@@ -357,6 +361,7 @@ class BaseTradeEnv(gym.Env):
             actions = actions * self.hmax
             actions = actions // self.per_unit_qty * self.per_unit_qty
 
+            # *****************************************
             # 此处添加用户自定义的交易 actions 规则
             # *****************************************
             if self.custom_rule_version:
@@ -380,25 +385,6 @@ class BaseTradeEnv(gym.Env):
             for index in buy_index:
                 actions[index], buy_amount = self._buy_stock(index, actions[index])
 
-            # 交易的记录
-            self.actions_memory.append(actions)
-            # 同上, 再计算一次期末的累计资产，因为, 进行了买卖交易
-            end_total_asset = self._get_acct_asset()
-
-            # 当前 reward 的定义: 使用资产增值的数额，可以处理多股票的组合任务
-            # 这种 reward 定义的就是短期激励!!!
-            # 使用收益率作为reward的好处是在下跌的时候加仓可以平摊收益率, 提高reward, 鼓励加仓; 反之, 鼓励减仓
-            # self.reward 是每一步交易的独立收益，所以计算累计收益时是: sum(self.reward)
-            self.reward = round((end_total_asset - begin_total_asset) / self.initial_amount, 7)
-
-            # 记录账户的累计资产记录
-            self.asset_memory.append(end_total_asset)
-            self.date_memory.append(self._get_date())
-            # 记录真实的账户盈亏记录
-            self.rewards_memory.append(self.reward)
-            # logging.warning(f'step logging total acct asset --------> {self.asset_memory[-1]}')
-            # 系统默认第4个返回的对象是 self.truncate
-
             # =========================================================
             # 更新 timetick & env data state. Important: 注意放在最后的位置
             # =========================================================
@@ -406,6 +392,28 @@ class BaseTradeEnv(gym.Env):
             self.day += 1
             # 更新环境的状态
             self.state = self._update_state()
+
+            # self.day 必须要 +1 才能计算收益 reward
+            # ********************************************
+            # 同上, 再计算一次期末的累计资产，因为, 进行了买卖交易
+            end_total_asset = self._get_acct_asset()
+            # 当前 reward 的定义: 使用资产增值的数额，可以处理多股票的组合任务
+            # 这种 reward 定义的就是短期激励!!!
+            # 使用收益率作为reward的好处是在下跌的时候加仓可以平摊收益率, 提高reward, 鼓励加仓; 反之, 鼓励减仓
+            # self.reward 是每一步交易的独立收益，所以计算累计收益时是: sum(self.reward)
+            self.reward = round((end_total_asset - begin_total_asset) / self.initial_amount, 7)
+
+            # 以下添加策略操作记录
+            # ********************************************
+            # 交易的记录
+            self.actions_memory.append(actions)
+            # 记录账户的累计资产记录
+            self.asset_memory.append(end_total_asset)
+            self.date_memory.append(self._get_date())
+            # 记录真实的账户盈亏记录
+            self.rewards_memory.append(self.reward)
+            # logging.warning(f'step logging total acct asset --------> {self.asset_memory[-1]}')
+            # 系统默认第4个返回的对象是 self.truncate
             return self.state, self.reward, self.terminal, self.truncate, self.acct_info
 
 
