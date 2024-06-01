@@ -156,8 +156,9 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         current_date = time.strftime('%Y-%m-%d')
         is_traded = trade_date in trade_date_log
 
+        # 14:45 之前仍然可以更新交易
         tic_time = dt_time(14, 45)
-        time_cond = datetime.today().time() > tic_time
+        time_cond = datetime.today().time() <= tic_time
 
         # 如果存在历史交易，并且非当日交易（因为当日交易允许更新）
         hist_duplicate_cond = all([
@@ -165,20 +166,21 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             trade_date != current_date,
             ])
 
-        curr_duplicate_cond = all([
-            trade_date == current_date,
-            time_cond,
-            ])
-
-        is_duplicate_trade = any([hist_duplicate_cond, curr_duplicate_cond])
         if hist_duplicate_cond:
-            logging.warning(f'Warning ---> _check_holding_duplicate: 历史已经采取买入交易, 请不要重复交易!!!')
-        elif curr_duplicate_cond:
-            logging.warning(f'Warning ---> _check_holding_duplicate: 当日[已]过 {tic_time}, 终止提交交易请求 !!!')
-        elif not curr_duplicate_cond:
-            logging.warning(f'Warning ---> _check_holding_duplicate: 当日[未]过 {tic_time}, 正在更新当日的交易请求 ...')
+            logging.warning(f'Warning ---> _check_holding_duplicate: {trade_date} 历史已经采取买入交易, 请不要重复交易!!!')
+            return True
 
-        return is_duplicate_trade
+        elif time_cond:
+            logging.warning(f'Warning ---> _check_holding_duplicate: {trade_date} 当日[已]过 {tic_time}, 终止提交交易请求 !!!')
+            return True
+
+        elif not time_cond and trade_date == current_date:
+            logging.warning(f'Warning ---> _check_holding_duplicate: {trade_date} 当日[未]过 {tic_time}, 正在更新当日的交易请求 ...')
+            return False
+
+        else:
+            return True
+
 
 
     def _set_pfo_ratio(self):
