@@ -18,6 +18,7 @@ from gymnasium.utils import seeding
 from stable_baselines3.common.vec_env import DummyVecEnv
 from ray.rllib.env import EnvContext
 from datetime import datetime
+from datetime import time as dt_time
 from copy import copy
 
 import sys
@@ -149,10 +150,35 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         '''
         acct_holdings_list = self.acct_info['pfo_shares_redeem'][stock_name]
         trade_date_log = set([hold[trade_date] for hold in acct_holdings_list])
-        is_traded = self._get_date() in trade_date_log
-        if is_traded:
-            logging.warning(f'Warning ---> 当日已经采取买入交易, 请不要重复交易!!!')
-        return is_traded
+        trade_date = self._get_date()
+        # logging.warning(f'-------> trade_date: {trade_date}')
+
+        current_date = time.strftime('%Y-%m-%d')
+        is_traded = trade_date in trade_date_log
+
+        tic_time = dt_time(14, 45)
+        time_cond = datetime.today().time() > tic_time
+
+        # 如果存在历史交易，并且非当日交易（因为当日交易允许更新）
+        hist_duplicate_cond = all([
+            is_traded,
+            trade_date != current_date,
+            ])
+
+        curr_duplicate_cond = all([
+            trade_date == current_date,
+            time_cond,
+            ])
+
+        is_duplicate_trade = any([hist_duplicate_cond, curr_duplicate_cond])
+        if hist_duplicate_cond:
+            logging.warning(f'Warning ---> _check_holding_duplicate: 历史已经采取买入交易, 请不要重复交易!!!')
+        elif curr_duplicate_cond:
+            logging.warning(f'Warning ---> _check_holding_duplicate: 当日[已]过 {tic_time}, 终止提交交易请求 !!!')
+        elif not curr_duplicate_cond:
+            logging.warning(f'Warning ---> _check_holding_duplicate: 当日[未]过 {tic_time}, 正在更新当日的交易请求 ...')
+
+        return is_duplicate_trade
 
 
     def _set_pfo_ratio(self):
@@ -238,7 +264,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         return total_asset
 
 
-    def step(self, actions):
+    def step(self, actions, **kwargs):
         '''
         Desc:
             继承并改写父类的 step 方法，主要功能如下：
@@ -269,7 +295,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 self.goal_achieved = True
             else:
                 logging.warning(f'当前账户【持仓清仓收益率】: {pfo_yield:0.4f}, 达到【阶段收益率】目标: {self.phase_yield}, 账户清仓 !!!')
-        return super().step(actions)
+
+        return super().step(actions, **kwargs)
 
 
     def _calculate_date_diff(self, start_date, end_date):
@@ -773,14 +800,16 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                         buy_amount = buy_num_shares * (1 - self.buy_cost_pct[index])
                         buy_fee = buy_num_shares * self.buy_cost_pct[index]
 
-                        # 更新账户的可用本金
-                        # 买入股票，现金账户减少金额
-                        self.acct_info['cash_asset'].append(round(-buy_num_shares, 2))
                         # 记录持仓的买入日期
                         self.acct_info['pfo_shares_redeem'].setdefault(stock_name, [])
 
                         if self.mode in ['infer', 'live'] and self._check_holding_duplicate(stock_name, trade_date='buy_date'):
                             return 0, 0
+
+                        self.acct_info['pfo_shares_redeem'][stock_name] = [
+                            record for record in self.acct_info['pfo_shares_redeem'][stock_name]
+                            if record['buy_date'] != self._get_date()
+                            ]
                         self.acct_info['pfo_shares_redeem'][stock_name].append({
                             'buy_date': self._get_date(),
                             'selling_date': '2500-01-01',
@@ -789,6 +818,10 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                             'yield': 0,
                             'soldout': 0,
                             })
+
+                        # 更新账户的可用本金
+                        # 买入股票，现金账户减少金额
+                        self.acct_info['cash_asset'].append(round(-buy_num_shares, 2))
 
                         # 更新买入的手续费
                         self.cost += buy_fee

@@ -250,7 +250,7 @@ class StockTradeEnv(gym.Env):
         return buy_num_shares, buy_amount
 
 
-    def step(self, actions):
+    def step(self, actions, **kwargs):
         # MultiDiscrete start 参数在实际运行中不起作用，手动调节 actions
         actions = actions - 5
         # logging.warning(f'sample actions {actions}')

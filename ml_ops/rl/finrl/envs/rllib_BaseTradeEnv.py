@@ -99,7 +99,7 @@ class BaseTradeEnv(gym.Env):
         self.stock_dim = len(self.stock_pools)
 
         self.window_size = config.get('window_size', 1)
-        self.future_days = config.get('future_days', 1)
+        self.future_days = config.get('future_days', 1) * self.stock_dim
         self.per_batch_size = self.stock_dim * self.window_size
 
         # 是否完全重置环境与账户信息
@@ -219,6 +219,7 @@ class BaseTradeEnv(gym.Env):
         sell_num_shares, sell_amount = _do_sell_normal()
         return sell_num_shares, sell_amount
 
+
     def _buy_stock(self, index, action):
         '''
         Desc:
@@ -274,18 +275,15 @@ class BaseTradeEnv(gym.Env):
         buy_num_shares, buy_amount = _do_buy()
         return buy_num_shares, buy_amount
 
-    def step(self, actions):
+
+    def step(self, actions, mode='train'):
         '''
         Desc:
             在环境中执行一个动作。函数调用的 _sell_stock 和 _byu_stock 函数的 index 参数来源于对 actions 的排序
         Args:
             actions: Union[np.array, list], 交易的份额列表
         '''
-        # logging.warning(f'sample actions {actions}')
-        # 是否 TimeLimit & truncate
-        # 因为 self.df 的最后 30 行用来计算 cumulative reward，非训练数据需要剔除
-        self.terminal = self.day == len(self.df.iloc[0:-self.future_days].index.unique())-self.per_batch_size+1
-        # logging.warning(f'is termial ------> {self.terminal}')
+        # logging.warning(f'-----------> 这是一条测试信息: step mode: "{mode}", actions: {actions}, terminal: {self.terminal}')
         begin_total_asset = self._get_acct_asset()
 
         if any([self.terminal, self.goal_achieved, self.truncate]):
@@ -390,30 +388,41 @@ class BaseTradeEnv(gym.Env):
             # =========================================================
             # state: s -> s+1
             self.day += 1
-            # 更新环境的状态
-            self.state = self._update_state()
+            # 是否 TimeLimit & truncate
+            # 因为 self.df 的最后 self.future_days 行用来计算 cumulative reward，非训练数据需要剔除
+            # 此处的 index 已经使用 factory 函数变成整数索引了
+            if mode in ['train']:
+                self.terminal = self.day == len(self.df.iloc[0:-self.future_days].index.unique())-self.per_batch_size+self.stock_dim
+            elif mode in ['infer', 'live']:
+                self.terminal = self.day == len(self.df.index.unique())-self.per_batch_size+self.stock_dim
+            else:
+                logging.warning(f'env step method "mode" params optional list: ["train", "infer", "live"]')
+                raise
 
-            # self.day 必须要 +1 才能计算收益 reward
-            # ********************************************
-            # 同上, 再计算一次期末的累计资产，因为, 进行了买卖交易
-            end_total_asset = self._get_acct_asset()
-            # 当前 reward 的定义: 使用资产增值的数额，可以处理多股票的组合任务
-            # 这种 reward 定义的就是短期激励!!!
-            # 使用收益率作为reward的好处是在下跌的时候加仓可以平摊收益率, 提高reward, 鼓励加仓; 反之, 鼓励减仓
-            # self.reward 是每一步交易的独立收益，所以计算累计收益时是: sum(self.reward)
-            self.reward = round((end_total_asset - begin_total_asset) / self.initial_amount, 7)
+            if not self.terminal:
+                # 更新环境的状态
+                self.state = self._update_state()
+                # self.day 必须要 +1 才能计算收益 reward
+                # ********************************************
+                # 同上, 再计算一次期末的累计资产，因为, 进行了买卖交易
+                end_total_asset = self._get_acct_asset()
+                # 当前 reward 的定义: 使用资产增值的数额，可以处理多股票的组合任务
+                # 这种 reward 定义的就是短期激励!!!
+                # 使用收益率作为reward的好处是在下跌的时候加仓可以平摊收益率, 提高reward, 鼓励加仓; 反之, 鼓励减仓
+                # self.reward 是每一步交易的独立收益，所以计算累计收益时是: sum(self.reward)
+                self.reward = round((end_total_asset - begin_total_asset) / self.initial_amount, 7)
 
-            # 以下添加策略操作记录
-            # ********************************************
-            # 交易的记录
-            self.actions_memory.append(actions)
-            # 记录账户的累计资产记录
-            self.asset_memory.append(end_total_asset)
-            self.date_memory.append(self._get_date())
-            # 记录真实的账户盈亏记录
-            self.rewards_memory.append(self.reward)
-            # logging.warning(f'step logging total acct asset --------> {self.asset_memory[-1]}')
-            # 系统默认第4个返回的对象是 self.truncate
+                # 以下添加策略操作记录
+                # ********************************************
+                # 交易的记录
+                self.actions_memory.append(actions)
+                # 记录账户的累计资产记录
+                self.asset_memory.append(end_total_asset)
+                self.date_memory.append(self._get_date())
+                # 记录真实的账户盈亏记录
+                self.rewards_memory.append(self.reward)
+                # logging.warning(f'step logging total acct asset --------> {self.asset_memory[-1]}')
+                # 系统默认第4个返回的对象是 self.truncate
             return self.state, self.reward, self.terminal, self.truncate, self.acct_info
 
 
@@ -567,7 +576,8 @@ class BaseTradeEnv(gym.Env):
         self.data = self.df.iloc[self.day : (self.day + self.per_batch_size)]
         # 如果到达 dataframe 的底部, 终止模拟...
         if len(self.data) == 0:
-            logging.warning(f'Observation Reached Point, Termilated !')
+            logging.warning(f'----------> Observation Reached Point, Termilated !!!')
+            self.terminal = True
             return
 
         self.current_data = self.data.iloc[-self.stock_dim:]

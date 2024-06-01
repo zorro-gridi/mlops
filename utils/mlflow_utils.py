@@ -4,7 +4,7 @@ import logging
 import numpy as np
 
 
-tracking_uri = 'http://192.168.0.106:9001/'
+tracking_uri = 'http://192.168.1.107:9001/'
 
 
 def check_model_existence(model_name, tracking_uri=tracking_uri):

@@ -12,8 +12,9 @@ client = OpenAI(
 
 # 非流式响应
 def gpt_35_api(messages: list):
-    """为提供的对话消息创建新的回答
-
+    """
+    Desc:
+        为提供的对话消息创建新的回答
     Args:
         messages (list): 完整的对话消息
     """
@@ -25,8 +26,9 @@ def gpt_35_api(messages: list):
 
 
 def gpt_35_api_stream(messages: list):
-    """为提供的对话消息创建新的回答 (流式传输)
-
+    """
+    Desc:
+        为提供的对话消息创建新的回答 (流式传输)
     Args:
         messages (list): 完整的对话消息
     """

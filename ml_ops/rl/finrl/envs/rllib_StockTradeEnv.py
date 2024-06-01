@@ -50,7 +50,7 @@ class StockTradeEnv(BaseTradeEnv):
         self.action_space = spaces.MultiDiscrete([11] * self.stock_dim)
 
 
-    def step(self, actions):
+    def step(self, actions, **kwargs):
         # MultiDiscrete start 参数在实际运行中不起作用，需要手动调节 actions
         actions = actions - 5
-        return super().step(actions)
+        return super().step(actions, **kwargs)

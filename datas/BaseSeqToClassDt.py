@@ -7,6 +7,14 @@ import pandas as pd
 from typing import Union
 
 
+class No_SeqDataException(Exception):
+    def __init__(self, msg='No_SeqDataException') -> None:
+        self.msg = msg
+
+    def __str__(self) -> str:
+        return f'\n======> 序列分块数为零！请增大样本数量，或者减少分块序列的长度'
+
+
 class BaseSeqToClassDt(AbstractDatasetFactory):
     '''
     Desc:
@@ -26,7 +34,7 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
     def build_train_data(self, data: np.ndarray):
         '''
         Desc:
-            构造 train 训练的原始数据
+            构造 train 训练的原始数据。
         '''
         logging.warning(f'-----> split name: "train" mode')
         X_y_arr_list = [
@@ -46,9 +54,9 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
             # 保证 g_arr >= X seq + y seq 的长度
             if len(g_arr) >= self.X_seq_len+self.y_seq_len
             ]
+        # Important !!!
         if len(X_y_arr_list) == 0:
-            logging.warning(f'\n======> 序列分块数为零！请增大样本数量，或者减少分块序列的长度')
-            raise
+            raise No_SeqDataException()
 
         logging.warning(f'X_y_arr_list length ------------------> {len(X_y_arr_list)}')
         return X_y_arr_list

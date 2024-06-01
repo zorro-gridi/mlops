@@ -33,7 +33,8 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
             self.features = len(self.features)
 
 
-    def feature_engineering(self, vars_datas: Union[np.ndarray, pd.DataFrame, list], pred_len=0, split_name='train'):
+    def feature_engineering(
+            self, vars_datas: Union[np.ndarray, pd.DataFrame, list], pred_len=0, split_name='train'):
         '''
         Desc:
             构造序列特征的步骤:
@@ -67,6 +68,7 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
         # 将不满足长度的数据全部删除，数据信息没有影响
         vars_datasets = [v for v in vars_datasets if len(v) == window]
         vars_datasets = np.array(vars_datasets)
+        logging.warning(f'BaseSeqToTsDt vars_datasets shape: {vars_datasets.shape}')
 
         # 训练数据集
         if pred_len > 0 and split_name == 'train':
@@ -78,7 +80,7 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
             vars_datasets = vars_datasets[-pred_len:]
 
         if len(vars_datasets.shape) > 2:
-            logging.warning(f'vars_datasets shape: {vars_datasets.shape}')
+            # logging.warning(f'vars_datasets shape: {vars_datasets.shape}')
             vars_datasets = vars_datasets.reshape(len(vars_datasets), -1)
             logging.warning(f'将 vars_datasets reshape 为二维数组: {vars_datasets.shape}')
         return vars_datasets
