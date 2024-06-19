@@ -1,4 +1,11 @@
-from mlops.datas.BaseDt import AbstractDatasetFactory
+from mlops.datas.BaseDt import (
+    AbstractDatasetFactory,
+    )
+from mlops.datas.exceptions import (
+    No_SeqDataException,
+    )
+
+
 from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
 import logging
@@ -6,13 +13,6 @@ import numpy as np
 import pandas as pd
 from typing import Union
 
-
-class No_SeqDataException(Exception):
-    def __init__(self, msg='No_SeqDataException') -> None:
-        self.msg = msg
-
-    def __str__(self) -> str:
-        return f'\n======> 序列分块数为零！请增大样本数量，或者减少分块序列的长度'
 
 
 class BaseSeqToClassDt(AbstractDatasetFactory):

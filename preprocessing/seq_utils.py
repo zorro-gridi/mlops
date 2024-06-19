@@ -13,11 +13,15 @@ def chunk_series(datas: pd.DataFrame, checkpoint=0.1):
         pd.DataFrame
     '''
     data = datas.copy()
-    markup_list = list(data['markup'])
+    markup_list = data['markup'].tolist()
+
+    # 从第二日的涨跌幅开始统计
     for i in range(1, len(markup_list)):
         last_sign = np.sign(markup_list[i-1])
+        # 如果涨跌幅小于阈值，变号时忽略，合并到上一序列
         if abs(markup_list[i]) <= checkpoint:
             markup_list[i] = abs(markup_list[i]) * last_sign
+
     # markup 字段重新赋值
     data['markup'] = markup_list
     data['last_markup'] = data.sort_values(by=['trade_date'])['markup'].shift(1)
@@ -45,7 +49,6 @@ def chunk_series(datas: pd.DataFrame, checkpoint=0.1):
     return vars_data
 
 
-
 def compute_vars_list(series, chunk_index: list, pool_func='np.max'):
     '''
     Desc:
@@ -59,6 +62,7 @@ def compute_vars_list(series, chunk_index: list, pool_func='np.max'):
     def outvars_markup_days(seq):
         '''
         Desc:
+            自定义聚合函数;
             计算外部变量分段序列的涨跌天数, 必须返回 float 对象
         '''
         up_days = sum(np.array(seq) > 0)
@@ -67,6 +71,7 @@ def compute_vars_list(series, chunk_index: list, pool_func='np.max'):
     def get_last_point(seq):
         '''
         Desc:
+            自定义聚合函数;
             获取分割序列的最后一个牛熊分割线标签。分类标签，可以为 int
         '''
         return str(seq[-1])
@@ -74,6 +79,7 @@ def compute_vars_list(series, chunk_index: list, pool_func='np.max'):
     def get_last_phase_point(seq):
         '''
         Desc:
+            自定义聚合函数;
             same as "get_last_point", will deprecated !
         '''
         return str(seq[-1])
@@ -88,33 +94,35 @@ def compute_vars_list(series, chunk_index: list, pool_func='np.max'):
     # 按 chunk_index（涨跌幅序列）分割外部变量序列
     vars_value = [vars_value[seq_idx[i-1]:seq_idx[i]] for i in range(1, len(seq_idx))]
 
-    # 外部变量池化操作
+    # 外部变量的池化操作
     pool_func = eval(pool_func)
     vars_value = [pool_func(v) for v in vars_value]
     assert len(chunk_index) == len(vars_value)
     return vars_value
 
 
-def build_multi_vars_datas(data, chunk_index: list, vars_config: dict, target_series=None):
+def build_multi_vars_datas(data, chunk_index: list, external_vars_config: dict, target_series=None):
     '''
     Desc:
-        本函数实现将外部变量集成到预测目标变量中
+        本函数实现将外部变量集成到预测的目标变量中
     Args:
         data: pd.DataFrame
         chunk_index: （本例中）表示指数的连续涨跌幅序列，必选参数
-        vars_config: dict, 外部变量的配置字典
+        external_vars_config: dict, 外部变量的配置字典
             example: {
+                '变量名': '聚合函数(可自定义)', # 因为涨跌幅序列是按照连续涨跌天数聚合的序列
                 'var1': 'np.max',
                 'var2': 'np.sum',
                 }
-        target_series: 预测的目标变量列表，可选 累计涨跌幅 or 累计涨跌幅天数；默认为 chunk_index
+        target_series: 预测的目标变量
+            可选 【累计涨跌幅】 or 【累计涨跌幅天数】；默认为 chunk_index
     Returns:
-        pd.DataFrame 包含各个特征的 dataframe 对象
+        pd.DataFrame 包含model输入特征的 dataframe 对象
     '''
     # 设计合理的数据结构非常重要
     var_value_list = {
         var_name: compute_vars_list(data[var_name], chunk_index=chunk_index, pool_func=pool_func)
-        for var_name, pool_func in vars_config.items()
+        for var_name, pool_func in external_vars_config.items()
         }
     # target_series 为 None 时默认为 chunk_index
     if not target_series:

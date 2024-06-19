@@ -7,6 +7,11 @@ import numpy as np
 from copy import copy
 
 from mlops.utils import mlflow_utils
+from mlops.datas.exceptions import (
+    No_SeqDataException,
+    )
+
+
 # import mlflow
 from mlflow.models import infer_signature
 from mlflow.client import MlflowClient
@@ -24,8 +29,11 @@ import ray
 from ray.air.integrations.mlflow import setup_mlflow
 import pandas as pd
 
-from threading import Lock
-lock = Lock()
+
+
+
+# from threading import Lock
+# lock = Lock()
 
 
 class AbstractMLOps(metaclass=ABCMeta):
@@ -197,7 +205,9 @@ class AbstractMLOps(metaclass=ABCMeta):
     def _eval_hist_model(self, model, config):
         '''
         Desc:
-            评估历史模型的评分
+            评估历史模型的评分, 主要两个操作
+            1. dataset_inst 实例方法 load_test_data() 加载测试数据
+            2. .model_task.test_job() 方法评估模型
         Args:
             model: 历史模型实例
             config: 历史模型的配置
@@ -240,7 +250,6 @@ class AbstractMLOps(metaclass=ABCMeta):
             training_loss: 训练损失
             hist_eval_metric: 测试损失
         '''
-        # model_arch = self.model_task.model_arch
         hist_regis_model = model_frame.load_model(
             f"models:/{reg_model_name}/{model_version}")
         # 下载历史模型的参数
@@ -301,12 +310,16 @@ class AbstractMLOps(metaclass=ABCMeta):
                 'SUM': 使用 train + test 的损失综合比较, 可避免 train loss 过大的问题
                 'UNIT': 仅使用 test 损失比较
                 'WEIGHT': 加权损失
+        Return:
+            checkpoint
         '''
         # find_best_model_args 的 checkpoint metric 指标不带 test 前缀
         if self.model_task.custom_loss_func:
             metric_name = self.model_task.custom_loss_func.loss_name
         else:
             metric_name = self.model_task.model_eval_metric
+
+        optimize_mode = self.model_task.optimize_mode
 
         tune_model_metric = checkpoint[metric_name]
         training_loss = checkpoint['training_loss']
@@ -379,30 +392,40 @@ class AbstractMLOps(metaclass=ABCMeta):
         if mlflow_utils.check_model_existence(reg_model_name):
             # 加载最优模型的版本信息
             model_info = mlflow_utils.get_best_model_version(
-                reg_model_name, f'{metric_name}', self.model_task.optimize_mode)
+                reg_model_name, f'{metric_name}', optimize_mode)
 
             best_model_version = model_info['version']
             hist_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{best_model_version}")
-            # 测试历史模型
-            # =================================================================
-            hist_training_loss, hist_eval_metric = self.test_hist_model(
-                reg_model_name, model_version=best_model_version, model_frame=model_frame)
+            # 测试历史模型。当测试的序列数据特征工程切分异常时，表明最新数据已经变化，需要抛弃历史模型
+            # =========================================================================
+
+            try:
+                hist_training_loss, hist_eval_metric = self.test_hist_model(
+                    reg_model_name, model_version=best_model_version, model_frame=model_frame)
+            except No_SeqDataException:
+                    exception_value = {
+                        'min': np.inf,
+                        'max': -np.inf,
+                        }
+                    hist_training_loss = hist_eval_metric = exception_value[optimize_mode]
+
+            # 更新评估指标的权重
             hist_sum_loss = hist_training_loss + hist_eval_metric
             hist_weight_loss = hist_training_loss * 0.2 + hist_eval_metric * 0.8
 
             # 比较是测试指标
             if loss_strategy == 'UNIT':
-                if self.model_task.optimize_mode == 'min':
+                if optimize_mode == 'min':
                     compare_bools_result = -tune_model_metric <= -hist_eval_metric
                 else:
                     compare_bools_result = tune_model_metric <= hist_eval_metric
             elif loss_strategy == 'WEIGHT':
-                if self.model_task.optimize_mode == 'min':
+                if optimize_mode == 'min':
                     compare_bools_result = -tune_weight_loss <= -hist_weight_loss
                 else:
                     compare_bools_result = tune_weight_loss <= hist_weight_loss
             else:
-                if self.model_task.optimize_mode == 'min':
+                if optimize_mode == 'min':
                     compare_bools_result = -tune_sum_loss <= -hist_sum_loss
                 else:
                     compare_bools_result = tune_sum_loss <= hist_sum_loss
@@ -482,8 +505,11 @@ class AbstractMLOps(metaclass=ABCMeta):
         logging.warning(f'register model uri: {mlflow.get_registry_uri()}')
         logging.warning(f'tracking model uri: {mlflow.get_tracking_uri()}')
 
-        try: mlflow_client.delete_registered_model(reg_model_name)
-        except: pass
+        try:
+            mlflow_client.delete_registered_model(reg_model_name)
+        except:
+            pass
+
         model_info = model_frame.log_model(
             best_model,
             artifact_path='models',

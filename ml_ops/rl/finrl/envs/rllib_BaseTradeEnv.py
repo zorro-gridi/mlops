@@ -105,10 +105,11 @@ class BaseTradeEnv(gym.Env):
         # 是否完全重置环境与账户信息
         self.initial = config.get('initial', True)
 
-        # initalize state
+        # initalize acct info & state
         self.acct_info = config.get('acct_info', None)
-        self.acct_info = self.acct_info if self.acct_info else self._initial_acct_info()
         self.user_id = config.get('user_id', 'Zorro')
+        self.plan_id = config.get('plan_id')
+        self.acct_info = self.acct_info if self.acct_info else self._initial_acct_info()
 
         # 先重新初始化状态
         self.state = self._initiate_state()
@@ -490,6 +491,7 @@ class BaseTradeEnv(gym.Env):
             初始化账户的信息
         Data example:
             acct_info = {
+                'plan_id': self.plan_id,
                 'cash_asset': [1000, 1200, 900, 1200],
                 'pfo_holding': {
                     '000001': [100, 200, -100, 400],
@@ -517,6 +519,8 @@ class BaseTradeEnv(gym.Env):
             return self.acct_info
 
         acct_info = {
+            'plan_id': self.plan_id,
+            'user_id': self.user_id,
             'cash_asset': [self.initial_amount],
             'pfo_holding': {},          # 持仓的变化流水
             'pfo_price': {},            # 买卖的价格流水

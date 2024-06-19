@@ -50,7 +50,7 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode):
     '''
     mlflow_client = MlflowClient(tracking_uri)
     best_loss = -np.inf if optimize_mode == 'max' else np.inf
-    best_version = 1
+    best_version = None
     best_model_config = None
 
     for mv in mlflow_client.search_model_versions(f"name='{reg_model_name}'"):
@@ -76,6 +76,7 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode):
 
     logging.warning(f'最优模型的版本号: {best_version}')
     return {
+        'model_name': reg_model_name,
         'config': best_model_config,
         'version': best_version,
         }

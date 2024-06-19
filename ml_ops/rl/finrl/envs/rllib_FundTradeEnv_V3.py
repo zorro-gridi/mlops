@@ -177,16 +177,18 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                         buy_amount = buy_num_shares * (1 - self.buy_cost_pct[index])
                         buy_fee = buy_num_shares * self.buy_cost_pct[index]
 
-                        # 记录持仓的买入日期
+                        # 记录持仓的买入信息
                         self.acct_info['pfo_shares_redeem'].setdefault(stock_name, [])
 
                         if self.mode in ['infer', 'live'] and self._check_holding_duplicate(stock_name, trade_date='buy_date'):
-                            return 0, 0
+                                return 0, 0
 
+                        # 不取当日的交易，是因为需要更新
                         self.acct_info['pfo_shares_redeem'][stock_name] = [
                             record for record in self.acct_info['pfo_shares_redeem'][stock_name]
                             if record['buy_date'] != self._get_date()
                             ]
+
                         self.acct_info['pfo_shares_redeem'][stock_name].append({
                             'buy_date': self._get_date(),
                             'selling_date': '2500-01-01',
@@ -195,8 +197,8 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                             'yield': 0,
                             'soldout': 0,
                             })
-                        # 更新账户的可用本金
-                        # 买入股票，现金账户减少金额
+
+                        # 更新账户的可用本金; 买入股票，现金账户减少金额
                         self.acct_info['cash_asset'].append(round(-buy_num_shares, 2))
 
                         # 更新买入的手续费

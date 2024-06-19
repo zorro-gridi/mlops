@@ -74,7 +74,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         super().__init__(config)
 
         # 增加或修改的属性可以写在 super() 后面
-        self.goal_yield = config.get('goal_yield', np.inf) # 训练的时候要保障数据训练完，推理的时候需要定义
+        self.goal_yield = config.get('goal_yield', np.inf) # 设置为np.inf 保障训练数据训练完，不至于达到目标退出训练，推理的时候需要定义
         self.phase_yield = config.get('phase_yield', 0.02)
         # 基金的净值很小，而且可以买很少的份数，可以使用连续空间; 缺点：训练太慢
         # self.action_space = spaces.Box(low=-1, high=1, shape=(self.stock_dim,), dtype="float32")
@@ -158,7 +158,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
         # 14:45 之前仍然可以更新交易
         tic_time = dt_time(14, 45)
-        time_cond = datetime.today().time() <= tic_time
+        is_before_1445 = datetime.today().time() <= tic_time
 
         # 如果存在历史交易，并且非当日交易（因为当日交易允许更新）
         hist_duplicate_cond = all([
@@ -170,13 +170,17 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             logging.warning(f'Warning ---> _check_holding_duplicate: {trade_date} 历史已经采取买入交易, 请不要重复交易!!!')
             return True
 
-        elif time_cond:
+        elif not is_before_1445:
             logging.warning(f'Warning ---> _check_holding_duplicate: {trade_date} 当日[已]过 {tic_time}, 终止提交交易请求 !!!')
             return True
 
-        elif not time_cond and trade_date == current_date:
+        elif is_before_1445 and trade_date == current_date:
             logging.warning(f'Warning ---> _check_holding_duplicate: {trade_date} 当日[未]过 {tic_time}, 正在更新当日的交易请求 ...')
             return False
+
+        elif trade_date != current_date:
+            logging.warning(f'Warning ---> _check_holding_duplicate: {current_date} 为非交易日, 无法交易 !!!')
+            return True
 
         else:
             return True
@@ -662,6 +666,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 # logging.warning(f'selliing date: {date}, sell_amount original: {selling_shares},  rest: {sell_amount}')
 
             cal_holdings = update_holding(sell_amount)
+            # 列表推倒式加快迭代速度
             [cal_holdings._update_holding_info_after_selling(i, share_info)
              for i, share_info in enumerate(sorted_holdings)]
 
@@ -688,7 +693,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                     task_end = time.time()
                     logging.warning(f'''
                         ---------->
-                        卖出日期: {selling_date}, 卖出份额: {selling_shares:0.2f}, 回收现金: {selling_return:0.2f}, 卖出手续费: {holdings_inst.selling_cost:0.2f}
+                        卖出日期: {selling_date}, 卖出份额: {selling_shares:0.2f}, 回收现金: {selling_return:0.2f}, 卖出手续费: {cal_holdings.selling_cost:0.2f}
                         卖出收益率: {return_ratio:0.4f}, 仓位: {self._get_pfo_ratio():0.2f}, 仓位控制线: {self._set_pfo_ratio():0.2f}
                         trades: {self.trades}
                         time consume: {(task_end - task_start):0.2f} s
@@ -727,7 +732,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             # 3. 反弹 / 反转的地步也可以买入
             self.current_data['is_reverse_point'].tolist()[index] == 1
             ])
-
 
     def selling_signal(self, index):
         '''
