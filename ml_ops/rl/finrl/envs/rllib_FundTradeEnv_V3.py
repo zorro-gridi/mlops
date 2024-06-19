@@ -181,7 +181,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                         self.acct_info['pfo_shares_redeem'].setdefault(stock_name, [])
 
                         if self.mode in ['infer', 'live'] and self._check_holding_duplicate(stock_name, trade_date='buy_date'):
-                                return 0, 0
+                            return 0, 0
 
                         # 不取当日的交易，是因为需要更新
                         self.acct_info['pfo_shares_redeem'][stock_name] = [
