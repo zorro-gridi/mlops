@@ -342,7 +342,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
     def _get_redeem_rate(self, days):
         '''
         Desc:
-            返回赎回基金的手续费率
+            根据持有天数, 返回赎回基金的手续费率
         '''
         days_range_max = 730
         if days >= days_range_max:
@@ -357,6 +357,86 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             return 0.5 / 100
         elif days >= 365 and days < 730:
             return 0.3 / 100
+        else:
+            return 0
+
+
+    def _cal_fofo_redeem_rate(self, fund_code, sell_amount):
+        '''
+        Desc:
+            2024-06-27: 按照"FIFO 先进先出"的规则计算实际卖出费率。
+            实现给定一个卖出份额, 计算预计的卖出综合费率
+        Release log:
+            2024-06-27: 新增
+        '''
+        acct_holdings = self.acct_info['pfo_shares_redeem'][fund_code]
+        still_holdings = [h for h in acct_holdings if h['soldout'] == 0]
+        sort_holdings = still_holdings.sort(key=lambda x: x['buy_date'])
+
+        total_fee = 0
+        for h in sort_holdings:
+            if sell_amount > 0:
+                hold_shares = h['hold']
+                buy_date = h['buy_date']
+                curr_date = self._get_date()
+                redeem_rate = self._calculate_date_diff(buy_date, curr_date)
+
+                if sell_amount > hold_shares:
+                    redeem_fee = hold_shares * redeem_rate
+                else:
+                    redeem_fee = sell_amount * redeem_rate
+
+                total_fee += redeem_fee
+                sell_amount -= hold_shares
+
+        total_redeem_rate = total_fee / sell_amount
+        return total_redeem_rate
+
+
+    def _cal_max_selling_amount_with_min_yield(self, fund_code, min_yield=0.01):
+        '''
+        Desc:
+            计算考虑 FIFO 规则，且满足最小止盈的可卖出的最大份额
+        Release log:
+            2024-06-27: 新增
+        '''
+        # 获取账户达到预期收益的所有持仓份额（该函数也同步更新了持仓收益）
+        max_subject_shares_for_selling = self._get_max_yield_shares(fund_code)
+        # 先更新持仓的收益率
+        # tic_holdings = self._update_acct_holdings_debit_yield()[fund_code]
+
+        tic_holdings = self.acct_info['pfo_shares_redeem'][fund_code]
+        still_holdings = [h for h in tic_holdings if h['soldout'] == 0]
+        # 此处得按 yield 收益率逆序排名
+        sort_holdings = still_holdings.sort(key=lambda x: x['yield'], reverse=True)
+
+        max_selling_amount = 0
+        max_received_value = 0
+        for h in sort_holdings:
+            sell_amount = h['hold']
+            hold_yield = h['yield']
+
+            redeem_rate = self._cal_fofo_redeem_rate(fund_code, sell_amount)
+            selling_yield = hold_yield - redeem_rate
+
+            # TODO: 此处有两种模式: 选择模式一
+            # 一， 整体（即考虑亏损持仓）总卖出收益达到 min_yield
+            # 二， 必须每一笔都达到 min_yield
+
+            max_selling_amount += sell_amount
+            max_received_value += sell_amount * (1 + selling_yield)
+            total_selling_yield = max_received_value / max_selling_amount - 1
+
+            # !!! important 此处的条件逻辑有点绕:
+            # 1. 必须要达到最小收益率：因为卖出止盈必须达到最小止盈收益率；
+            # 2. 卖出的份额不能超过达到目标止盈收益的累计持仓份额, 解释如下:
+                # 2.1 达到目标止盈的累计持仓肯定优先卖出, 因此, 这个总数是理论上🉑️卖出的总数
+                # 2.2 卖出的整体份额又必须达到最小止盈收益率
+            # 综合 2.1/2.2 的条件，卖出的份额判断即完整统一, 触发任何一个条件则停止搜素，定格最大可卖出持仓
+            if total_selling_yield < min_yield or max_selling_amount > max_subject_shares_for_selling:
+                break
+
+        return max_selling_amount
 
 
     def _get_max_yield_shares(self, fund_code, min_yield=None):
@@ -529,6 +609,10 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 "BackTest": 数据回测模式, 该模式仅测试策略的收益，并不更新实际的账户数据。例如，测试部分卖出与清仓时的平均收益率
         Return:
             return_ratio: 返回扣除卖出手续费之后的实际收益率
+        Release log:
+            2024-06-27:
+                1. 给持仓添加 hold_id 主键
+                2. 修复基于 FIFO 规则的卖出判断逻辑; TODO: 需要修改卖出持仓的信息
         '''
         task_start = time.time()
         update_holdings = self._update_acct_holdings_debit_yield()
@@ -544,6 +628,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             # 计算扣除卖出手续费的收益率就是为了按照收益率真实排序
             # sorted_holdings: sorted of still holding
             sorted_holdings = list(sorted(still_holdings, key=lambda x: x['yield'], reverse=True))
+            # 越早买入的份额，卖出手续费率越低，需要越早清仓
+            # sorted_holdings = list(sorted(still_holdings, key=lambda x: x['buy_date']))
             # logging.warning(f'sorted_holdings ------->\n{pd.DataFrame(sorted_holdings)}')
 
             selling_shares = copy(sell_amount)                # 统计卖出的原始持仓金额
