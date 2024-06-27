@@ -30,8 +30,6 @@ from ray.air.integrations.mlflow import setup_mlflow
 import pandas as pd
 
 
-
-
 # from threading import Lock
 # lock = Lock()
 
@@ -252,6 +250,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         '''
         hist_regis_model = model_frame.load_model(
             f"models:/{reg_model_name}/{model_version}")
+
         # 下载历史模型的参数
         hist_model_config = self.load_hist_model_config(reg_model_name, model_version)
         training_loss = hist_model_config['training_loss']

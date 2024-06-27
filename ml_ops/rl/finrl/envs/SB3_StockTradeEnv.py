@@ -180,12 +180,12 @@ class StockTradeEnv(gym.Env):
                         self.acct_info['profit_shares_sold'][stock_name] += sell_num_shares
                         # 计算卖出可获得的金额，考虑交易费用
                         sell_amount = close_price * sell_num_shares * (1 - self.sell_cost_pct[index])
-                        # 卖出股票，仓位减少
+                        # TODO: 卖出股票，仓位减少；待改成字典模式
                         self.acct_info['pfo_holding'][stock_name].append(-sell_num_shares)
                         self.acct_info['pfo_price'][stock_name].append(close_price)
 
                         # 卖出股票，现金账户增加金额
-                        self.acct_info['cash_asset'].append(sell_amount)
+                        self.acct_info['cash_asset'][self._get_date()] = sell_amount
                         self.cost += close_price * sell_num_shares * self.sell_cost_pct[index]
                         self.trades += 1
 
@@ -218,7 +218,7 @@ class StockTradeEnv(gym.Env):
                 1==1
             ):
                 # 基于单笔最大交易限制
-                cash_asset = sum(self.acct_info['cash_asset'])
+                cash_asset = sum(self.acct_info['cash_asset'].values())
                 available_cash = min(cash_asset, self.per_buy_order_max_amt)
                 available_shares = available_cash // close_price
 
@@ -234,8 +234,8 @@ class StockTradeEnv(gym.Env):
                         if buy_amount >= self.per_unit_amount:
                             # 更新账户的可用本金
                             # 买入股票，现金账户减少金额
-                            self.acct_info['cash_asset'].append(-buy_amount)
-                            # 买入股票，增加持仓
+                            self.acct_info['cash_asset'][self._get_date()] = -buy_amount
+                            # TODO: 买入股票，增加持仓; 待改成字典模式
                             self.acct_info['pfo_holding'][stock_name].append(buy_num_shares)
                             self.acct_info['pfo_price'][stock_name].append(close_price)
 
@@ -400,7 +400,7 @@ class StockTradeEnv(gym.Env):
         # =================================================================
         if self.initial:
             self.acct_info = self._initial_acct_info()
-            cash_asset = sum(self.acct_info['cash_asset'])
+            cash_asset = sum(self.acct_info['cash_asset'].values())
             holding_asset = sum([
                 sum(self.acct_info['pfo_holding'][stock_name]) * close_price
                 for stock_name, close_price in zip(self.current_data.tic, self.current_data.close)
@@ -409,7 +409,7 @@ class StockTradeEnv(gym.Env):
             self.asset_memory = [begin_total_asset]
         else:
             # initial=False, 账户不初始化
-            cash_asset = sum(self.acct_info['cash_asset'])
+            cash_asset = sum(self.acct_info['cash_asset'].values())
             holding_asset = sum([
                 sum(self.acct_info['pfo_holding'][stock_name]) * close_price
                 for stock_name, close_price in zip(self.current_data.tic, self.current_data.close)
@@ -452,7 +452,7 @@ class StockTradeEnv(gym.Env):
 
 
     def _get_acct_asset(self):
-        cash_asset = sum(self.acct_info['cash_asset'])
+        cash_asset = sum(self.acct_info['cash_asset'].values())
         holding_asset = sum([
             sum(self.acct_info['pfo_holding'][stock_name]) * close_price
             for stock_name, close_price in zip(self.current_data.tic, self.current_data.close)
@@ -493,7 +493,7 @@ class StockTradeEnv(gym.Env):
         # state = state.reshape(1, -1)[0]
 
         # 是否添加 持仓信息 & 账户现金 到 obs 中
-        acct_cash_asset = sum(self.acct_info['cash_asset'])
+        acct_cash_asset = sum(self.acct_info['cash_asset'].values())
         # holding_shares = [sum(shares) for _, shares in self.acct_info['pfo_holding'].items()]
 
         # state.extend(holding_shares)

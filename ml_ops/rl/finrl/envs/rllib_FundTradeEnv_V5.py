@@ -2,6 +2,7 @@
 from gymnasium import spaces
 import logging
 from ray.rllib.env import EnvContext
+import random
 
 import sys
 from pathlib import Path
@@ -45,12 +46,14 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
         last_day = max(self.day-1, 0)
         plus_pfo_ratio = 0  # 补仓空间初始化
         plus_buy_amount = 0 # 最大可补的仓位初始化
-
         is_buying_accept = self.buying_signal(index)
 
         if self.pfo_ratio_guide:
+            # 昨日的仓位指导线
             last_pfo_ratio_guide = self.pfo_ratio_guide[last_day]
+            # 加仓空间
             plus_pfo_ratio = last_pfo_ratio_guide - pfo_ratio_guideline
+            # 可加仓金额
             plus_buy_amount = round(self.initial_amount * plus_pfo_ratio, 1)
 
         # 如果当前已到仓位指导线，则停止加仓
@@ -77,7 +80,8 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
             if is_buying_accept:
                 # 基于单笔最大交易限制的买入策略
                 # logging.warning(f'acct cash list ----------> {self.acct_info["cash_asset"]}')
-                cash_asset = sum(self.acct_info['cash_asset'])
+                cash_asset = sum(self.acct_info['cash_asset'].values())
+                # 最大加仓金额 & 账户余额 取最小
                 available_cash = min(cash_asset, self.per_buy_order_max_amt)
                 available_shares = available_cash
 
@@ -132,10 +136,11 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
                             'hold': buy_amount,
                             'yield': 0,
                             'soldout': 0,
+                            'hold_id': str(random.randint(1e18, 9e18)),
                             })
                         # 更新账户的可用本金
                         # 买入股票，现金账户减少金额
-                        self.acct_info['cash_asset'].append(round(-buy_num_shares, 2))
+                        self.acct_info['cash_asset'][self._get_date()] = round(-buy_num_shares, 2)
 
                         # 更新买入的手续费
                         self.cost += buy_fee

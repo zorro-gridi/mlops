@@ -67,7 +67,8 @@ class BaseTradeEnv(gym.Env):
         self.acct_info = config.get('acct_info', None)                          # 是否用户自定义初始化账户信息
         self.day = config.get('day', 0)
         self.df = config['df']
-        self.num_stock_shares = config['num_stock_shares']
+        self.raw_data = config.get('raw_data', self.df)                         # 指数的原始涨跌数据，用于计算区间的收益率
+        self.num_stock_shares = config.get('num_stock_shares', [None])
 
         # TODO: hmax 需要设计一个预期函数，即估计出最大定投次数, 换算得到
         self.hmax = config.get('hmax', 200)                                     # base model 的配置
@@ -80,8 +81,8 @@ class BaseTradeEnv(gym.Env):
         # 若此时限制 per_buy_order_max_amt = 800， 则最高买入额为 800 元，意义在此 !
         self.per_buy_order_max_amt = config.get('per_buy_order_max_amt', self.initial_amount)
 
-        self.per_unit_qty = config['per_unit_qty']       # 每笔交易最小的股数，股票为100
-        self.per_unit_amount = config['per_unit_amount'] # 每笔最小的交易额，基金一般为10元
+        self.per_unit_qty = config.get('per_unit_qty', 100)       # 每笔交易最小的股数，股票为100
+        self.per_unit_amount = config.get('per_unit_amount', 200) # 每笔最小的交易额，基金一般为10元
 
         # 使用用户自定义的规则外挂的版本
         self.custom_rule_version = config.get('custom_rule_version', None)
@@ -89,10 +90,10 @@ class BaseTradeEnv(gym.Env):
             self.custom_base_rule = eval(f'FundTradeRules_V{self.custom_rule_version}')(self)
             logging.warning(f'---------> 使用版本"{self.custom_rule_version}"的自定义交易规则外挂')
 
-        self.buy_cost_pct = config['buy_cost_pct']
+        self.buy_cost_pct = config.get('buy_cost_pct', [None])
         self.sell_cost_pct = config.get('sell_cost_pct', [None])
-        self.reward_scaling = config['reward_scaling']
-        self.tech_indicator_list = config['tech_indicator_list']
+        self.reward_scaling = config.get('reward_scaling', None)
+        self.tech_indicator_list = config.get('tech_indicator_list', None)
 
         # 当日的交易数据特征
         self.stock_pools = self.df.tic.unique()
@@ -126,10 +127,14 @@ class BaseTradeEnv(gym.Env):
 
         self.terminal = False
         self.truncate = False
-        self.print_verbosity = config['print_verbosity']
-        self.model_name = config['model_name']
-        self.mode = config.get('mode', None)
-        self.iteration = config['iteration']
+        self.print_verbosity = config.get('print_verbosity', None)
+        self.model_name = config.get('model_name', None)
+        self.mode = config.get('mode', 'train') # 使用 bot 的模式
+        # !!! important: 在生产模式下，self.df 只需要最新一条数据
+        if self.mode in ['live']:
+            self.df = self.raw_data.iloc[-1:]
+
+        self.iteration = config.get('iteration', None)
 
         self.reward = 0
         self.cost = 0
@@ -143,7 +148,7 @@ class BaseTradeEnv(gym.Env):
         self.date_memory = [self._get_date()]
         self._seed()
 
-        self.output_dir = config['output_dir']
+        self.output_dir = config.get('output_dir', None)
         if self.output_dir:
             if not Path(self.output_dir).exists():
                 Path(self.output_dir).mkdir(exist_ok=True)
@@ -212,7 +217,7 @@ class BaseTradeEnv(gym.Env):
                         self.acct_info['pfo_price'][stock_name].append(close_price)
 
                         # 卖出股票，现金账户增加金额
-                        self.acct_info['cash_asset'].append(sell_amount)
+                        self.acct_info['cash_asset'][self._get_date()] = sell_amount
                         self.cost += close_price * sell_num_shares * self.sell_cost_pct[index]
                         self.trades += 1
             return sell_num_shares, sell_amount
@@ -246,7 +251,7 @@ class BaseTradeEnv(gym.Env):
                 1==1
                 ):
                 # 基于单笔最大交易限制的买入策略
-                cash_asset = sum(self.acct_info['cash_asset'])
+                cash_asset = sum(self.acct_info['cash_asset'].values())
                 available_cash = min(cash_asset, self.per_buy_order_max_amt)
                 available_shares = available_cash // close_price
 
@@ -261,8 +266,8 @@ class BaseTradeEnv(gym.Env):
                         if buy_amount >= self.per_unit_amount:
                             # 更新账户的可用本金
                             # 买入股票，现金账户减少金额, 并扣除手续费
-                            self.acct_info['cash_asset'].append(-close_price * buy_num_shares-buy_fee)
-                            # 买入股票，增加持仓
+                            self.acct_info['cash_asset'][self._get_date()] = -close_price * buy_num_shares - buy_fee
+                            # TODO: 买入股票，增加持仓; 此处都要改成字典模式
                             self.acct_info['pfo_holding'][stock_name].append(buy_num_shares)
                             self.acct_info['pfo_price'][stock_name].append(close_price)
 
@@ -359,6 +364,7 @@ class BaseTradeEnv(gym.Env):
 
             actions = actions * self.hmax
             actions = actions // self.per_unit_qty * self.per_unit_qty
+            # print(f'------------> 最终确定的 action: {actions}')
 
             # *****************************************
             # 此处添加用户自定义的交易 actions 规则
@@ -492,24 +498,26 @@ class BaseTradeEnv(gym.Env):
         Data example:
             acct_info = {
                 'plan_id': self.plan_id,
-                'cash_asset': [1000, 1200, 900, 1200],
+                'cash_asset': [1000, 1200, 900, 1200],  # 账户的现金流水
                 'pfo_holding': {
-                    '000001': [100, 200, -100, 400],
+                    '000001': [100, 200, -100, 400],    # pfo 的持仓流水
                 },
                 'pfo_price': {
-                    '000001': [10, 60, 450, 200],
+                    '000001': [10, 60, 450, 200],       # 买入的价格
                 },
                 'profit_shares_sold': {
-                    '000001': 100,
+                    '000001': 100,                      # 卖出的份额流水
                 },
                 'pfo_shares_redeem': {
                     '000001': [{
                         'buy_date': '1900-01-01',       # 持仓买入日期
-                        'shares': 0,                    # 买入份额, 对于卖部分仓位的时候, shares会被拆分
+                        'buy_num_shares':               # 买入的金额
+                        'shares': 0,                    # 扣除手续费的到账的金额（买入份额）, 对于卖部分仓位的时候, shares会被拆分
                         'hold': 0,                      # 持仓剩余的份额
                         'yield': 0,                     # 扣除卖出手续费的持仓净收益率
                         'soldout': 1,                   # 持仓是否被清仓
                         'selling_date': '2500-01-01',   # 持仓卖出日期
+                        'hold_id': 20位数的str           # 单笔持仓id, 主键
                     }] # 记录单只基金的每一笔定投
                 }
             }
@@ -521,11 +529,11 @@ class BaseTradeEnv(gym.Env):
         acct_info = {
             'plan_id': self.plan_id,
             'user_id': self.user_id,
-            'cash_asset': [self.initial_amount],
-            'pfo_holding': {},          # 持仓的变化流水
-            'pfo_price': {},            # 买卖的价格流水
-            'profit_shares_sold': {},   # 已卖出的盈利份额
-            'pfo_shares_redeem': {},    # 记录持仓买入的时间，同时，卖出时更新对应的持仓变化；主要应用于基金统计
+            'cash_asset': {'initial': self.initial_amount},
+            'pfo_holding': {},          # 持仓的变化流水, 数据类型: Dict[List[Dict]]
+            'pfo_price': {},            # 买卖的价格流水, 数据类型: Dict[List[Dict]]
+            'profit_shares_sold': {},   # 已卖出的盈利份额, 数据类型: Dict[List[Dict]]
+            'pfo_shares_redeem': {},    # 记录持仓买入的时间，同时，卖出时更新对应的持仓变化；主要应用于基金统计, 数据类型: Dict[List[Dict]]
             }
         # 此处需要注意股票列表与持仓列表的 mapping
         for idx, tic in enumerate(self.stock_pools):
@@ -542,7 +550,7 @@ class BaseTradeEnv(gym.Env):
         Desc:
             统计当前账户的资产价值, 包括持仓市值+现金金额
         '''
-        cash_asset = sum(self.acct_info['cash_asset'])
+        cash_asset = sum(self.acct_info['cash_asset'].values())
         holding_asset = sum([
             sum(self.acct_info['pfo_holding'][stock_name]) * close_price
             for stock_name, close_price in zip(self.current_data.tic, self.current_data.close)
@@ -613,7 +621,7 @@ class BaseTradeEnv(gym.Env):
         state = state.reshape(1, -1).tolist()[0]
 
         # 是否添加 持仓信息 & 账户现金 到 obs 中
-        acct_cash_asset = round(sum(self.acct_info['cash_asset']), 0)
+        acct_cash_asset = round(sum(self.acct_info['cash_asset'].values()), 0)
         # TODO: 添加加仓空间为环境的一部分
         acct_pfo_ratio = round(self._get_pfo_ratio(), 1)
         # holding_shares = [sum(shares) for _, shares in self.acct_info['pfo_holding'].items()]

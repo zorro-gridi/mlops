@@ -63,7 +63,7 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
         stock_name = self.current_data['tic'].to_list()[index]
         close_price = self.current_data['close'].to_list()[index]
         # 当前的剩余累计持仓
-        # cash_asset = sum(self.acct_info['cash_asset'])
+        # cash_asset = sum(self.acct_info['cash_asset'].values())
         stock_shares, _ = self._get_acct_pfo_shares()
         # logging.warning(f'当前账户持仓 ---------------> 现金: {cash_asset}, 份额: {stock_shares}')
 

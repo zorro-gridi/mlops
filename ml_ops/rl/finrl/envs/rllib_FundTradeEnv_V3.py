@@ -2,6 +2,7 @@
 from gymnasium import spaces
 import logging
 from ray.rllib.env import EnvContext
+import random
 
 import sys
 from pathlib import Path
@@ -46,7 +47,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
         stock_name = self.current_data['tic'].to_list()[index]
         close_price = self.current_data['close'].to_list()[index]
         # 当前的剩余累计持仓
-        # cash_asset = sum(self.acct_info['cash_asset'])
+        # cash_asset = sum(self.acct_info['cash_asset'].values())
         stock_shares, _ = self._get_acct_pfo_shares()
         # logging.warning(f'当前账户持仓 ---------------> 现金: {cash_asset}, 份额: {stock_shares}')
 
@@ -155,7 +156,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
             if is_buying_accept:
                 # 基于单笔最大交易限制的买入策略
                 # logging.warning(f'acct cash list ----------> {self.acct_info["cash_asset"]}')
-                cash_asset = sum(self.acct_info['cash_asset'])
+                cash_asset = sum(self.acct_info['cash_asset'].values())
                 available_cash = min(cash_asset, self.per_buy_order_max_amt)
                 available_shares = available_cash
 
@@ -179,11 +180,10 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
 
                         # 记录持仓的买入信息
                         self.acct_info['pfo_shares_redeem'].setdefault(stock_name, [])
-
                         if self.mode in ['infer', 'live'] and self._check_holding_duplicate(stock_name, trade_date='buy_date'):
                             return 0, 0
 
-                        # 不取当日的交易，是因为需要更新
+                        # 排除当日的date key, 需要更新
                         self.acct_info['pfo_shares_redeem'][stock_name] = [
                             record for record in self.acct_info['pfo_shares_redeem'][stock_name]
                             if record['buy_date'] != self._get_date()
@@ -196,10 +196,11 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                             'hold': buy_amount,
                             'yield': 0,
                             'soldout': 0,
+                            'hold_id': str(random.randint(1e18, 9e18)),
                             })
 
                         # 更新账户的可用本金; 买入股票，现金账户减少金额
-                        self.acct_info['cash_asset'].append(round(-buy_num_shares, 2))
+                        self.acct_info['cash_asset'][self._get_date()] = round(-buy_num_shares, 2)
 
                         # 更新买入的手续费
                         self.cost += buy_fee
@@ -214,3 +215,4 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
         return buy_num_shares, buy_amount
 
 # %%
+1+1

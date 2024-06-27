@@ -2,7 +2,7 @@
 # from gymnasium import spaces
 import logging
 from ray.rllib.env import EnvContext
-
+import random
 
 import sys
 from pathlib import Path
@@ -42,7 +42,7 @@ class FundQuantTradeEnv_V4(FundQuantTradeEnv_V1):
         action = abs(action)
         stock_name = self.current_data['tic'].to_list()[index]
         # 当前的剩余累计持仓
-        # cash_asset = sum(self.acct_info['cash_asset'])
+        # cash_asset = sum(self.acct_info['cash_asset'].values())
         stock_shares, _ = self._get_acct_pfo_shares()
         # logging.warning(f'当前账户持仓 ---------------> 现金: {cash_asset}, 份额: {stock_shares}')
 
@@ -106,7 +106,7 @@ class FundQuantTradeEnv_V4(FundQuantTradeEnv_V1):
             if is_buying_accept:
                 # 基于单笔最大交易限制的买入策略
                 # logging.warning(f'acct cash list ----------> {self.acct_info["cash_asset"]}')
-                cash_asset = sum(self.acct_info['cash_asset'])
+                cash_asset = sum(self.acct_info['cash_asset'].values())
                 available_cash = min(cash_asset, self.per_buy_order_max_amt)
                 # 注意：与股票不同，基金直接使用买卖金额，模型输出金额后再换算份额
                 available_shares = available_cash
@@ -135,10 +135,11 @@ class FundQuantTradeEnv_V4(FundQuantTradeEnv_V1):
                             'hold': buy_amount,
                             'yield': 0,
                             'soldout': 0,
+                            'hold_id': str(random.randint(1e18, 9e18)),
                             })
                         # 更新账户的可用本金
                         # 买入股票，现金账户减少金额
-                        self.acct_info['cash_asset'].append(round(-buy_num_shares, 2))
+                        self.acct_info['cash_asset'][self._get_date()] = round(-buy_num_shares, 2)
 
                         # 更新买入的手续费
                         self.cost += buy_fee

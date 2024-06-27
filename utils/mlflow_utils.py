@@ -21,12 +21,14 @@ def check_model_existence(model_name, tracking_uri=tracking_uri):
     return model_name in registered_models
 
 
-def load_register_model_args(reg_model_name, model_version, tracking_uri=tracking_uri):
+def load_register_model_args(reg_model_name: str, model_version: str, tracking_uri=tracking_uri):
     '''
     Desc:
         加载注册模型的参数
     Return:
-        model 的参数字典, 包括model 参数，数据集参数...
+        model 的参数字典, 包括 model 参数，数据集参数...
+    Remark:
+        必须要要求 log_model 时传入 signature 参数
     '''
     mlflow_client = MlflowClient(tracking_uri)
     hist_model_uri = mlflow_client.get_model_version_download_uri(reg_model_name, model_version)
@@ -35,7 +37,6 @@ def load_register_model_args(reg_model_name, model_version, tracking_uri=trackin
     params_list = eval(
         hist_model_signature_dict['params'].replace('null', 'None').replace('true', 'True').replace('false', 'False'))
     hist_model_args = {param['name']: param['default'] for param in params_list}
-
     logging.warning(f'hist model params details: {hist_model_args}')
     return hist_model_args
 
@@ -48,8 +49,12 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode):
         reg_model_name: 模型名称
         eval_metric: 模型的比较指标
     '''
+    if not check_model_existence(reg_model_name):
+        raise Exception(f'{reg_model_name} 模型不存在 !!!')
+
     mlflow_client = MlflowClient(tracking_uri)
     best_loss = -np.inf if optimize_mode == 'max' else np.inf
+
     best_version = None
     best_model_config = None
 
