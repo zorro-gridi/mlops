@@ -141,13 +141,12 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 # 如果没有卖空
                 if is_soldout == 0:
                     # 返回持有天数
-                    days_diff = self.env_cls._calculate_date_diff(buy_date, selling_date)
+                    # days_diff = self.env_cls._calculate_date_diff(buy_date, selling_date)
                     # 卖出收益率 = 持仓收益率 - 卖出费率；其中，持仓收益率 = 收益率 - 买入费率
                     buy_yield = self.env_cls._caculate_holding_yield(fund_code, buy_date, selling_date)
-                    selling_fee = self.env_cls._get_redeem_rate(days_diff)
+                    # selling_fee = self.env_cls._get_redeem_rate(days_diff)
                     # 更新持仓的实际收益率
-                    self.update_holdings[fund_code][holding_idx]['yield'] = round(
-                        buy_yield - selling_fee ,4)
+                    self.update_holdings[fund_code][holding_idx]['yield'] = round(buy_yield, 4)
         # 更新账户的持仓收益
         if update_holdings:
             holding_yield_inst = holding_yield(update_holdings)
@@ -361,35 +360,79 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             return 0
 
 
-    def _cal_fofo_redeem_rate(self, fund_code, sell_amount):
+    def _stat_redemm_rate_balance(self, fund_code):
         '''
         Desc:
-            2024-06-27: 按照"FIFO 先进先出"的规则计算实际卖出费率。
-            实现给定一个卖出份额, 计算预计的卖出综合费率
+            统计持仓账户的卖出手续费率余额分布
         Release log:
-            2024-06-27: 新增
+            2024-06-28: 新增
         '''
         acct_holdings = self.acct_info['pfo_shares_redeem'][fund_code]
         still_holdings = [h for h in acct_holdings if h['soldout'] == 0]
-        sort_holdings = still_holdings.sort(key=lambda x: x['buy_date'])
+
+        redeem_rate_balance = {}
+        for h in still_holdings:
+            hold_shares = h['hold']
+            buy_date = h['buy_date']
+            curr_date = self._get_date()
+            days_diff = self._calculate_date_diff(buy_date, curr_date)
+            redeem_rate = self._get_redeem_rate(days_diff)
+
+            redeem_rate_balance.setdefault(redeem_rate, 0)
+            redeem_rate_balance[redeem_rate] += hold_shares
+
+        redeem_rate_balance = dict(sorted(redeem_rate_balance.items()))
+        return redeem_rate_balance
+
+
+    def _cal_fofo_redeem_rate(self, fund_code, sell_amount):
+        '''
+        Desc:
+            实现给定一个卖出份额, 计算预计的卖出综合费率
+            2024-06-27: 按照"FIFO 先进先出"的规则计算实际卖出费率。
+        Release log:
+            2024-06-27: 新增
+            2024-06-28: 增加 redeem_balance 剩余手续费余额处理逻辑
+        '''
+        acct_holdings = self.acct_info['pfo_shares_redeem'][fund_code]
+        # 已兑换掉费率额度的单独摘开
+        redeemOut_holdings = [h for h in acct_holdings if h['redeem_balance'] <= 0]
+        # 未兑换费率额度的循环计算卖出费率
+        still_holdings = [h for h in acct_holdings if h['redeem_balance'] > 0]
+        import pandas as pd
+        logging.warning(f'-----------> _cal_fofo_redeem_rate still_holdings:\n{pd.DataFrame(still_holdings)}\n')
+
+        # 越早买入的份额，需要越早清仓; 这个 still_holdings 是列表
+        sort_holdings = list(sorted(still_holdings, key=lambda x: x['buy_date']))
 
         total_fee = 0
-        for h in sort_holdings:
-            if sell_amount > 0:
-                hold_shares = h['hold']
-                buy_date = h['buy_date']
-                curr_date = self._get_date()
-                redeem_rate = self._calculate_date_diff(buy_date, curr_date)
+        sell_amount_init = copy(sell_amount)
 
-                if sell_amount > hold_shares:
-                    redeem_fee = hold_shares * redeem_rate
-                else:
-                    redeem_fee = sell_amount * redeem_rate
+        for idx, h in enumerate(sort_holdings):
+            logging.warning(f'--------------> sell_amount: {sell_amount}\n')
+            hold_shares = h['hold']
+            buy_date = h['buy_date']
+            curr_date = self._get_date()
+            days_diff = self._calculate_date_diff(buy_date, curr_date)
+            redeem_rate = self._get_redeem_rate(days_diff)
 
-                total_fee += redeem_fee
-                sell_amount -= hold_shares
+            if sell_amount > hold_shares:
+                redeem_fee = hold_shares * redeem_rate
+                sort_holdings[idx]['redeem_balance'] = 0
+            else:
+                redeem_fee = sell_amount * redeem_rate
+                sort_holdings[idx]['redeem_balance'] = hold_shares - sell_amount
 
-        total_redeem_rate = total_fee / sell_amount
+            total_fee += redeem_fee
+            sell_amount -= hold_shares
+            if sell_amount <= 0:
+                break
+
+        # 更新持仓的 redeem_balance 信息
+        redeemOut_holdings.extend(sort_holdings)
+        self.acct_info['pfo_shares_redeem'][fund_code] = redeemOut_holdings
+
+        total_redeem_rate = round(total_fee / sell_amount_init, 4)
         return total_redeem_rate
 
 
@@ -402,41 +445,50 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         '''
         # 获取账户达到预期收益的所有持仓份额（该函数也同步更新了持仓收益）
         max_subject_shares_for_selling = self._get_max_yield_shares(fund_code)
-        # 先更新持仓的收益率
+        # 先更新持仓的收益率；_get_max_yield_shares() 已更新，不重复调用
         # tic_holdings = self._update_acct_holdings_debit_yield()[fund_code]
 
         tic_holdings = self.acct_info['pfo_shares_redeem'][fund_code]
         still_holdings = [h for h in tic_holdings if h['soldout'] == 0]
         # 此处得按 yield 收益率逆序排名
-        sort_holdings = still_holdings.sort(key=lambda x: x['yield'], reverse=True)
+        sort_holdings = list(sorted(still_holdings, key=lambda x: x['yield'], reverse=True))
 
-        max_selling_amount = 0
-        max_received_value = 0
-        for h in sort_holdings:
-            sell_amount = h['hold']
-            hold_yield = h['yield']
+        max_selling_amount = 0              # 循环中累计的卖出累计份额
+        max_received_value = 0              # 循环中累计的卖出可到账金额
+        final_max_selling_amount = 0        # 最终决策的卖出累计数量
+        total_selling_yield = 0             # 循环中卖出的累计收益率
 
-            redeem_rate = self._cal_fofo_redeem_rate(fund_code, sell_amount)
-            selling_yield = hold_yield - redeem_rate
+        # 持仓中最大的收益至少达到 min_yield 水平
+        if sort_holdings[0]['yield'] >= min_yield:
+            for h in sort_holdings:
+                sell_amount = h['hold']
+                hold_yield = h['yield']
 
-            # TODO: 此处有两种模式: 选择模式一
-            # 一， 整体（即考虑亏损持仓）总卖出收益达到 min_yield
-            # 二， 必须每一笔都达到 min_yield
+                redeem_rate = self._cal_fofo_redeem_rate(fund_code, sell_amount)
+                selling_yield = hold_yield - redeem_rate
 
-            max_selling_amount += sell_amount
-            max_received_value += sell_amount * (1 + selling_yield)
-            total_selling_yield = max_received_value / max_selling_amount - 1
+                # TODO: 此处有两种模式: 选择模式一
+                # 一， 整体（即考虑亏损持仓）总卖出收益达到 min_yield
+                # 二， 必须每一笔都达到 min_yield
 
-            # !!! important 此处的条件逻辑有点绕:
-            # 1. 必须要达到最小收益率：因为卖出止盈必须达到最小止盈收益率；
-            # 2. 卖出的份额不能超过达到目标止盈收益的累计持仓份额, 解释如下:
-                # 2.1 达到目标止盈的累计持仓肯定优先卖出, 因此, 这个总数是理论上🉑️卖出的总数
-                # 2.2 卖出的整体份额又必须达到最小止盈收益率
-            # 综合 2.1/2.2 的条件，卖出的份额判断即完整统一, 触发任何一个条件则停止搜素，定格最大可卖出持仓
-            if total_selling_yield < min_yield or max_selling_amount > max_subject_shares_for_selling:
-                break
+                max_selling_amount += sell_amount
+                max_received_value += sell_amount * (1 + selling_yield)
+                total_selling_yield = max_received_value / max_selling_amount - 1
+                logging.warning(f'-----------> total_selling_yield: {total_selling_yield:.4f}')
 
-        return max_selling_amount
+                # !!! important 此处的条件逻辑有点绕:
+                # 1. 必须要达到最小收益率：因为卖出止盈必须达到最小止盈收益率；
+                # 2. 卖出的份额不能超过达到目标止盈收益的累计持仓份额, 解释如下:
+                    # 2.1 达到目标止盈的累计持仓肯定优先卖出, 因此, 这个总数是理论上🉑️卖出的总数
+                    # 2.2 卖出的整体份额又必须达到最小止盈收益率
+                # 综合 2.1/2.2 的条件，卖出的份额判断即完整统一, 触发任何一个条件则停止搜素，定格最大可卖出持仓
+                if total_selling_yield < min_yield or max_selling_amount > max_subject_shares_for_selling:
+                    break
+
+                # 两个条件取小
+                final_max_selling_amount = min(max_selling_amount, max_subject_shares_for_selling)
+
+        return final_max_selling_amount
 
 
     def _get_max_yield_shares(self, fund_code, min_yield=None):
@@ -612,7 +664,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         Release log:
             2024-06-27:
                 1. 给持仓添加 hold_id 主键
-                2. 修复基于 FIFO 规则的卖出判断逻辑; TODO: 需要修改卖出持仓的信息
+                2. 修复基于 FIFO 规则的卖出判断逻辑; TODO: 需要修改每一笔持仓的实际卖出费率
         '''
         task_start = time.time()
         update_holdings = self._update_acct_holdings_debit_yield()
@@ -628,8 +680,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             # 计算扣除卖出手续费的收益率就是为了按照收益率真实排序
             # sorted_holdings: sorted of still holding
             sorted_holdings = list(sorted(still_holdings, key=lambda x: x['yield'], reverse=True))
-            # 越早买入的份额，卖出手续费率越低，需要越早清仓
-            # sorted_holdings = list(sorted(still_holdings, key=lambda x: x['buy_date']))
             # logging.warning(f'sorted_holdings ------->\n{pd.DataFrame(sorted_holdings)}')
 
             selling_shares = copy(sell_amount)                # 统计卖出的原始持仓金额
@@ -662,20 +712,22 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                     if round(self.sell_amount, 2) == 0:
                         return
 
-                    date = shares_info['buy_date']
+                    # buy_date = shares_info['buy_date']
                     shares = shares_info['hold']
                     # 获取持仓的天数
-                    holding_days = self.env_clf._calculate_date_diff(date, selling_date)
+                    # holding_days = self.env_clf._calculate_date_diff(buy_date, selling_date)
                     # 根据持仓天数, 计算该笔持仓的赎回费率
-                    redeem_rate = self.env_clf._get_redeem_rate(holding_days)
+                    # redeem_rate = self.env_clf._get_redeem_rate(holding_days)
                     shares_yield = shares_info['yield']
 
                     # 注意: 下面逻辑有点绕
-                    # ****************************************************
+                    # *******************************************************************
                     # 1. 如果要卖出的金额比单笔持仓高, 则先将该笔持仓设置为卖空状态, 即 soldout = 1
                     if self.sell_amount >= shares:
-                        # 计算该笔持仓的当前市值
-                        shares_value = shares * (1 + shares_yield)
+                        # 根据卖出份额，计算对应的卖出费率
+                        redeem_rate = self.env_clf._cal_fofo_redeem_rate(fund_code, shares)
+                        # 计算该笔持仓的当前市值, 扣除卖出手续费;
+                        shares_value = shares * (1 + shares_yield - redeem_rate)
                         # 累加预计回收的金额
                         self.selling_value += shares_value
 
@@ -694,6 +746,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                     # 2. 如果要卖出的金额小于单笔持仓金额，需要将单笔持仓拆分为两部分：!important
                     #    卖出金额的部分需设置为卖空状态: soldout = 1, 另一部分则继续保留
                     else:
+                        # 根据卖出份额，计算对应的卖出费率
+                        redeem_rate = self.env_clf._cal_fofo_redeem_rate(fund_code, self.sell_amount)
                         # rest_value: 剩余待卖出的原始份额市值
                         rest_value = self.sell_amount * (1 + shares_yield)
                         self.selling_value += rest_value
@@ -863,7 +917,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
                         # 记录持仓的买入日期
                         self.acct_info['pfo_shares_redeem'].setdefault(stock_name, [])
-
                         if self.mode in ['infer', 'live'] and self._check_holding_duplicate(stock_name, trade_date='buy_date'):
                             return 0, 0
 
@@ -880,6 +933,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                             'soldout': 0,
                             # 2024-06-27 bug 修复: 增加持仓 id, 主键唯一
                             'hold_id': str(random.randint(1e18, 9e18)),
+                            # 2024-06-28 bug 修复: 增加手续费持仓额度
+                            'redeem_balance': buy_amount,
                             })
 
                         # 更新账户的可用本金
@@ -917,7 +972,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         # logging.warning(f'当前账户持仓 ---------------> 现金: {cash_asset}, 份额: {stock_shares}')
 
         # 1. 当前可卖出的最大盈利持仓
-        max_profit_shares = self._get_max_yield_shares(stock_name, min_yield=self.min_yield)
+        # 2024-06-28 更新
+        max_profit_shares = self._cal_max_selling_amount_with_min_yield(stock_name, min_yield=self.min_yield)
         # logging.warning(f'当前盈利持仓 ---------------> {max_profit_shares}')
 
         # check if the stock is able to sell, for simlicity we just add it in techical index
@@ -969,9 +1025,9 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         Release log:
             1. 2024-04-18: 新增
         '''
-        is_code = self.df['tic'] == fund_code
-        is_date = self.df['date'] == buy_date
-        fund_data = self.df.loc[(is_code & is_date)]
+        fund_data = self.raw_data.query(expr=f'tic=="{fund_code}" and date=="{buy_date}"')
+        if len(fund_data) == 0:
+            raise Exception(f'----------> Exception: self.raw_data 中找不到 {fund_code} & {buy_date} 数据记录')
 
         is_reverse_point = fund_data['is_reverse_point'].max()
         idx_percentile = fund_data['closed_phase_percentile'].max()

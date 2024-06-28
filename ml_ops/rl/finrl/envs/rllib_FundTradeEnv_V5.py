@@ -137,6 +137,7 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
                             'yield': 0,
                             'soldout': 0,
                             'hold_id': str(random.randint(1e18, 9e18)),
+                            'redeem_balance': buy_amount,
                             })
                         # 更新账户的可用本金
                         # 买入股票，现金账户减少金额

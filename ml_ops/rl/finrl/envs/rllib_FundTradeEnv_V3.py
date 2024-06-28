@@ -52,7 +52,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
         # logging.warning(f'当前账户持仓 ---------------> 现金: {cash_asset}, 份额: {stock_shares}')
 
         # 1. 当前可卖出的最大盈利持仓
-        max_profit_shares = self._get_max_yield_shares(stock_name, min_yield=self.min_yield)
+        max_profit_shares = self._cal_max_selling_amount_with_min_yield(stock_name, min_yield=self.min_yield)
         # logging.warning(f'当前盈利持仓 ---------------> {max_profit_shares}')
 
         # check if the stock is able to sell, for simlicity we just add it in techical index
@@ -197,6 +197,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                             'yield': 0,
                             'soldout': 0,
                             'hold_id': str(random.randint(1e18, 9e18)),
+                            'redeem_balance': buy_amount,
                             })
 
                         # 更新账户的可用本金; 买入股票，现金账户减少金额

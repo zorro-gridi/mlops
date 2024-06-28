@@ -31,7 +31,7 @@ class FundTradeRules_V2(FundTradeRules_V1):
         # logging.warning(f'当前账户持仓 ---------------> 现金: {cash_asset}, 份额: {stock_shares}')
 
         # 1. 当前可卖出的最大盈利持仓
-        max_profit_shares = self.fund_env._get_max_yield_shares(stock_name, min_yield=self.fund_env.min_yield)
+        max_profit_shares = self.fund_env._cal_max_selling_amount_with_min_yield(stock_name, min_yield=self.fund_env.min_yield)
         # logging.warning(f'当前盈利持仓 ---------------> {max_profit_shares}')
 
         # check if the stock is able to sell, for simlicity we just add it in techical index
