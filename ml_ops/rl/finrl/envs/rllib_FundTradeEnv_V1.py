@@ -488,11 +488,15 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         # 持仓中最大的收益至少达到 min_yield 水平
         if sort_holdings[0]['yield'] >= min_yield:
             for h in sort_holdings:
+                buy_amount = h['shares']
+                buy_rate = h['buy_rate']
                 sell_amount = h['hold']
                 hold_yield = h['yield']
 
                 redeem_rate = self._cal_fofo_redeem_rate(fund_code, sell_amount)
-                selling_yield = hold_yield - redeem_rate
+                # 考虑 申购 & 赎回 的净收益率
+                selling_yield = round(
+                        (sell_amount * (hold_yield - redeem_rate) - buy_amount * buy_rate) / buy_amount, 4)
 
                 # TODO: 此处有两种模式: 选择模式一
                 # 一， 整体（即考虑亏损持仓）总卖出收益达到 min_yield
