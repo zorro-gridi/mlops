@@ -488,6 +488,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         # 持仓中最大的收益至少达到 min_yield 水平
         if sort_holdings[0]['yield'] >= min_yield:
             for h in sort_holdings:
+                # 在卖出阶段，如果被拆分，此处的 buy_amount 就是一笔的部分份额
                 buy_amount = h['shares']
                 buy_rate = h['buy_rate']
                 sell_amount = h['hold']
