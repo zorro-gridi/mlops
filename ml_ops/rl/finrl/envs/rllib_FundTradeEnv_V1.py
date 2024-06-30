@@ -101,6 +101,31 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         self._update_acct_holdings_debit_yield()
 
 
+    def _get_plan_idx_to_fundcode(self, tic_code, buy_date):
+        '''
+        Desc:
+            获取用户配置的指数定投计划匹配的基金代码
+        Args:
+            tic_code: 计划定投的指数名称
+            buy_date: 定投日期
+        Release log:
+            2024-06-30: 新增
+        '''
+        # print(f'-----------> {self.idx_2_fund}')
+        # 训练模式下，只使用指数本身测试
+        if self.mode in ['train']:
+            return tic_code
+        else:
+            # 取 buy_date 前，历史配置的最新一条数据
+            idx_2_fundcode = self.idx_2_fund[
+                (self.idx_2_fund['user_id'] == self.user_id) &
+                (self.idx_2_fund['plan_id'] == self.plan_id) &
+                (self.idx_2_fund['tic'] == tic_code) &
+                (self.idx_2_fund['update_date'] <= buy_date)
+            ]['fundcode'].iloc[-1]
+            return idx_2_fundcode
+
+
     def _update_acct_holdings_debit_yield(self):
         '''
         Desc:
@@ -127,7 +152,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 Desc:
                     更新持仓的实际收益, 已经考虑了当日卖出的费率
                 Args:
-                    fund_code: 持仓代码
+                    fund_code: 对应 idx_name, 定投指数的名称
                     holding_idx: 持仓序列的索引
                 Remark:
                     考虑过将买入日期作为持仓字典的 key, 但是持仓分笔卖出时, 会导致 key 重复。dict 不允许重复的 key
@@ -139,22 +164,24 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 selling_date = curr_date if selling_date == '2500-01-01' else selling_date
 
                 # 如果没有卖空
-                if is_soldout == 0:
+                if is_soldout in [0, ]:
                     # 返回持有天数
                     # days_diff = self.env_cls._calculate_date_diff(buy_date, selling_date)
                     # 卖出收益率 = 持仓收益率 - 卖出费率；其中，持仓收益率 = 收益率 - 买入费率
                     buy_yield = self.env_cls._caculate_holding_yield(fund_code, buy_date, selling_date)
+                    # logging.warning(f'------------> buy yield: {buy_yield:0.4f}')
                     # selling_fee = self.env_cls._get_redeem_rate(days_diff)
                     # 更新持仓的实际收益率
                     self.update_holdings[fund_code][holding_idx]['yield'] = round(buy_yield, 4)
+
         # 更新账户的持仓收益
         if update_holdings:
             holding_yield_inst = holding_yield(update_holdings)
             [
-                holding_yield_inst.update_holding_yield(fund_code, holding_idx)
-                for fund_code, holdings in update_holdings.items()
+                holding_yield_inst.update_holding_yield(tic, holding_idx)
+                for tic, holdings in update_holdings.items()
                 for holding_idx, _ in enumerate(holdings)
-             ]
+                ]
 
             self.acct_info['pfo_shares_redeem'] = holding_yield_inst.update_holdings
             return update_holdings
@@ -496,7 +523,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         Desc:
             计算给定卖出日期，持仓账户达到最小盈利的累计持仓数量
         Args:
-            fund_code: 基金名称, 指数名称等
+            fund_code: 计划定投的指数名称
             min_yield: 最小盈利阈值
         Return:
             max_yield_shares: 当前可卖出的已盈利的最大持仓数量
@@ -529,12 +556,12 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         return max_yield_shares
 
 
-    def _caculate_holding_yield(self, fund_code, buy_date, sell_date):
+    def _caculate_holding_yield(self, tic_code, buy_date, sell_date):
         '''
         Desc:
-            基金基金卖出时的毛收益率
+            统计基金卖出时的毛收益率, 不考虑申购费率、和赎回费率
         Args:
-            fund_code: 基金名称, 指数名称等
+            tic_code: 计划定投的指数名称, egg: 医药生物，传媒, ...
             buy_date: 买入日期
             sell_date: 卖出日期
         Return:
@@ -542,9 +569,24 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         TODO Bug:
             在 live 生产模式下，只有一条当日的最新数据，无法计算累计的收益率
         '''
-        fund_data = self.raw_data.query(expr=f'''
-            tic == "{fund_code}" and date > "{buy_date}" and date <= "{sell_date}"
-            ''').copy()
+        # 取 buy_date 前，历史配置的最新一条数据
+        idx_2_fundcode = self._get_plan_idx_to_fundcode(tic_code, buy_date)
+        # logging.warning(f'---------------> idx_2_fundcode: {tic_code} vs {idx_2_fundcode}')
+
+        if self.mode in ['train']:
+            markup_data = self.raw_data
+        else:
+            markup_data = self.fund_data
+
+        # logging.warning(f'-----------> markup_data: {markup_data}')
+        # markup_data: 计算持仓基金标的涨跌幅的原始行情数据
+        fund_data = markup_data.loc[
+            (markup_data['tic'] == idx_2_fundcode) &
+            (markup_data['date'] > buy_date) &
+            (markup_data['date'] <= sell_date)
+        ].copy()
+
+        # logging.warning(f'--------------> fund networth data:\n{fund_data}')
 
         if len(fund_data) > 0:
             # 这个计算是否有错？答：没错！因为筛选条件已经过滤了买入当日的涨跌幅
@@ -552,6 +594,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             # logging.warning(f'---------->\n{fund_data}')
             # logging.warning(f'----------> buy_date: {buy_date}, selling_date: {sell_date}, selling yield: {fund_yield}:.4f')
             return fund_yield
+
+        logging.warning(f'--------------> 当日新买入，无法计算收益')
         return 0
 
 
@@ -736,6 +780,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                         sorted_holdings[i]['hold'] = 0
                         sorted_holdings[i]['soldout'] = 1
                         sorted_holdings[i]['selling_date'] = selling_date
+                        sorted_holdings[i]['redeem_rate'] = redeem_rate
 
                         # 分仓卖出，更新剩余待卖出金额 sell_amount
                         self.sell_amount -= shares
@@ -758,6 +803,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                         update_item['hold'] = 0
                         update_item['soldout'] = 1
                         update_item['selling_date'] = selling_date
+                        update_item['redeem_rate'] = redeem_rate
                         # 2024-06-27 bug 修复: 拆分 hold 重新赋值一个 hold id, 确保主键唯一
                         update_item['hold_id'] = str(random.randint(1e18, 9e18))
 
@@ -927,14 +973,19 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                         self.acct_info['pfo_shares_redeem'][stock_name].append({
                             'buy_date': self._get_date(),
                             'selling_date': '2500-01-01',
-                            'shares': buy_amount,
+                            # 2024-06-29 修复，使用原始的买入金额
+                            'shares': buy_num_shares,
                             'hold': buy_amount,
-                            'yield': 0,
+                            # 买入即损失手续费
+                            'yield': round(-self.buy_cost_pct[index], 2),
                             'soldout': 0,
                             # 2024-06-27 bug 修复: 增加持仓 id, 主键唯一
                             'hold_id': str(random.randint(1e18, 9e18)),
                             # 2024-06-28 bug 修复: 增加手续费持仓额度
                             'redeem_balance': buy_amount,
+                            'fundcode': self._get_plan_idx_to_fundcode(stock_name, self._get_date()),
+                            'buy_rate': round(self.buy_cost_pct[index], 2),
+                            'redeem_rate': 'null',
                             })
 
                         # 更新账户的可用本金
@@ -1020,12 +1071,15 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             计算每一笔买入持仓的最小预期收益率, 特别是对于在反弹、反转底部买入的持仓，需要扩大期望收益率。
             本预期收益策略仅针对波动性的指数设计，对于指数的单边行情不适用
         Args:
-            fund_code: 交易基金代码，股票代码
+            fund_code: 计划定投的指数名称
             buy_date: 买入日期
         Release log:
             1. 2024-04-18: 新增
         '''
-        fund_data = self.raw_data.query(expr=f'tic=="{fund_code}" and date=="{buy_date}"')
+        fund_data = self.raw_data.loc[
+            (self.raw_data['tic'] == fund_code) &
+            (self.raw_data['date'] == buy_date)
+        ]
         if len(fund_data) == 0:
             raise Exception(f'----------> Exception: self.raw_data 中找不到 {fund_code} & {buy_date} 数据记录')
 

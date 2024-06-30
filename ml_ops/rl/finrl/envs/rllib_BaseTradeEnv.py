@@ -67,8 +67,20 @@ class BaseTradeEnv(gym.Env):
         self.acct_info = config.get('acct_info', None)                          # 是否用户自定义初始化账户信息
         self.day = config.get('day', 0)
         self.df = config['df']
-        self.raw_data = config.get('raw_data', self.df)                         # 指数的原始涨跌数据，用于计算区间的收益率
+        self.raw_data = config.get('raw_data', self.df)                         # 指数的原始涨跌数据，用于训练计算区间的收益率，和历史反转点
         self.num_stock_shares = config.get('num_stock_shares', [None])
+
+        # 2024-06-30 新增: 指数与基金代码的映射关系;
+        # data demo: pd.DataFrame, columns: [user_id, plan_id, tic, fundcode, update_date]
+        self.idx_2_fund = config.get('idx_2_fund', None)
+
+        self.mode = config.get('mode', 'train') # 使用 bot 的模式
+        # !!! important: 在生产模式下，self.df 只需要最新一条数据
+        if self.mode in ['live']:
+            self.df = self.raw_data.iloc[-1:]
+            self.fund_data = config['fund_data']                                # 基金的原始涨跌数据，用于计算区间的收益率
+        else:
+            self.fund_data = config.get('fund_data', self.raw_data)
 
         # TODO: hmax 需要设计一个预期函数，即估计出最大定投次数, 换算得到
         self.hmax = config.get('hmax', 200)                                     # base model 的配置
@@ -108,7 +120,7 @@ class BaseTradeEnv(gym.Env):
 
         # initalize acct info & state
         self.acct_info = config.get('acct_info', None)
-        self.user_id = config.get('user_id', 'Zorro')
+        self.user_id = config.get('user_id', 'zorro')
         self.plan_id = config.get('plan_id')
         self.acct_info = self.acct_info if self.acct_info else self._initial_acct_info()
 
@@ -129,11 +141,6 @@ class BaseTradeEnv(gym.Env):
         self.truncate = False
         self.print_verbosity = config.get('print_verbosity', None)
         self.model_name = config.get('model_name', None)
-        self.mode = config.get('mode', 'train') # 使用 bot 的模式
-        # !!! important: 在生产模式下，self.df 只需要最新一条数据
-        if self.mode in ['live']:
-            self.df = self.raw_data.iloc[-1:]
-
         self.iteration = config.get('iteration', None)
 
         self.reward = 0
@@ -152,6 +159,7 @@ class BaseTradeEnv(gym.Env):
         if self.output_dir:
             if not Path(self.output_dir).exists():
                 Path(self.output_dir).mkdir(exist_ok=True)
+
 
     def _sell_stock(self, index, action):
         '''

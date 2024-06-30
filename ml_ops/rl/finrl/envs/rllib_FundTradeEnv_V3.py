@@ -192,12 +192,20 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                         self.acct_info['pfo_shares_redeem'][stock_name].append({
                             'buy_date': self._get_date(),
                             'selling_date': '2500-01-01',
-                            'shares': buy_amount,
+                            # 2024-06-29 修复，使用原始的买入金额
+                            'shares': buy_num_shares,
                             'hold': buy_amount,
-                            'yield': 0,
+                            # 买入即损失手续费
+                            'yield': round(-self.buy_cost_pct[index], 2),
                             'soldout': 0,
+                            # 2024-06-27 bug 修复: 增加持仓 id, 主键唯一
                             'hold_id': str(random.randint(1e18, 9e18)),
+                            # 2024-06-28 bug 修复: 增加手续费持仓额度
                             'redeem_balance': buy_amount,
+                            # 2024-06-30 新增 3 个字段
+                            'fundcode': self._get_plan_idx_to_fundcode(stock_name, self._get_date()),
+                            'buy_rate': round(self.buy_cost_pct[index], 2),
+                            'redeem_rate': 'null',
                             })
 
                         # 更新账户的可用本金; 买入股票，现金账户减少金额
