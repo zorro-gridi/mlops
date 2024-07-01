@@ -101,8 +101,8 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                     logging.warning(f'当前仓位过高，主动减仓 ----> {over_pfo_ratio},  decrease_pfo_amount: {sell_amount}')
 
                 if sell_amount > 0:
-                    self.acct_info['pfo_holding'][stock_name].append(-sell_num_shares)
-                    self.acct_info['pfo_price'][stock_name].append(close_price)
+                    # self.acct_info['pfo_holding'][stock_name].append(-sell_num_shares)
+                    # self.acct_info['pfo_price'][stock_name].append(close_price)
                     return_ratio = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
 
             return sell_num_shares, sell_amount

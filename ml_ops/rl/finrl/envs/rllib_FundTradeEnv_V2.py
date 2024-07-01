@@ -93,13 +93,13 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
                     if sell_num_shares > 0:
                         # 记录累计已卖出的盈利头寸
                         # logging.warning(f'do sell stock action: {sell_num_shares} quantities.')
-                        self.acct_info['profit_shares_sold'][stock_name] += sell_num_shares
+                        # self.acct_info['profit_shares_sold'][stock_name] += sell_num_shares
                         # 计算卖出可获得的金额，考虑交易费用
                         sell_amount = sell_num_shares
 
                         # 卖出股票，仓位减少
-                        self.acct_info['pfo_holding'][stock_name].append(-sell_num_shares)
-                        self.acct_info['pfo_price'][stock_name].append(close_price)
+                        # self.acct_info['pfo_holding'][stock_name].append(-sell_num_shares)
+                        # self.acct_info['pfo_price'][stock_name].append(close_price)
                         return_ratio = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
 
             return sell_num_shares, sell_amount
