@@ -982,7 +982,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                             'shares': buy_num_shares,
                             'hold': buy_amount,
                             # 买入即损失手续费
-                            'yield': round(-self.buy_cost_pct[index], 2),
+                            'yield': -self.buy_cost_pct[index],
                             'soldout': 0,
                             # 2024-06-27 bug 修复: 增加持仓 id, 主键唯一
                             'hold_id': str(random.randint(1e18, 9e18)),
@@ -991,6 +991,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                             'fundcode': self._get_plan_idx_to_fundcode(stock_name, self._get_date()),
                             'buy_rate': round(self.buy_cost_pct[index], 2),
                             'redeem_rate': 'null',
+                            'etldate': time.strftime('%Y-%m-%d %H:%M:%S'),
                             })
 
                         # 更新账户的可用本金
@@ -1001,7 +1002,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                         self.cost += buy_fee
                         # 更新交易频次，不能写在 step 函数中
                         self.trades += 1
-
                         # logging.warning(f"acct info ---> {self.acct_info['pfo_shares_redeem']}")
 
             # 返回买入的份额数量

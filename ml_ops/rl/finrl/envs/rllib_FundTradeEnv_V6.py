@@ -3,6 +3,7 @@
 import logging
 from ray.rllib.env import EnvContext
 import random
+import time
 
 import sys
 from pathlib import Path
@@ -67,7 +68,7 @@ class FundQuantTradeEnv_V6(FundQuantTradeEnv_V1):
                         'shares': buy_num_shares,
                         'hold': buy_amount,
                         # 买入即损失手续费
-                        'yield': round(-self.buy_cost_pct[index], 2),
+                        'yield': -self.buy_cost_pct[index],
                         'soldout': 0,
                         # 2024-06-27 bug 修复: 增加持仓 id, 主键唯一
                         'hold_id': str(random.randint(1e18, 9e18)),
@@ -76,6 +77,7 @@ class FundQuantTradeEnv_V6(FundQuantTradeEnv_V1):
                         'fundcode': self._get_plan_idx_to_fundcode(stock_name, self._get_date()),
                         'buy_rate': round(self.buy_cost_pct[index], 2),
                         'redeem_rate': 'null',
+                        'etldate': time.strftime('%Y-%m-%d %H:%M:%S'),
                         })
                     # 更新账户的可用本金
                     # 买入股票，现金账户减少金额
