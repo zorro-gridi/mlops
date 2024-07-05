@@ -137,7 +137,7 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
                             'shares': buy_num_shares,
                             'hold': buy_amount,
                             # 买入即损失手续费
-                            'yield': -self.buy_cost_pct[index],
+                            'yield': 0,
                             'soldout': 0,
                             # 2024-06-27 bug 修复: 增加持仓 id, 主键唯一
                             'hold_id': str(random.randint(1e18, 9e18)),

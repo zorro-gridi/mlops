@@ -164,7 +164,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 selling_date = curr_date if selling_date == '2500-01-01' else selling_date
 
                 # 如果没有卖空
-                if is_soldout in [0, ]:
+                # 数据库中为 str 类型
+                if is_soldout in ['0', ]:
                     # 返回持有天数
                     # days_diff = self.env_cls._calculate_date_diff(buy_date, selling_date)
                     # 卖出收益率 = 持仓收益率 - 卖出费率；其中，持仓收益率 = 收益率 - 买入费率
@@ -775,7 +776,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                     if self.sell_amount >= shares:
                         # 根据卖出份额，计算对应的卖出费率
                         redeem_rate = self.env_clf._cal_fofo_redeem_rate(fund_code, shares)
-                        # 计算该笔持仓的当前市值, 扣除卖出手续费;
+                        # 计算该笔持仓的当前市值, 扣除卖出手续费(申购手续费已经在买入的市值中扣除, 不用减)
                         shares_value = shares * (1 + shares_yield - redeem_rate)
                         # 累加预计回收的金额
                         self.selling_value += shares_value
@@ -981,8 +982,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                             # 2024-06-29 修复，使用原始的买入金额
                             'shares': buy_num_shares,
                             'hold': buy_amount,
-                            # 买入即损失手续费
-                            'yield': -self.buy_cost_pct[index],
+                            # 此处的 yield 指持仓的涨跌幅, 不含买卖的费率
+                            'yield': 0,
                             'soldout': 0,
                             # 2024-06-27 bug 修复: 增加持仓 id, 主键唯一
                             'hold_id': str(random.randint(1e18, 9e18)),
