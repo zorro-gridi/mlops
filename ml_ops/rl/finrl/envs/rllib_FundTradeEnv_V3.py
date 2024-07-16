@@ -94,6 +94,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                 if sell_amount == 0 and over_pfo_ratio >= 0.05:
                     decrease_pfo_amount = round(self.initial_amount * over_pfo_ratio, 2)
                     sell_amount =  min(decrease_pfo_amount, stock_shares)
+
                     logging.warning(f'''
                         -------->
                         当前建议仓位: {pfo_ratio_guide}, 上次建议仓位: {last_pfo_ratio_guide}
@@ -102,6 +103,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                     logging.warning(f'当前仓位过高，主动减仓 ----> {over_pfo_ratio},  decrease_pfo_amount: {sell_amount}')
 
                 if sell_amount > 0:
+                    _, fee_rate = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
                     # 生产模式不用更新持仓
                     self.acct_info['order'].append({
                         'order_id': str(random.randint(1e18, 9e18)),
@@ -109,13 +111,12 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                         'order_type': 1,
                         'order_amount': sell_num_shares,
                         'fundcode': self._get_plan_idx_to_fundcode(stock_name, self._get_date()),
-                        'fee_rate': 'null',
+                        'fee_rate': fee_rate,
                         'order_fee': 'null',
                         'net_worth': 'null',
                         'received_amount': 'null',
                         'opt_type': 'null',
                         })
-                    _ = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
 
             return sell_num_shares, sell_amount
 

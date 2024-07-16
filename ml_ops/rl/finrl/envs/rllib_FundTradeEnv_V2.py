@@ -96,6 +96,7 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
                     # 计算卖出可获得的金额，考虑交易费用
                     sell_amount = sell_num_shares
 
+                    _, fee_rate = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
                     # 生产模式下，直接返回卖出份额，待 GRIDi 产品更新持仓
                     self.acct_info['order'].append({
                         'order_id': str(random.randint(1e18, 9e18)),
@@ -103,13 +104,13 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
                         'order_type': 1,
                         'order_amount': sell_num_shares,
                         'fundcode': self._get_plan_idx_to_fundcode(stock_name, self._get_date()),
-                        'fee_rate': 'null',
+                        'fee_rate': fee_rate,
                         'order_fee': 'null',
                         'net_worth': 'null',
                         'received_amount': 'null',
                         'opt_type': 'null',
                         })
-                    _ = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
+
 
             return sell_num_shares, sell_amount
 
