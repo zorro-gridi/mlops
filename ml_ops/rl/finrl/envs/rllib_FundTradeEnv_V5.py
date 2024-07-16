@@ -130,33 +130,55 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
                             record for record in self.acct_info['pfo_shares_redeem'][stock_name]
                             if record['buy_date'] != self._get_date()
                             ]
-                        self.acct_info['pfo_shares_redeem'][stock_name].append({
-                            'buy_date': self._get_date(),
-                            'selling_date': '2500-01-01',
-                            # 2024-06-29 修复，使用原始的买入金额
-                            'shares': buy_num_shares,
-                            'hold': buy_amount,
-                            # 买入即损失手续费
-                            'yield': 0,
-                            'soldout': 0,
-                            # 2024-06-27 bug 修复: 增加持仓 id, 主键唯一
-                            'hold_id': str(random.randint(1e18, 9e18)),
-                            # 2024-06-28 bug 修复: 增加手续费持仓额度
-                            'redeem_balance': buy_amount,
-                            'fundcode': self._get_plan_idx_to_fundcode(stock_name, self._get_date()),
-                            'buy_rate': self.buy_cost_pct[index],
-                            'redeem_rate': 'null',
-                            'etldate': time.strftime('%Y-%m-%d %H:%M:%S'),
-                            })
-                        # 更新账户的可用本金
-                        # 买入股票，现金账户减少金额
-                        self.acct_info['cash_asset'][self._get_date()] = round(-buy_num_shares, 2)
+                        if self.mode not in ['live']:
+                            self.acct_info['pfo_shares_redeem'][stock_name].append({
+                                'buy_date': self._get_date(),
+                                'selling_date': 'null',
+                                # 2024-06-29 修复，使用原始的买入金额
+                                'shares': buy_num_shares,
+                                # 买入的确认份额，待当日净值更新后再更新; 训练模式下使用金额
+                                'hold': 'null' if self.mode == 'live' else buy_amount,
+                                'received_amount': buy_amount,  # 入账的金额
+                                # 2024-06-28 bug 修复: 增加手续费持仓额度
+                                'redeem_balance': 'null' if self.mode == 'live' else buy_amount,
+                                'buy_price': 'null' if self.mode == 'live' else 1,
+                                'sell_price': 'null', # 买入的确认净值
+                                'sold_shares': 0,     # 卖出的确认净值
+                                # 此处的 yield 指持仓的涨跌幅, 不含买卖的费率
+                                'yield': 0,
+                                'soldout': 0,
+                                # 2024-06-27 bug 修复: 增加持仓 id, 主键唯一
+                                'hold_id': str(random.randint(1e18, 9e18)),
+                                # 2024-07-12 添加；当卖出拆分holding时，需要新的主键
+                                'record_id': str(random.randint(1e18, 9e18)),
+                                'fundcode': self._get_plan_idx_to_fundcode(stock_name, self._get_date()),
+                                'buy_rate': round(self.buy_cost_pct[index], 5),
+                                'redeem_rate': 'null',
+                                'etldate': time.strftime('%Y-%m-%d %H:%M:%S'),
+                                })
+                            # 更新账户的可用本金
+                            # 买入股票，现金账户减少金额
+                            self.acct_info['cash_asset'][self._get_date()] = round(-buy_num_shares, 2)
 
-                        # 更新买入的手续费
-                        self.cost += buy_fee
-                        # 更新交易频次，不能写在 step 函数中
-                        self.trades += 1
-                        # logging.warning(f"acct info ---> {self.acct_info['pfo_shares_redeem']}")
+                            # 更新买入的手续费
+                            self.cost += buy_fee
+                            # 更新交易频次，不能写在 step 函数中
+                            self.trades += 1
+                            # logging.warning(f"acct info ---> {self.acct_info['pfo_shares_redeem']}")
+
+                        # 单笔交易的格式
+                        self.acct_info['order'].append({
+                            'order_id': str(random.randint(1e18, 9e18)),
+                            'order_date': self._get_date(),
+                            'order_type': 0,
+                            'order_amount': buy_num_shares,
+                            'fundcode': self._get_plan_idx_to_fundcode(stock_name, self._get_date()),
+                            'fee_rate': round(self.buy_cost_pct[index], 5),
+                            'order_fee': 'null',
+                            'net_worth': 'null',
+                            'received_amount': buy_amount,
+                            'opt_type': 'null',
+                            })
 
             # 返回买入的份额数量
             return buy_num_shares, buy_amount

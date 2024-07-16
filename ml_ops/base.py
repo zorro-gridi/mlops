@@ -319,7 +319,6 @@ class AbstractMLOps(metaclass=ABCMeta):
             metric_name = self.model_task.model_eval_metric
 
         optimize_mode = self.model_task.optimize_mode
-
         tune_model_metric = checkpoint[metric_name]
         training_loss = checkpoint['training_loss']
         tune_sum_loss = tune_model_metric + training_loss
@@ -389,9 +388,10 @@ class AbstractMLOps(metaclass=ABCMeta):
             return test_loader, signature
 
         if mlflow_utils.check_model_existence(reg_model_name):
-            # 加载最优模型的版本信息
+            # 使用 get_best_model_version 加载最优模型的版本信息
+            # 模型训练阶段不删除历史模型, 推理的时候过滤, 避免训练任务失败
             model_info = mlflow_utils.get_best_model_version(
-                reg_model_name, f'{metric_name}', optimize_mode)
+                reg_model_name, f'{metric_name}', optimize_mode, delete=False)
 
             best_model_version = model_info['version']
             hist_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{best_model_version}")
@@ -446,8 +446,8 @@ class AbstractMLOps(metaclass=ABCMeta):
                     'save_mode': 'hist',
                     }
             else:
-                # 将针对数据实例的更改撤回
-                mlflow_client.delete_registered_model(reg_model_name)
+                # 将针对数据实例的更改撤回。不删除历史模型
+                # mlflow_client.delete_registered_model(reg_model_name)
                 logging.warning(f'''
                     test loss vs ------> hist: {hist_eval_metric:,.6f}, new: {tune_model_metric:,.6f}.
                     sum loss vs  ------> hist: {hist_sum_loss:,.6f}, new: {tune_sum_loss:,.6f}.

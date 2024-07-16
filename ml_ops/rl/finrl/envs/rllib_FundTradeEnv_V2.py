@@ -2,6 +2,7 @@
 from gymnasium import spaces
 import logging
 from ray.rllib.env import EnvContext
+import random
 
 import sys
 from pathlib import Path
@@ -89,20 +90,30 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
                     # 此处与股票不同，注意 ！！！
                     # logging.warning(f'max_profit: {max_profit_shares:0.2f}')
                     sell_num_shares = max_profit_shares
+                    # 记录累计已卖出的盈利头寸
+                    # logging.warning(f'do sell stock action: {sell_num_shares} quantities.')
+                    # self.acct_info['profit_shares_sold'][stock_name] += sell_num_shares
+                    # 计算卖出可获得的金额，考虑交易费用
+                    sell_amount = sell_num_shares
 
-                    if sell_num_shares > 0:
-                        # 记录累计已卖出的盈利头寸
-                        # logging.warning(f'do sell stock action: {sell_num_shares} quantities.')
-                        # self.acct_info['profit_shares_sold'][stock_name] += sell_num_shares
-                        # 计算卖出可获得的金额，考虑交易费用
-                        sell_amount = sell_num_shares
-
-                        # 卖出股票，仓位减少
-                        # self.acct_info['pfo_holding'][stock_name].append(-sell_num_shares)
-                        # self.acct_info['pfo_price'][stock_name].append(close_price)
-                        return_ratio = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
+                    # 生产模式下，直接返回卖出份额，待 GRIDi 产品更新持仓
+                    self.acct_info['order'].append({
+                        'order_id': str(random.randint(1e18, 9e18)),
+                        'order_date': self._get_date(),
+                        'order_type': 1,
+                        'order_amount': sell_num_shares,
+                        'fundcode': self._get_plan_idx_to_fundcode(stock_name, self._get_date()),
+                        'fee_rate': 'null',
+                        'order_fee': 'null',
+                        'net_worth': 'null',
+                        'received_amount': 'null',
+                        'opt_type': 'null',
+                        })
+                    _ = self._caculate_selling_return(stock_name, sell_amount, mode='LiveTrade')
 
             return sell_num_shares, sell_amount
 
         sell_num_shares, sell_amount = _do_sell_normal()
         return sell_num_shares, sell_amount
+
+# %%

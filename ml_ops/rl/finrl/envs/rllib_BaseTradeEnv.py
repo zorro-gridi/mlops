@@ -147,8 +147,8 @@ class BaseTradeEnv(gym.Env):
         self.cost = 0
         self.trades = 0
         self.episode = 0
-        self.soldout = 0
-        self.goal_achieved = False
+        self.soldout = 0            # 清仓的次数
+        self.goal_achieved = False  # 是否达到预期收益
 
         self.rewards_memory = []
         self.actions_memory = []
@@ -336,32 +336,6 @@ class BaseTradeEnv(gym.Env):
                     print(f"Sharpe: {sharpe:0.3f}")
                 print("=================================")
                 # logging.warning(f'action history: \n{self.actions_memory}')
-
-            # # reward 流水 dataframe
-            # df_rewards = pd.DataFrame(self.rewards_memory)
-            # df_rewards.columns = ["account_rewards"]
-            # df_rewards["date"] = self.date_memory[:-1]
-
-            # if (self.model_name != "") and (self.mode != ""):
-            #     df_total_value.to_csv(
-            #         self.output_dir / "account_value_{}_{}_{}.csv".format(
-            #             self.mode, self.model_name, self.iteration
-            #         ),
-            #         index=False,
-            #     )
-            #     df_rewards.to_csv(
-            #         self.output_dir / "account_rewards_{}_{}_{}.csv".format(
-            #             self.mode, self.model_name, self.iteration
-            #         ),
-            #         index=False,
-            #     )
-            #     plt.plot(self.asset_memory, "r")
-            #     plt.savefig(
-            #         self.output_dir / "account_value_{}_{}_{}.png".format(
-            #             self.mode, self.model_name, self.iteration
-            #         )
-            #     )
-            # plt.close()
             # ==========================================================================
             return self.state, self.reward, self.terminal, True, self.acct_info
         else:
@@ -524,7 +498,7 @@ class BaseTradeEnv(gym.Env):
                         'hold': 0,                      # 持仓剩余的份额
                         'yield': 0,                     # 扣除卖出手续费的持仓净收益率
                         'soldout': 1,                   # 持仓是否被清仓
-                        'selling_date': '2500-01-01',   # 持仓卖出日期
+                        'selling_date': 'null',         # 持仓卖出日期, 默认 null, 方便入数据库
                         'hold_id': 20位数的str           # 单笔持仓id, 主键
                     }] # 记录单只基金的每一笔定投
                 }
@@ -537,6 +511,7 @@ class BaseTradeEnv(gym.Env):
         acct_info = {
             'plan_id': self.plan_id,
             'user_id': self.user_id,
+            'order': [],
             'cash_asset': {'initial': self.initial_amount},
             'pfo_holding': {},          # 持仓的变化流水, 数据类型: Dict[List[Dict]]
             'pfo_price': {},            # 买卖的价格流水, 数据类型: Dict[List[Dict]]

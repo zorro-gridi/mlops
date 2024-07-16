@@ -41,43 +41,48 @@ def load_register_model_args(reg_model_name: str, model_version: str, tracking_u
     return hist_model_args
 
 
-def get_best_model_version(reg_model_name, eval_metric, optimize_mode):
+def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=True):
     '''
     Desc:
         获取最优模型的版本号
     Args:
         reg_model_name: 模型名称
         eval_metric: 模型的比较指标
+        delete: 是否删除旧模型
     '''
-    if not check_model_existence(reg_model_name):
-        raise Exception(f'{reg_model_name} 模型不存在 !!!')
-
     mlflow_client = MlflowClient(tracking_uri)
+    # 初始化模型评分
     best_loss = -np.inf if optimize_mode == 'max' else np.inf
 
     best_version = None
     best_model_config = None
+    delete_version = None
 
+    # 搜索注册模型的所有版本号
     for mv in mlflow_client.search_model_versions(f"name='{reg_model_name}'"):
         mv = dict(mv)
         cur_version = mv['version']
         model_config = load_register_model_args(reg_model_name, cur_version)
+        # 获取该注册模型的测试评分
         eval_loss = model_config[f'test_{eval_metric}']
 
         if optimize_mode == 'max':
-            if eval_loss > best_loss:
+            if eval_loss >= best_loss:
                 best_loss = eval_loss
                 best_version = cur_version
                 best_model_config = model_config
             else:
-                mlflow_client.delete_model_version(reg_model_name, cur_version)
+                delete_version = cur_version
         else:
-            if eval_loss < best_loss:
+            if eval_loss <= best_loss:
                 best_loss = eval_loss
                 best_version = cur_version
                 best_model_config = model_config
             else:
-                mlflow_client.delete_model_version(reg_model_name, cur_version)
+                delete_version = cur_version
+
+        if delete_version and delete:
+            mlflow_client.delete_model_version(reg_model_name, delete_version)
 
     logging.warning(f'最优模型的版本号: {best_version}')
     return {

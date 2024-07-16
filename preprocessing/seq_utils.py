@@ -2,18 +2,21 @@ import pandas as pd
 import numpy as np
 
 
-def chunk_series(datas: pd.DataFrame, checkpoint=0.1):
+def chunk_series(datas: pd.DataFrame, column='markup', checkpoint=0.1):
     '''
     Desc:
         将序列按照涨跌分组切块, data 中必须包含 "markup" 涨跌幅指标
     Args:
-        data: 需要切分的序列
+        data: 需要切分的原始 dataframe 序列, 例如, 股票的面板数据
+        column: 需要切分的列，默认为股票的涨跌幅%
         checkpoint: 合并的阈值。abs(x) <= checkpoint 则合并到上一个分块序列
     Returns:
-        pd.DataFrame
+        pd.DataFrame, 包含两个字段:
+            1. "markup_days": 分块累计连续涨跌天数
+            2. "markup_vol": 分块累计涨跌幅
     '''
     data = datas.copy()
-    markup_list = data['markup'].tolist()
+    markup_list = data[column].tolist()
 
     # 从第二日的涨跌幅开始统计
     for i in range(1, len(markup_list)):
@@ -23,14 +26,14 @@ def chunk_series(datas: pd.DataFrame, checkpoint=0.1):
             markup_list[i] = abs(markup_list[i]) * last_sign
 
     # markup 字段重新赋值
-    data['markup'] = markup_list
-    data['last_markup'] = data.sort_values(by=['trade_date'])['markup'].shift(1)
+    data[column] = markup_list
+    data[f'last_{column}'] = data.sort_values(by=['trade_date'])[column].shift(1)
 
     data['is_split_point'] = [
         i if np.sign(x) != np.sign(y) else -1
-        for i, (x, y) in enumerate(zip(data['markup'], data['last_markup']))]
+        for i, (x, y) in enumerate(zip(data[column], data[f'last_{column}']))]
 
-    markup_list = list(data['markup'])
+    markup_list = list(data[column])
     split_idx_list = [i for i in data['is_split_point'] if i != -1]
     split_idx_list.append(len(data))
 
@@ -46,6 +49,13 @@ def chunk_series(datas: pd.DataFrame, checkpoint=0.1):
         markup_vol=[sum(d) for d in markup_chunk_list],
         )
     vars_data = pd.DataFrame(vars_data)
+
+    markup_days_80_pct = np.percentile(vars_data['markup_days'].abs(), 80)
+    vars_data['days_outlier'] = vars_data['markup_days'].apply(lambda x: 1 if abs(x) >= markup_days_80_pct else 0)
+
+    markup_vol_80_pct = np.percentile(vars_data['markup_vol'].abs(), 80)
+    vars_data['vol_outlier'] = vars_data['markup_vol'].apply(lambda x: 1 if abs(x) >= markup_vol_80_pct else 0)
+
     return vars_data
 
 
@@ -55,6 +65,7 @@ def compute_vars_list(series, chunk_index: list, pool_func='np.max'):
         本函数实现将外部变量按照分快序列的不同长度，切分外部变量序列, 并针对序列组进行池化
         说明: 因为预测涨跌天数，将序列进行了分段汇总，如果传入外部变量序列，因此也需要将外部变量的序列分型分段汇总（即池化操作）
     Args:
+        series: 输入的切分序列, 例如: [3, -2, 5, -3, ...]
         chunk_index: np.array 在本例中，是涨跌天数的分段汇总序列。数据样本: [1, -2, 4, -5, 3, -3,...]
     Returns:
         返回序列分组、并池化后的外部变量 np.ndarray
@@ -94,7 +105,7 @@ def compute_vars_list(series, chunk_index: list, pool_func='np.max'):
     # 按 chunk_index（涨跌幅序列）分割外部变量序列
     vars_value = [vars_value[seq_idx[i-1]:seq_idx[i]] for i in range(1, len(seq_idx))]
 
-    # 外部变量的池化操作
+    # pooling: 外部变量的池化操作
     pool_func = eval(pool_func)
     vars_value = [pool_func(v) for v in vars_value]
     assert len(chunk_index) == len(vars_value)
@@ -127,6 +138,12 @@ def build_multi_vars_datas(data, chunk_index: list, external_vars_config: dict, 
     # target_series 为 None 时默认为 chunk_index
     if not target_series:
         target_series = chunk_index
+
+    # # 2024-07-05 新增变量：涨跌幅天数异常点
+    # var_value_list['days_outlier'] = [
+    #     1 if abs(d) >= np.percentile(np.abs(chunk_index, 80)) else 0
+    #     for d in chunk_index
+    #     ]
 
     # 最后，将预测变量添加进来
     var_value_list['target'] = target_series
