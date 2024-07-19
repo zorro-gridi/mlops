@@ -108,7 +108,7 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
                         'order_fee': 'null',
                         'net_worth': 'null',
                         'received_amount': 'null',
-                        'opt_type': 'null',
+                        'opt_type': 3,
                         })
 
 

@@ -76,6 +76,7 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
         def _do_buy():
             buy_num_shares = 0
             buy_amount = 0
+            opt_type = 3
 
             # 判断买入的条件:
             if is_buying_accept:
@@ -92,6 +93,8 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
                     pfo_ratio_adj = pfo_ratio_guideline - pfo_ratio - action / self.initial_amount
                     # 仓位补偿
                     if is_reverse_point:
+                        # 更新操作类型为抄底
+                        opt_type = 2
                         # 在反转/反弹点处，一次加满仓位
                         pfo_ratio_room = int(self.initial_amount * (pfo_ratio_guideline - pfo_ratio))
                         # 特殊：取账户现金和建议买入仓位的最小
@@ -174,10 +177,10 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
                             'order_amount': buy_num_shares,
                             'fundcode': self._get_plan_idx_to_fundcode(stock_name, self._get_date()),
                             'fee_rate': round(self.buy_cost_pct[index], 5),
-                            'order_fee': 'null',
+                            'order_fee': buy_num_shares * round(self.buy_cost_pct[index], 5),
                             'net_worth': 'null',
                             'received_amount': buy_amount,
-                            'opt_type': 'null',
+                            'opt_type': opt_type,
                             })
 
             # 返回买入的份额数量

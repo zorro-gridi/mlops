@@ -121,6 +121,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 (self.idx_2_fund['user_id'] == self.user_id) &
                 (self.idx_2_fund['plan_id'] == self.plan_id) &
                 (self.idx_2_fund['tic'] == tic_code) &
+                # ！Important 此处细节需要注意: 去小于当前日期配置的最后一个映射关系
                 (self.idx_2_fund['update_date'] <= buy_date)
             ]['fundcode'].iloc[-1]
             return idx_2_fundcode
@@ -476,6 +477,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         '''
         Desc:
             计算考虑 FIFO 规则，且满足最小止盈的可卖出的最大份额, 与对应的卖出综合费率
+        Args:
+            fund_code:
         Release log:
             2024-06-27: 新增
         '''
@@ -491,8 +494,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         max_selling_amount = 0              # 循环中累计的卖出累计份额
         max_received_value = 0              # 循环中累计的卖出可到账金额
         final_max_selling_amount = 0        # 最终决策的卖出累计数量
-        max_selling_fee = 0                 # 最终卖出时的费率份额
-        find_redeem_rate = 0                # 最终决策卖出份额的综合费率
+        # max_selling_fee = 0                 # 最终卖出时的费率份额
+        # find_redeem_rate = 0                # 最终决策卖出份额的综合费率
         total_selling_yield = 0             # 循环中卖出的累计收益率
 
         # 持仓中最大的收益至少达到 min_yield 水平
@@ -504,7 +507,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 buy_date = h['buy_date']
                 # 可卖出的持仓份额
                 sell_amount = h['hold']
-                hold_yield = h['yield']
+                hold_yield = h['yield'] + self.live_markup
 
                 # 动态最下止盈收益率
                 dyn_min_yield = self._caculate_holding_min_yield(fund_code, buy_date)
@@ -691,6 +694,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         self.trades += 1
 
         # 生产模式的清仓操作与训练环境不同
+        # 此处的 fundcode 只是指数的名称, 未映射到基金代码
         for fundcode, holdings in acct_holdings.items():
             for h in holdings:
                 sell_num_shares = h['hold']
@@ -701,7 +705,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                     'order_date': soldout_date,
                     'order_type': 1,
                     'order_amount': sell_num_shares,
-                    'fundcode': fundcode,
+                    'fundcode': self._get_plan_idx_to_fundcode(fundcode, self._get_date()),
                     'fee_rate': 'null',
                     'order_fee': 'null',
                     'net_worth': 'null',
@@ -958,6 +962,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             # 2. 下跌时，杀跌
             _mark_point >= _pred_points * (1 - self.temperature) and _mark_point < 0,
             # 3. 反弹、反转 3 天内不卖出
+            # TODO: 会不会与上面的逻辑1， 2冲突
             self.day - self.reverse_point_day >= 3,
             ])
 
@@ -1065,10 +1070,10 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                             'order_amount': buy_num_shares,
                             'fundcode': self._get_plan_idx_to_fundcode(stock_name, self._get_date()),
                             'fee_rate': round(self.buy_cost_pct[index], 5),
-                            'order_fee': 'null',
+                            'order_fee': buy_num_shares * round(self.buy_cost_pct[index], 5),
                             'net_worth': 'null',
                             'received_amount': buy_amount,
-                            'opt_type': 'null',
+                            'opt_type': 3,
                             })
 
             # 返回买入的份额数量
@@ -1138,7 +1143,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                             'order_fee': 'null',
                             'net_worth': 'null',
                             'received_amount': sell_num_shares,
-                            'opt_type': 'null',
+                            'opt_type': 3,
                             })
 
 

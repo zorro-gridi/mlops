@@ -108,10 +108,10 @@ class FundQuantTradeEnv_V6(FundQuantTradeEnv_V1):
                         'order_amount': buy_num_shares,
                         'fundcode': self._get_plan_idx_to_fundcode(stock_name, self._get_date()),
                         'fee_rate': round(self.buy_cost_pct[index], 5),
-                        'order_fee': 'null',
+                        'order_fee': buy_num_shares * round(self.buy_cost_pct[index], 5),
                         'net_worth': 'null',
                         'received_amount': buy_amount,
-                        'opt_type': 'null',
+                        'opt_type': 3,
                         })
 
             # 返回买入的份额数量
@@ -159,7 +159,7 @@ class FundQuantTradeEnv_V6(FundQuantTradeEnv_V1):
                         'order_fee': 'null',
                         'net_worth': 'null',
                         'received_amount': 'null',
-                        'opt_type': 'null',
+                        'opt_type': 3,
                         })
 
 

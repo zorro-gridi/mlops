@@ -115,6 +115,9 @@ class BaseTradeEnv(gym.Env):
         self.future_days = config.get('future_days', 1) * self.stock_dim
         self.per_batch_size = self.stock_dim * self.window_size
 
+        # 2024-07-19 新增：标的物当日的涨跌幅; 不使用列表组合，未来需要组合时，可以单独使用并列的tradebot
+        self.live_markup = config.get('live_markup', 0)
+
         # 是否完全重置环境与账户信息
         self.initial = config.get('initial', True)
 
