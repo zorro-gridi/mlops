@@ -116,6 +116,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                         'net_worth': 'null',
                         'received_amount': 'null',
                         'opt_type': 3,
+                        'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
                         })
 
             return sell_num_shares, sell_amount
@@ -249,6 +250,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                             'net_worth': 'null',
                             'received_amount': buy_amount,
                             'opt_type': 3,
+                            'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
                             })
 
             # 返回买入的份额数量

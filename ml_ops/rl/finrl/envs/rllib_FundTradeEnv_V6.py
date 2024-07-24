@@ -112,6 +112,7 @@ class FundQuantTradeEnv_V6(FundQuantTradeEnv_V1):
                         'net_worth': 'null',
                         'received_amount': buy_amount,
                         'opt_type': 3,
+                        'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
                         })
 
             # 返回买入的份额数量
@@ -160,6 +161,7 @@ class FundQuantTradeEnv_V6(FundQuantTradeEnv_V1):
                         'net_worth': 'null',
                         'received_amount': 'null',
                         'opt_type': 3,
+                        'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
                         })
 
 

@@ -109,6 +109,7 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
                         'net_worth': 'null',
                         'received_amount': 'null',
                         'opt_type': 3,
+                        'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
                         })
 
 

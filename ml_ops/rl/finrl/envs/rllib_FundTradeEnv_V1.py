@@ -97,6 +97,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
         # verbose 辅助信息
         self.verbose = config.get('verbose', 0)
+        # 2024-07-21 新增: 卖出费率的字典
+        self.sell_cost_pct = config.get('sell_cost_pct', dict())
         # 每次实例化都应该先更新持仓的收益
         self._update_acct_holdings_debit_yield()
 
@@ -374,20 +376,22 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         Desc:
             根据持有天数, 返回赎回基金的手续费率
         '''
-        days_range_max = 730
-        if days >= days_range_max:
-            logging.warning(f'-------> days: {days}, limit: {days_range_max}, days redeem rate mapping not set!!!')
+        # days_range_max = 730
+        # if days >= days_range_max:
+        #     logging.warning(f'-------> days: {days}, limit: {days_range_max}, days redeem rate mapping not set!!!')
+        #     raise
+        # redeem_rate_info = {
+        #     7: 1.5 / 100,
+        #     30: 0.75 / 100,
+        #     365: 0.5 / 100,
+        #     730: 0.25 / 100,
+        #     }
+
+        if not self.sell_cost_pct:
             raise
 
-        redeem_rate_info = {
-            7: 1.5 / 100,
-            30: 0.75 / 100,
-            365: 0.5 / 100,
-            730: 0.25 / 100,
-            }
-
         redeem_rate = 0
-        for d, rate in redeem_rate_info.items():
+        for d, rate in self.sell_cost_pct.items():
             if days < d:
                 redeem_rate = rate
                 break
@@ -711,6 +715,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                     'net_worth': 'null',
                     'received_amount': 'null',
                     'opt_type': 1,
+                    'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
                     })
 
         # 使用列表推倒式速度更快
@@ -1074,6 +1079,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                             'net_worth': 'null',
                             'received_amount': buy_amount,
                             'opt_type': 3,
+                            'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
                             })
 
             # 返回买入的份额数量
@@ -1144,6 +1150,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                             'net_worth': 'null',
                             'received_amount': sell_num_shares,
                             'opt_type': 3,
+                            'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
                             })
 
 
