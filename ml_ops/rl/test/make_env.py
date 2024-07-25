@@ -43,17 +43,16 @@ stock_data.index = stock_data.date.factorize()[0]
 
 stock_data.to_csv(Path(current_dir) / 'stock.csv', index=False)
 logging.warning(f'\n{stock_data.head()}')
-
 stock_nums = len(stock_data.tic.unique())
 
-env_config = dict(
-    df=stock_data,
-    num_stock_shares=[0] * stock_nums,
-    buy_cost_pct=[3/10000, 3/10000],
-    sell_cost_pct=[3/10000, 3/10000],
-    )
-# 加载已经注册的 env
-gym.make('sb3_StockTradeEnv-v0.2', **env_config)
+# env_config = dict(
+#     df=stock_data,
+#     num_stock_shares=[0] * stock_nums,
+#     buy_cost_pct=[3/10000, 3/10000],
+#     sell_cost_pct=[3/10000, 3/10000],
+#     )
+# # 加载已经注册的 env
+# gym.make('sb3_StockTradeEnv-v0.2', **env_config)
 
 
 # %%

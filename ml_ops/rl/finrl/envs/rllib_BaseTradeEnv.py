@@ -1,7 +1,6 @@
 # %%
 import logging
-from pathlib import Path
-
+from pprint import pprint
 # from typing import List
 import gymnasium as gym
 import matplotlib
@@ -12,6 +11,8 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 from stable_baselines3.common.vec_env import DummyVecEnv
 from ray.rllib.env import EnvContext
+import pandas as pd
+
 
 import sys
 from pathlib import Path
@@ -64,11 +65,12 @@ class BaseTradeEnv(gym.Env):
                 2. infer: 策略推理测试模式
                 3. live:  策略生产应用模式
         '''
+        self.pfo_type = config.get('pfo_type', 'fund')                          # 资产的默认类型，fund / stock，需要读取样例数据
+        self.default_data = pd.read_csv(current_dir / f'{self.pfo_type}.csv')
         self.acct_info = config.get('acct_info', None)                          # 是否用户自定义初始化账户信息
         self.day = config.get('day', 0)
-        self.df = config['df']
+        self.df = config.get('df', self.default_data)                           # 给df指定一个默认的数据源，使得可以实例化
         self.raw_data = config.get('raw_data', self.df)                         # 指数的原始涨跌数据，用于训练计算区间的收益率，和历史反转点
-        self.num_stock_shares = config.get('num_stock_shares', [None])
 
         # 2024-06-30 新增: 指数与基金代码的映射关系;
         # data demo: pd.DataFrame, columns: [user_id, plan_id, tic, fundcode, update_date]
@@ -78,7 +80,7 @@ class BaseTradeEnv(gym.Env):
         # !!! important: 在生产模式下，self.df 只需要最新一条数据
         if self.mode in ['live']:
             self.df = self.raw_data.iloc[-1:]
-            self.fund_data = config['fund_data']                                # 基金的原始涨跌数据，用于计算区间的收益率
+            self.fund_data = config.get('fund_data', None)                      # 基金的原始涨跌数据，用于计算区间的收益率
         else:
             self.fund_data = config.get('fund_data', self.raw_data)
 
@@ -102,11 +104,6 @@ class BaseTradeEnv(gym.Env):
             self.custom_base_rule = eval(f'FundTradeRules_V{self.custom_rule_version}')(self)
             logging.warning(f'---------> 使用版本"{self.custom_rule_version}"的自定义交易规则外挂')
 
-        self.buy_cost_pct = config.get('buy_cost_pct', [None])
-        self.sell_cost_pct = config.get('sell_cost_pct', [None])
-        self.reward_scaling = config.get('reward_scaling', None)
-        self.tech_indicator_list = config.get('tech_indicator_list', None)
-
         # 当日的交易数据特征
         self.stock_pools = self.df.tic.unique()
         self.stock_dim = len(self.stock_pools)
@@ -114,6 +111,12 @@ class BaseTradeEnv(gym.Env):
         self.window_size = config.get('window_size', 1)
         self.future_days = config.get('future_days', 1) * self.stock_dim
         self.per_batch_size = self.stock_dim * self.window_size
+
+        self.buy_cost_pct = config.get('buy_cost_pct', [0] * self.stock_dim)
+        self.sell_cost_pct = config.get('sell_cost_pct', [0] * self.stock_dim)
+        self.num_stock_shares = config.get('num_stock_shares', [0] * self.stock_dim) # 初始化的用户持仓数据
+        self.reward_scaling = config.get('reward_scaling', None)
+        self.tech_indicator_list = config.get('tech_indicator_list', None)
 
         # 2024-07-19 新增：标的物当日的涨跌幅; 不使用列表组合，未来需要组合时，可以单独使用并列的tradebot
         self.live_markup = config.get('live_markup', 0)

@@ -196,7 +196,7 @@ checkpoint_dir = Path(current_dir) / 'trader_bot/Media/V1'
 # ========================================
 # %%
 algo = Algorithm.from_checkpoint(checkpoint_dir)
-fund_env = FundQuantTradeEnv(config=env_kwargs)
+fund_env = FundQuantTradeEnv_V1(config=env_kwargs)
 # reset 默认返回两个元素
 obs, acct_info = fund_env.reset(seed=42)
 
