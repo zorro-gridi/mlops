@@ -432,6 +432,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         Args:
             sell_amount: 卖出的份额
             mode: 测试或者生产模式，区别在于是否更新账户数据. Option: ["LiveTrade", "Backtest"]
+        Return:
+            返回卖出的费率
         Release log:
             2024-06-27: 新增
             2024-06-28: 增加 redeem_balance 剩余手续费余额处理逻辑
@@ -443,7 +445,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         still_holdings = [h for h in acct_holdings if h['redeem_balance'] > 0]
         logging.warning(f'-----------> acct still_holdings:\n{pd.DataFrame(still_holdings)}\n')
 
-        # 越早买入的份额，需要越早清仓; 这个 still_holdings 是列表
+        # 越早买入的份额，需要越早清仓; still_holdings 是列表
         sort_holdings = list(sorted(still_holdings, key=lambda x: x['buy_date']))
         total_fee = 0
         sell_amount_init = copy(sell_amount)
@@ -470,6 +472,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
         # 更新持仓的 redeem_balance 信息
         if mode == 'LiveTrade':
+            # 合并清空的holding和已更新的holding
             redeemOut_holdings.extend(sort_holdings)
             self.acct_info['pfo_shares_redeem'][fund_code] = redeemOut_holdings
 
@@ -699,24 +702,28 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
         # 生产模式的清仓操作与训练环境不同
         # 此处的 fundcode 只是指数的名称, 未映射到基金代码
+        total_sell_num_shares = 0
         for fundcode, holdings in acct_holdings.items():
             for h in holdings:
                 sell_num_shares = h['hold']
                 if h['soldout'] == '1' or sell_num_shares == 0:
                     continue
-                self.acct_info['order'].append({
-                    'order_id': str(random.randint(1e18, 9e18)),
-                    'order_date': soldout_date,
-                    'order_type': 1,
-                    'order_amount': sell_num_shares,
-                    'fundcode': self._get_plan_idx_to_fundcode(fundcode, self._get_date()),
-                    'fee_rate': 'null',
-                    'order_fee': 'null',
-                    'net_worth': 'null',
-                    'received_amount': 'null',
-                    'opt_type': 1,
-                    'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
-                    })
+                total_sell_num_shares += sell_num_shares
+
+        # 清仓合成一笔订单, 相同的订单类型，订单日期不能重复
+        self.acct_info['order'].append({
+            'order_id': str(random.randint(1e18, 9e18)),
+            'order_date': soldout_date,
+            'order_type': 1,
+            'order_amount': total_sell_num_shares,
+            'fundcode': self._get_plan_idx_to_fundcode(fundcode, self._get_date()),
+            'fee_rate': 'null',
+            'order_fee': 'null',
+            'net_worth': 'null',
+            'received_amount': 'null',
+            'opt_type': 1,
+            'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+            })
 
         # 使用列表推倒式速度更快
         class holdings_soldout():
