@@ -296,12 +296,12 @@ class BaseTradeEnv(gym.Env):
         return buy_num_shares, buy_amount
 
 
-    def step(self, actions, mode='train'):
+    def step(self, actions: np.array, mode='train'):
         '''
         Desc:
             在环境中执行一个动作。函数调用的 _sell_stock 和 _byu_stock 函数的 index 参数来源于对 actions 的排序
         Args:
-            actions: Union[np.array, list], 交易的份额列表
+            actions:, 交易的份额数组
         '''
         # logging.warning(f'-----------> 这是一条测试信息: step mode: "{mode}", actions: {actions}, terminal: {self.terminal}')
         begin_total_asset = self._get_acct_asset()
@@ -421,7 +421,7 @@ class BaseTradeEnv(gym.Env):
             return self.state, self.reward, self.terminal, self.truncate, self.acct_info
 
 
-    # 每个 espisode 之后要重新收集资料。俗话说，”一个人的美酒可能是另一个人的毒药“
+    # 每个 espisode 之后要重新收集资料。俗话说，”一个人的美酒可能是另一个人的毒药“, 是说有的行为对有些人来说好，对另些人却不好
     def reset(self, *, seed=None, options=None):
         '''
         Desc:
