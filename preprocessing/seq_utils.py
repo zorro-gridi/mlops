@@ -95,6 +95,13 @@ def compute_vars_list(series, chunk_index: list, pool_func='np.max'):
         '''
         return str(seq[-1])
 
+    def get_outlier_point_num(seq, threshhold=1):
+        '''
+        Desc:
+            获取切分的序列中暴涨暴跌的天数(分类变量使用str)
+        '''
+        return str(int(sum([1 if abs(i) >= threshhold else 0 for i in seq])))
+
     seq_idx = chunk_index.copy()
     # 计算累计涨跌幅
     seq_idx.insert(0, 0)
@@ -132,8 +139,9 @@ def build_multi_vars_datas(data, chunk_index: list, external_vars_config: dict, 
     '''
     # 设计合理的数据结构非常重要
     var_value_list = {
+        # 避免同名的变量多次处理异常
         var_name: compute_vars_list(data[var_name], chunk_index=chunk_index, pool_func=pool_func)
-        for var_name, pool_func in external_vars_config.items()
+        for _, (var_name, pool_func) in enumerate(external_vars_config.items())
         }
     # target_series 为 None 时默认为 chunk_index
     if not target_series:

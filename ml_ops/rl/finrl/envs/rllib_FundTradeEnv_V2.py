@@ -3,6 +3,7 @@ from gymnasium import spaces
 import logging
 from ray.rllib.env import EnvContext
 import random
+import time
 
 import sys
 from pathlib import Path
@@ -14,6 +15,7 @@ env_path = '/'.join([dirname for dirname in dir_list[:dir_list.index('pycharm')+
 sys.path.append(env_path)
 
 from mlops.ml_ops.rl.finrl.envs.rllib_FundTradeEnv_V1 import FundQuantTradeEnv_V1
+
 
 
 class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
@@ -47,12 +49,11 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
         # logging.warning(f'acct holdings ------------> {acct_holdings}')
         # logging.warning(f'strategy actions test ---------> {actions}')
 
+        for i in range(self.stock_dim):
+            _, _ = self._sell_stock(i, 0)
+
         # 因为, v1版正负双向 actions, step 给 actions 减 5，因此，需要提前加回来
         self.state, self.reward, self.terminal, self.truncate, self.acct_info = super().step(actions+5, **kwargs)
-        if not (self.terminal or self.truncate):
-            for i in range(self.stock_dim):
-                _, _ = self._sell_stock(i, 0)
-
         return self.state, self.reward, self.terminal, self.truncate, self.acct_info
 
 
@@ -70,7 +71,7 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
 
         # 1. 当前可卖出的最大盈利持仓
         max_profit_shares = self._cal_max_selling_amount_with_min_yield(stock_name, min_yield=self.min_yield)
-        # logging.warning(f'当前盈利持仓 ---------------> {max_profit_shares}')
+        logging.warning(f'当前盈利持仓份额 ---------------> {max_profit_shares}')
 
         # check if the stock is able to sell, for simlicity we just add it in techical index
         # 也就是说，对应的股票是否可以交易，在技术指标中内置了。因为可能有些股票当日停牌，不可交易
@@ -111,8 +112,6 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
                         'opt_type': 3,
                         'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
                         })
-
-
             return sell_num_shares, sell_amount
 
         sell_num_shares, sell_amount = _do_sell_normal()
