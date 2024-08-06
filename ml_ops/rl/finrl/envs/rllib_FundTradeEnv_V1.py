@@ -103,7 +103,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         # 每次实例化都应该先更新持仓的收益
         self._update_acct_holdings_debit_yield()
 
-
     def _get_plan_idx_to_fundcode(self, tic_code, buy_date):
         '''
         Desc:
@@ -127,10 +126,9 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 # TODO: ！Important
                 # 此处细节需要注意: 去小于当前日期配置的最后一个映射关系, 暂时不需要
                 # (self.idx_2_fund['update_date'] <= buy_date)
-            ]['fundcode'].iloc[-1]
+                ]['fundcode'].iloc[-1]
             # logging.warning(f'------------> idx_2_fundcode: {idx_2_fundcode}')
             return idx_2_fundcode
-
 
     def _update_acct_holdings_debit_yield(self):
         '''
@@ -201,8 +199,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         else:
             return {}
 
-
-    # %%
     def _check_holding_duplicate(self, stock_name, trade_date='buy_date'):
         '''
         Desc:
@@ -240,7 +236,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             logging.warning(f'Warning ---> 未发现交易重复, 正常执行交易🙋‍♂️')
             return False
 
-
     def _set_pfo_ratio(self):
         '''
         Desc: Important !!!
@@ -258,7 +253,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             1: 0.5,
             2: 0.3,
             }
-
         pfo_ratio_guideline = 0
         # 兼容多指数持仓策略
         for index in range(self.stock_dim):
@@ -286,7 +280,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         self.pfo_ratio_guide[self.day] = pfo_ratio_guideline
         return round(pfo_ratio_guideline, 3)
 
-
     def _get_acct_pfo_shares(self):
         '''
         Desc:
@@ -303,18 +296,17 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 s['hold'] for holding in update_holdings.values() for s in holding])
             # pfo_asset: 实际卖出的市值
             pfo_asset = sum([
-                s['hold'] * (1 + s['yield']) for holding in update_holdings.values() for s in holding])
+                s['hold'] * s['sell_price']
+                for holding in update_holdings.values() for s in holding])
             return pfo_shares, pfo_asset
         else:
             return 0, 0
-
 
     def _get_acct_asset(self):
         '''
         Desc:
             调用 _get_acct_pfo_shares 方法，统计当前账户的资产价值, 包括持仓扣除若卖出手续费的市值+现金金额
         '''
-
         # if len(self.acct_info['cash_asset']) > 1:
         #     logging.warning(f"acct hold date ---------------> {self.acct_info['pfo_shares_redeem']}")
         #     logging.warning(f"acct cash list ---------------> {self.acct_info['cash_asset']}")
@@ -325,7 +317,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         total_asset = pfo_asset + cash_asset
         # logging.warning(f'current acct ----> pfo_asset: {pfo_asset}, cash_asset: {cash_asset}')
         return total_asset
-
 
     def step(self, actions, **kwargs):
         '''
@@ -361,7 +352,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
         return super().step(actions, **kwargs)
 
-
     def _calculate_date_diff(self, start_date, end_date):
         ''''
         Desc:
@@ -377,12 +367,12 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         date_difference = (end_datetime - start_datetime).days
         return date_difference
 
-
     def _get_redeem_rate(self, days):
         '''
         Desc:
             根据持有天数, 返回赎回基金的手续费率
         '''
+        # TODO: 训练 agent 的时候使用
         # days_range_max = 730
         # if days >= days_range_max:
         #     logging.warning(f'-------> days: {days}, limit: {days_range_max}, days redeem rate mapping not set!!!')
@@ -395,8 +385,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         #     }
 
         if not self.sell_cost_pct:
-            raise
-
+            raise Exception('没有传入卖出费率表')
         redeem_rate = 0
         for d, rate in self.sell_cost_pct.items():
             if days < d:
@@ -404,7 +393,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 break
 
         return redeem_rate
-
 
     def _stat_redemm_rate_balance(self, fund_code):
         '''
@@ -429,7 +417,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
         redeem_rate_balance = dict(sorted(redeem_rate_balance.items()))
         return redeem_rate_balance
-
 
     def _cal_fifo_redeem_rate(self, fund_code, sell_amount, mode='LiveTrade'):
         '''
@@ -486,7 +473,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
         total_redeem_rate = round(total_fee / sell_amount_init, 5)
         return total_redeem_rate
-
 
     def _cal_max_selling_amount_with_min_yield(self, fund_code, min_yield=0.01):
         '''
@@ -571,7 +557,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         # find_redeem_rate = round(max_selling_fee / max_selling_amount, 4)
         return final_max_selling_amount
 
-
     def _get_max_yield_shares(self, fund_code, min_yield=None):
         '''
         Desc:
@@ -603,13 +588,11 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                     min_yield if min_yield else self._caculate_holding_min_yield(fund_code, s['buy_date'])
                     )
             ]
-
         if holdings:
             # logging.warning(f'test acct holding yield -------->\n{pd.DataFrame(holdings)}')
             max_yield_shares = sum([s['hold'] for s in holdings])
             # logging.warning(f'当前可卖的累计盈利的持仓 ------------> 份额: {shares}, yield: {selling_return}')
         return max_yield_shares
-
 
     def _caculate_holding_yield(self, tic_code, buy_date, sell_date):
         '''
@@ -646,14 +629,13 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         # logging.warning(f'--------------> fund networth data:\n{fund_data}')
         if len(fund_data) > 0:
             # 这个计算是否有错？答：没错！因为筛选条件已经过滤了买入当日的涨跌幅
-            # TODO: 基金其实可以使用净值直接计算涨跌幅，指数可以用点位计算；但是RL模型没有使用指数点位作为变量，因此在训练时无法使用点位计算涨跌幅
+            # TODO: 基金其实可以使用净值直接计算涨跌幅，指数可以用点位计算；
+            # 但是RL模型没有使用指数点位作为变量，因此在训练时无法使用点位计算涨跌幅
             fund_yield = float(fund_data['close'].sum()) / 100
             # logging.warning(f'----------> buy_date: {buy_date}, selling_date: {sell_date}, selling yield: {fund_yield}:.4f')
             return fund_yield
-
         # logging.warning(f'--------------> 当日新买入，无法计算收益')
         return 0
-
 
     def _caculate_soldout_cost_fee(self):
         '''
@@ -671,7 +653,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             ])
         return soldout_fee
 
-
     def _get_pfo_soldout_yield(self):
         '''
         Desc:
@@ -684,7 +665,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         pfo_yield = pfo_asset / pfo_shares - 1 if pfo_shares > 0 else 0
         return pfo_yield
 
-
     def _get_acct_cumsum_yield(self):
         '''
         Desc:
@@ -696,7 +676,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         if cumsum_yield >= self.goal_yield:
             self.goal_achieved = True
         return cumsum_yield
-
 
     def _get_pfo_ratio(self):
         '''
@@ -894,7 +873,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                         update_item['sell_price'] = (1 + shares_yield)
                         # 2024-06-27 bug 修复: 拆分 hold 重新赋值一个 hold id, 确保主键唯一
                         update_item['hold_id'] = str(random.randint(1e18, 9e18))
-
                         self.update_items_list.append(update_item)
 
                         # 更新未卖空的部分
@@ -942,7 +920,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                         time consume: {(task_end - task_start):0.2f} s
                         ''')
                     # logging.warning(f'selling yield time consume ----> {(task_end - task_start):0.2f} s')
-
             redeem_rate = round(cal_holdings.selling_cost / selling_shares, 4)
             return return_ratio, redeem_rate
         else:
@@ -972,12 +949,15 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         # 主要针对买入，此时_mark_point为负
         adj_pred_points = _pred_points - test_loss
 
-        # TODO: 根本错误是因为连跌天数预测的不准
+        # TODO: 买入时机，根本错误是因为连跌天数预测的不准
         chaodi_signal = any([
             all([
+                # 1. 在_mark_point等于_pred_points时加仓
+                _mark_point < 0 and _mark_point == _pred_points,
+                # 2. 且当前的_mark_point节点满足一定的条件
                 _mark_point <= _pred_points * (1 - self.temperature),
-                _mark_point < 0 and _mark_point >= _pred_points,
                 ]),
+            # 超过预测的连跌天数之后，保持持续定投加仓
             _mark_point < 0 and _mark_point <= adj_pred_points,
             ])
 
