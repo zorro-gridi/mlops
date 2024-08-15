@@ -71,8 +71,6 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
 
         # 1. 当前可卖出的最大盈利持仓
         max_profit_shares = self._cal_max_selling_amount_with_min_yield(stock_name, min_yield=self.min_yield)
-        logging.warning(f'当前盈利持仓份额 ---------------> {max_profit_shares}')
-
         # check if the stock is able to sell, for simlicity we just add it in techical index
         # 也就是说，对应的股票是否可以交易，在技术指标中内置了。因为可能有些股票当日停牌，不可交易
         def _do_sell_normal():
