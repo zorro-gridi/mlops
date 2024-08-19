@@ -1,3 +1,4 @@
+import functools
 from abc import ABCMeta, abstractclassmethod
 import datetime
 import xgboost as xgb
@@ -5,6 +6,8 @@ from catboost import Pool
 from torch.utils.data import DataLoader
 import numpy as np
 from copy import copy
+from pprint import pprint
+from typing import Union
 
 from mlops.utils import mlflow_utils
 from mlops.datas.exceptions import (
@@ -72,15 +75,12 @@ class AbstractMLOps(metaclass=ABCMeta):
         self.postprocess_func = postprocess_func
         self.mlflow_config = mlflow_config
 
-        # 框架目前已实现的模型训练流程类型
         # 这个 lazyloader 对象无法序列化, 无法存入 ray remote object store
         # 为了兼容 ray 框架，将以下参数该写入 save_checkpoint 的 model_frame 参数中
         # self.mlflow_model_flavor = {
         #     'xgb': mlflow.xgboost,
         #     'cat': mlflow.catboost,
-        #     'nn': mlflow.pytorch,
-        #     'kmeans': mlflow.sklearn,
-        #     'lgb': mlflow.lightgbm,
+        #     ...
         #     }
 
     def _get_attr_sets(self):
@@ -183,6 +183,7 @@ class AbstractMLOps(metaclass=ABCMeta):
             logging.warning(f'---------> MLOps 无 dataset inst 模式')
             return best_checkpoint
 
+        # 更新模型的数据参数
         self.best_data_args.update(copy(self.dataset_inst.__dict__))
         logging.warning(f'更新后的 MLOps 的 best_data_args: {self.best_data_args}')
         return best_checkpoint
@@ -191,13 +192,30 @@ class AbstractMLOps(metaclass=ABCMeta):
     def load_hist_model_config(self, reg_model_name, model_version):
         '''
         Desc:
-            加载注册模型的参数
+            加载注册模型的参数。可通过自定义该方法，传入外部参数到数据的参数字典
         Remark:
             如果需要对模型的config进行特殊处理, 可以通过继承重写该方法
         '''
         # 下载历史模型的参数
         hist_model_config = mlflow_utils.load_register_model_args(reg_model_name, model_version)
         return hist_model_config
+
+
+    def data_util_map(self, test_data, params_config=Union[None, dict]):
+        '''
+        Args:
+            test_data: 模型输入的的的 test_data
+            params_config: mlflow signature 的 params 参数
+        return:
+            test_loader: 供 self.test_job 评估模型
+            signature: 供 mlflow 注册模型
+        '''
+        if params_config:
+            params_config = self.exclude_non_mlflow_param_type(params_config)
+
+        test_loader = None
+        signature = None
+        return test_loader, signature
 
 
     def _eval_hist_model(self, model, config):
@@ -209,6 +227,8 @@ class AbstractMLOps(metaclass=ABCMeta):
         Args:
             model: 历史模型实例
             config: 历史模型的配置
+        Return:
+            hist_eval_metric: 历史模型在新数据的测试损失
         '''
         # 如果历史没有配置数据参数,就直接加载传入的数据
         if self.dataset_inst is None:
@@ -221,7 +241,7 @@ class AbstractMLOps(metaclass=ABCMeta):
             test_data = self.dataset_inst.load_test_data(self.raw_data, inst_config=config)
 
         # 历史模型不用更新参数，不用返回 model signature, 所以 params_config 可为 None
-        test_loader, _ = data_util_map(test_data, params_config=config)
+        test_loader, _ = self.data_util_map(test_data, params_config=config)
         # 此处很容易出 bug, 根源还是没有正确加载数据
         # ====================================
         hist_eval_metric = self.model_task.test_job(model, test_loader)
@@ -231,6 +251,7 @@ class AbstractMLOps(metaclass=ABCMeta):
     def test_hist_model(self, reg_model_name, model_version='1', model_frame=None, update_interval=5):
         '''
         Desc:
+            可优先改写 load_hist_model_config 方法。
             该方法提供 BaseOps 测试历史注册模型的一般化方法，如果需要在应用中定制化，可以通过继承重写灵活满足实际需要。
             该方法实现以下功能：
                 1. 加载历史注册模型
@@ -253,6 +274,7 @@ class AbstractMLOps(metaclass=ABCMeta):
 
         # 下载历史模型的参数
         hist_model_config = self.load_hist_model_config(reg_model_name, model_version)
+        # 历史模型的 training_loss 注册信息中提取
         training_loss = hist_model_config['training_loss']
         current_date = datetime.datetime.today()
         regist_date = hist_model_config['regist_date']
@@ -268,30 +290,37 @@ class AbstractMLOps(metaclass=ABCMeta):
             test_loss = hist_model_config[f'test_{metric_name}']
             return training_loss, test_loss
 
-        # # 如果历史没有配置数据参数,就直接加载传入的数据
-        # if self.dataset_inst is None:
-        #     logging.warning(f'无数据参数调参模式, 使用当前测试数据测试历史模型...')
-        #     test_data = self.test_data
-        # else:
-        #     # load_test_data 加载历史模型的测试集
-        #     # 加载 dataset hist cnofig, 更新当前的 dataset_inst 为历史模式
-        #     logging.warning(f'----------> 历史模型刚注册已超过 {update_interval} 天，最新数据重新测试')
-        #     test_data = self.dataset_inst.load_test_data(self.raw_data, inst_config=hist_model_config)
-
-        # # 历史模型不用更新参数，不用返回 model signature, 所以 params_config 可为 None
-        # test_loader, _ = data_util_map(test_data, params_config=hist_model_config)
-        # # 此处很容易出 bug, 根源还是没有正确加载数据
-        # # ====================================
-        # hist_eval_metric = self.model_task.test_job(hist_regis_model, test_loader)
-
+        # 如果超过注册有效期，就使用新数据，重新评估历史模型
         hist_eval_metric = self._eval_hist_model(hist_regis_model, hist_model_config)
         return training_loss, hist_eval_metric
 
 
+    def exclude_non_mlflow_param_type(self, params_config):
+        '''
+        Desc:
+            排除mlflow不支持注册的参数类型
+        '''
+        params_config_copy = copy(params_config)
+        new_params_config = {
+            k: v for k, v in params_config_copy.items()
+            if v is not None
+                # 筛选 data args 的类型, 因为 mlflow 限制log params的数据类型
+                and type(v) in [
+                    bool, str, int, float, list, dict, np.array, np.ndarray, np.float64
+                ]
+                and type(v) not in [
+                    functools.partial,
+               ]
+            }
+        return new_params_config
+
     def save_checkpoint(
-        self, checkpoint, reg_model_name,
+        self,
+        checkpoint,
+        reg_model_name,
         model_alias=None,
-        model_frame=None, loss_strategy='UNIT',
+        model_frame=None,
+        loss_strategy='UNIT',
         ):
         '''
         Desc:
@@ -302,7 +331,7 @@ class AbstractMLOps(metaclass=ABCMeta):
             4. 更新 mlops 类的 best_model_args, best_data_args
             5. 更新 mlops 类的 dataset_inst 类的属性
         Args:
-            model_frame: 模型框架, 在 BaseOps 中为参数占位符。
+            model_frame: 默认为None, 不需要传递。模型框架, 在 BaseOps 中为参数占位符。
                 在对应框架的 ops 实现的 save_checkpoint 方法中已经指定默认值
                 例如 LstmOps 中, model_frame=mlflow.pytorch
             loss_strategy:
@@ -332,60 +361,6 @@ class AbstractMLOps(metaclass=ABCMeta):
         run_name = f'{model_arch}_best_model_and_config'
         mlflow = setup_mlflow(run_name=run_name, **self.mlflow_config,)
         mlflow_client = MlflowClient(mlflow.get_tracking_uri())
-
-        global data_util_map
-        def data_util_map(test_data, params_config={}):
-            '''
-            Args:
-                test_data: 模型输入的的的 test_data
-                params_config: mlflow signature 的 params 参数
-        return:
-                test_loader: 供 self.test_job 评估模型
-                signature: 供 mlflow 注册模型
-            '''
-            if model_arch == 'xgb':
-                test_loader = xgb.DMatrix(*test_data)
-                X, y = test_data
-                signature = infer_signature(X[:5], y[:5], params_config)
-
-            elif model_arch == 'cat':
-                if type(test_data).__name__ == 'Pool':
-                    test_loader = test_data
-                    # 返回的是 input_size
-                    shape = test_data.shape
-                    input_examples = np.random.randint(0, 10, size=shape)
-                    label = np.random.randint(0, 10, size=shape[0])
-                    signature = infer_signature(
-                        input_examples[:5], label[:5], params_config)
-                elif isinstance(test_data[0], np.ndarray):
-                    # 因为 np.ndarray 中不能设置文本分类变量
-                    test_loader = Pool(
-                        pd.DataFrame(test_data[0]), label=test_data[1], cat_features=params_config.get('categoric_features', None))
-                    X, y = test_data
-                    signature = infer_signature(X[:5], y[:5], params_config)
-                else:
-                    test_loader = Pool(
-                    *test_data, cat_features=params_config.get('categoric_features', None))
-                    X, y = test_data
-                    signature = infer_signature(X[:5], y[:5], params_config)
-
-            elif model_arch == 'nn':
-                test_loader = DataLoader(test_data, batch_size=1)
-                test_data_sample = next(iter(test_loader))
-                X, y = test_data_sample
-                signature = infer_signature(X.numpy(), y.numpy(), params_config)
-
-            # 聚类模型没有测试集
-            elif model_arch == 'kmeans':
-                test_loader = test_data
-                X, y = test_data
-                signature = infer_signature(X[:5], best_model.predict(X[:5]), params_config)
-
-            else:
-                test_loader = test_data
-                X, y = test_data
-                signature = infer_signature(X[:5], y[:5], params_config)
-            return test_loader, signature
 
         if mlflow_utils.check_model_existence(reg_model_name):
             # 使用 get_best_model_version 加载最优模型的版本信息
@@ -475,14 +450,8 @@ class AbstractMLOps(metaclass=ABCMeta):
         logging.warning(f'--------> best data args: {self.best_data_args}')
         # logging.warning(f'log mlflow params -----> {type(params_config["chunk_point"])}')
 
-        params_config = {
-            k: v for k, v in params_config.items()
-            if v is not None
-            # 筛选 data args 的类型, 因为 mlflow 限制log params的数据类型
-            and type(v) in [
-                bool, str, int, float, list, dict, np.array, np.ndarray, np.float64
-                ]
-            }
+        logging.warning(f'---------> params_config:')
+        pprint(params_config)
         params_config['training_loss'] = training_loss
         params_config[f'test_{metric_name}'] = tune_model_metric
         # 登记模型的注册日期
@@ -497,8 +466,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         else:
             test_data = self.test_data if self.test_data else self.train_data
 
-        test_loader, signature = data_util_map(test_data, params_config=params_config)
-
+        test_loader, signature = self.data_util_map(test_data, params_config=params_config)
         # with mlflow.start_run(run_name=run_name):
         # TODO: current path: file:///home/zorro/project/pycharm/mlruns/0/01de69589f3b45df8c6111899175b97c/artifacts
         logging.warning(f'register model uri: {mlflow.get_registry_uri()}')
@@ -507,6 +475,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         try:
             mlflow_client.delete_registered_model(reg_model_name)
         except:
+            logging.warning(f'------> reg_model_name: {reg_model_name} 版本已被清空')
             pass
 
         model_info = model_frame.log_model(

@@ -27,6 +27,7 @@ from torch.utils.data import (
 
 from mlops.nn import train_utils
 from mlops.utils import mlflow_utils
+from typing import Union
 
 
 
@@ -45,6 +46,25 @@ class LstmOps(AbstractMLOps):
 
     def run_model_args(self, ):
         pass
+
+
+    def data_util_map(self, test_data, params_config=Union[None, dict]):
+        '''
+        Args:
+            test_data: 模型输入的的的 test_data
+            params_config: mlflow signature 的 params 参数
+        return:
+            test_loader: 供 self.test_job 评估模型
+            signature: 供 mlflow 注册模型
+        '''
+        if params_config:
+            params_config = self.exclude_non_mlflow_param_type(params_config)
+
+        test_loader = DataLoader(test_data, batch_size=1)
+        test_data_sample = next(iter(test_loader))
+        X, y = test_data_sample
+        signature = infer_signature(X.numpy(), y.numpy(), params_config)
+        return test_loader, signature
 
 
     def find_best_model_args(self, search_space, checkpoint_dir, **kwargs):

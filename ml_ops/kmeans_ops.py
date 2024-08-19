@@ -10,6 +10,8 @@ from mlflow.models import infer_signature
 from mlflow.client import MlflowClient
 from mlops.utils import mlflow_utils
 import ray
+from typing import Union
+
 
 
 @ray.remote(num_cpus=2)
@@ -20,6 +22,24 @@ class KmeansOps(AbstractMLOps):
 
     def run_data_args(self,):
         pass
+
+
+    def data_util_map(self, test_data, params_config=Union[None, dict]):
+        '''
+        Args:
+            test_data: 模型输入的的的 test_data
+            params_config: mlflow signature 的 params 参数
+        return:
+            test_loader: 供 self.test_job 评估模型
+            signature: 供 mlflow 注册模型
+        '''
+        if params_config:
+            params_config = self.exclude_non_mlflow_param_type(params_config)
+
+        test_loader = test_data
+        X, y = test_data
+        signature = infer_signature(X[:5], y[:5], params_config)
+        return test_loader, signature
 
 
     def find_best_data_args(self, data_args_space):

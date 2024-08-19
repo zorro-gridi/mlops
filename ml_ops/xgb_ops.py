@@ -10,10 +10,11 @@ from mlops.ml_ops.base import AbstractMLOps
 
 
 import mlflow
-# from mlflow.models import infer_signature
+from mlflow.models import infer_signature
 # from mlops.utils import mlflow_utils
 # from mlflow.client import MlflowClient
 # import ray
+from typing import Union
 
 
 
@@ -36,6 +37,24 @@ class XgboostOps(AbstractMLOps):
 
         best_checkpoint = self.model_task.train_job(model_args, self.train_data, self.test_data, checkpoint=True)
         return best_checkpoint
+
+
+    def data_util_map(self, test_data, params_config=Union[None, dict]):
+        '''
+        Args:
+            test_data: 模型输入的的的 test_data
+            params_config: mlflow signature 的 params 参数
+        return:
+            test_loader: 供 self.test_job 评估模型
+            signature: 供 mlflow 注册模型
+        '''
+        if params_config:
+            params_config = self.exclude_non_mlflow_param_type(params_config)
+
+        test_loader = xgb.DMatrix(*test_data)
+        X, y = test_data
+        signature = infer_signature(X[:5], y[:5], params_config)
+        return test_loader, signature
 
 
     def find_best_model_args(self, params_space, **kwargs):

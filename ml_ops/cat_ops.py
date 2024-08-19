@@ -6,16 +6,56 @@ from mlflow.models import infer_signature
 from mlops.utils import mlflow_utils
 from mlflow.client import MlflowClient
 
-
 import logging
 import shutil
 from copy import copy
 import ray
+from typing import Union
+import numpy as np
+from catboost import Pool
+import pandas as pd
+
 
 
 class CatBoostOps(AbstractMLOps):
     def __init__(self, **kwargs):
         super(CatBoostOps, self).__init__(**kwargs)
+
+    def data_util_map(self, test_data, params_config=Union[None, dict]):
+        '''
+        Args:
+            test_data: 模型输入的的的 test_data
+            params_config: mlflow signature 的 params 参数
+        return:
+            test_loader: 供 self.test_job 评估模型
+            signature: 供 mlflow 注册模型
+        '''
+        if params_config:
+            params_config = self.exclude_non_mlflow_param_type(params_config)
+
+        if type(test_data).__name__ == 'Pool':
+            test_loader = test_data
+            # 返回的是 input_size
+            shape = test_data.shape
+            input_examples = np.random.randint(0, 10, size=shape)
+            label = np.random.randint(0, 10, size=shape[0])
+            signature = infer_signature(
+                input_examples[:5], label[:5], params_config)
+
+        elif isinstance(test_data[0], np.ndarray):
+            # 因为 np.ndarray 中不能设置文本分类变量
+            test_loader = Pool(
+                pd.DataFrame(test_data[0]), label=test_data[1], cat_features=params_config.get('categoric_features', None))
+            X, y = test_data
+            signature = infer_signature(X[:5], y[:5], params_config)
+
+        else:
+            test_loader = Pool(
+            *test_data, cat_features=params_config.get('categoric_features', None))
+            X, y = test_data
+            signature = infer_signature(X[:5], y[:5], params_config)
+
+        return test_loader, signature
 
 
     def find_best_model_args(self, params_space, **kwargs):

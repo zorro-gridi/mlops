@@ -975,6 +975,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         '''
         is_reverse_point = self._check_reverse_point(index)
         _mark_point = self.current_data.y_point.tolist()[index]
+        # 注意⚠️：_pred_points 是小数
         _pred_points = self.current_data.y_pred.tolist()[index]
         test_loss = int(self.current_data.test_loss.tolist()[index])
         # 主要针对买入，因为此时_mark_point为负
@@ -1009,10 +1010,11 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 _mark_point <= _pred_points * self.temperature,
             ]),
             all([
-                # TODO: 人工处理，因为rllib追踪的是指数的趋势，有时候目标基金与指数行情背离，因此需要调整
+                # TODO: 人工处理，因为rllib追踪的是指数的趋势，有时候目标基金与指数行情背离，因此, 需要调整
                 _mark_point > 0,
                 _mark_point <= 2,
-                self.live_markup < 0,
+                # TODO: 此处的问题是，live_markup 的预测的符号可能; 直接写死
+                self.live_markup <= -1 / 100,
             ])
         ])
 

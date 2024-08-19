@@ -36,6 +36,7 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
         target=None,
         preprocess_func=None,
         is_imbalanced=False,
+        **kwargs,
         ):
         '''
         Args:
@@ -52,7 +53,7 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
         self.is_imbalanced = is_imbalanced # 默认为 False, 因为分层抽样会打乱数据集
         self.categoric_features = categoric_features
         self.preprocess_func = preprocess_func
-        self.target = self.target if isinstance(self.target, int) else self.features.index(self.target)
+        self.target = self.target if isinstance(self.target, int) else self.features.index(self.target) if self.target else None
 
 
     @abstractclassmethod
@@ -60,7 +61,7 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
         pass
 
 
-    def set_attr(self, inst_config):
+    def set_attr(self, inst_config: dict):
         '''
         Desc:
             更新类的属性
@@ -102,8 +103,10 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
     def load_test_data(self, data, inst_config=None):
         '''
         Desc:
-            data: 输入为 mlops 的 raw_data
+            data: 默认可提供 mlops 的 raw_data
             inst_config: 类实例化的参数; 可为历史模型参数, 或new model 的参数
+        Return:
+            返回提供给历史模型评估的最新的测试集
         Remark: Important !!! 设计模式
             如果对于需要额外处理的数据集，可以通过继承重写的方式，来实现加载历史模型的测试数据集
         Remark: TODO

@@ -59,7 +59,8 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=Tr
     delete_version = None
 
     # 搜索注册模型的所有版本号
-    for mv in mlflow_client.search_model_versions(f"name='{reg_model_name}'"):
+    hist_models_info = mlflow_client.search_model_versions(f"name='{reg_model_name}'")
+    for idx, mv in enumerate(hist_models_info):
         mv = dict(mv)
         cur_version = mv['version']
         model_config = load_register_model_args(reg_model_name, cur_version)
@@ -67,24 +68,30 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=Tr
         eval_loss = model_config[f'test_{eval_metric}']
 
         if optimize_mode == 'max':
-            if eval_loss >= best_loss:
-                best_loss = eval_loss
+            if eval_loss > best_loss:
                 best_version = cur_version
                 best_model_config = model_config
             else:
                 delete_version = cur_version
         else:
-            if eval_loss <= best_loss:
-                best_loss = eval_loss
+            if eval_loss < best_loss:
                 best_version = cur_version
                 best_model_config = model_config
             else:
                 delete_version = cur_version
 
-        if delete_version and delete:
-            mlflow_client.delete_model_version(reg_model_name, delete_version)
+        # logging.warning(f'-------> best loss: {best_loss}, eval loss: {eval_loss}, best version: {best_version}')
+        best_loss = eval_loss
 
-    logging.warning(f'最优模型的版本号: {best_version}')
+        if delete:
+            try:
+                mlflow_client.delete_model_version(reg_model_name, delete_version)
+                logging.warning(f'---------> reg model name: {reg_model_name}, version: {delete_version} 已删除')
+            except:
+                logging.warning(f'---------> reg model name: {reg_model_name}, version: {delete_version} 不存在, 无法删除')
+
+
+    logging.warning(f'最优模型的版本号: {best_version}, 评估指标: {eval_metric}: {best_loss}')
     return {
         'model_name': reg_model_name,
         'config': best_model_config,

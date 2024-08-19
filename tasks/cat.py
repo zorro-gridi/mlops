@@ -22,6 +22,7 @@ from copy import copy
 import torch
 
 
+
 class CatboostTask(AbstractModelFactory):
     def __init__(self, **kwargs):
         '''
@@ -76,6 +77,8 @@ class CatboostTask(AbstractModelFactory):
         '''
         Desc:
             启动训练 job
+        Return:
+            training_loss
         '''
         config_device = config.pop('device', 'CPU')
         model_params = copy(config)
@@ -118,6 +121,8 @@ class CatboostTask(AbstractModelFactory):
             test_data:
             max_evals: 实验的数量, 类似 ray[tune] 的 num_samples
             early_stop_round: 早停技术。如果 n 轮后损失没有提升，则停止实验
+        Return:
+            training checkpoint info dict
         '''
         trials = hyperopt.Trials()
 
@@ -161,6 +166,8 @@ class CatboostTask(AbstractModelFactory):
         '''
         Desc:
             返回指定模型在测试集上的测试指标
+        Return:
+            test_loss
         '''
         loss_result = model.eval_metrics(test_pool, [self.model_eval_metric])
         # loss_result 是一个字典或者 NamedTuple
