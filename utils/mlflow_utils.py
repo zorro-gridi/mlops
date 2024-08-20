@@ -15,6 +15,7 @@ def check_model_existence(model_name, tracking_uri=tracking_uri):
         bool
     '''
     # 获取注册的模型的所有版本
+    mlflow.set_tracking_uri(tracking_uri)
     mlflow_client = MlflowClient(tracking_uri)
     registered_models = [
         dict(rm)['name'] for rm in mlflow_client.search_registered_models()]
@@ -30,6 +31,7 @@ def load_register_model_args(reg_model_name: str, model_version: str, tracking_u
     Remark:
         必须要要求 log_model 时传入 signature 参数
     '''
+    mlflow.set_tracking_uri(tracking_uri)
     mlflow_client = MlflowClient(tracking_uri)
     hist_model_uri = mlflow_client.get_model_version_download_uri(reg_model_name, model_version)
     hist_model_info = mlflow.models.get_model_info(hist_model_uri)
@@ -37,7 +39,7 @@ def load_register_model_args(reg_model_name: str, model_version: str, tracking_u
     params_list = eval(
         hist_model_signature_dict['params'].replace('null', 'None').replace('true', 'True').replace('false', 'False'))
     hist_model_args = {param['name']: param['default'] for param in params_list}
-    logging.warning(f'hist model params details: {hist_model_args}')
+    # logging.warning(f'hist model params details: {hist_model_args}')
     return hist_model_args
 
 
@@ -50,6 +52,7 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=Tr
         eval_metric: 模型的比较指标
         delete: 是否删除旧模型
     '''
+    mlflow.set_tracking_uri(tracking_uri)
     mlflow_client = MlflowClient(tracking_uri)
     # 初始化模型评分
     best_loss = -np.inf if optimize_mode == 'max' else np.inf

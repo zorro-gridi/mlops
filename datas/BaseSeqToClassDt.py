@@ -112,6 +112,7 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
                 groups_arr = [group.loc[:, self.categoric_features].to_numpy() for idx, group in raw_data]
 
         elif isinstance(raw_data, pd.DataFrame):
+            raw_data = raw_data.loc[:, self.categoric_features].copy()
             groups_arr = [raw_data.to_numpy()]
 
         if split_name == 'train':
@@ -151,6 +152,7 @@ class BaseSeqToClassDt(AbstractDatasetFactory):
 
         elif isinstance(raw_data, pd.DataFrame):
             # 与 DataFrameGroupBy 情况下返回相同的类型
+            raw_data = raw_data.loc[:, self.features].copy()
             groups_arr = [raw_data.to_numpy()]
         else:
             raise Exception('不支持的输入数据格式')

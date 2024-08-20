@@ -68,7 +68,8 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
         '''
         new_config = copy(
             {k: v for k, v in inst_config.items() if k in self.__dict__.keys()})
-        self.__dict__.update(new_config)
+        self.__dict__.update(inst_config)
+        logging.warning(f'-------> 数据示例切换为历史模型评测模式')
 
 
     def data_split(self, X, y, test_size=0.2, random_state=42, shuffle=True, **kwargs):

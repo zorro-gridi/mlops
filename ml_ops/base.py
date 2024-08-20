@@ -31,10 +31,13 @@ from mlops.utils.wrappers import DictWrapper
 import ray
 from ray.air.integrations.mlflow import setup_mlflow
 import pandas as pd
+import mlflow
 
 
 # from threading import Lock
 # lock = Lock()
+
+mlflow.set_tracking_uri(f'http://192.168.1.107:9001/')
 
 
 class AbstractMLOps(metaclass=ABCMeta):
@@ -192,12 +195,16 @@ class AbstractMLOps(metaclass=ABCMeta):
     def load_hist_model_config(self, reg_model_name, model_version):
         '''
         Desc:
-            加载注册模型的参数。可通过自定义该方法，传入外部参数到数据的参数字典
+            加载注册模型的参数
+        Special Usage:
+            可通过自定义该方法，传入外部参数到数据的参数字典
         Remark:
             如果需要对模型的config进行特殊处理, 可以通过继承重写该方法
         '''
         # 下载历史模型的参数
         hist_model_config = mlflow_utils.load_register_model_args(reg_model_name, model_version)
+        logging.warning(f'----------> load_hist_model_config 加载历史模型配置:')
+        pprint(hist_model_config)
         return hist_model_config
 
 
@@ -274,6 +281,13 @@ class AbstractMLOps(metaclass=ABCMeta):
 
         # 下载历史模型的参数
         hist_model_config = self.load_hist_model_config(reg_model_name, model_version)
+        logging.warning(f'--------> 使用新数据测试历史模型, 模型配置:')
+        if hist_model_config:
+            pprint(hist_model_config)
+        else:
+            logging.warning(f'-------> hist_model_config: {type(hist_model_config)}')
+            raise Exception(f'-------> 没有找到历史的模型配置')
+
         # 历史模型的 training_loss 注册信息中提取
         training_loss = hist_model_config['training_loss']
         current_date = datetime.datetime.today()
@@ -366,9 +380,10 @@ class AbstractMLOps(metaclass=ABCMeta):
             # 使用 get_best_model_version 加载最优模型的版本信息
             # 模型训练阶段不删除历史模型, 推理的时候过滤, 避免训练任务失败
             model_info = mlflow_utils.get_best_model_version(
-                reg_model_name, f'{metric_name}', optimize_mode, delete=False)
+                reg_model_name, metric_name, optimize_mode, delete=False)
 
             best_model_version = model_info['version']
+            logging.warning(f'---------> save checkpoint pipeline 历史最佳注册模型版本: {best_model_version}')
             hist_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{best_model_version}")
             # 测试历史模型。当测试的序列数据特征工程切分异常时，表明最新数据已经变化，需要抛弃历史模型
             # =========================================================================
