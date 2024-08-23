@@ -95,7 +95,7 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=Tr
                 mlflow_client.delete_model_version(reg_model_name, delete_version)
                 logging.warning(f'---------> reg model name: {reg_model_name}, version: {delete_version} 已删除')
             except:
-                logging.warning(f'---------> reg model name: {reg_model_name}, version: {delete_version} 不存在, 无法删除')
+                logging.warning(f'---------> 历史次优模型 reg model name: {reg_model_name}, version: {delete_version} 已删除')
 
 
     logging.warning(f'最优模型的版本号: {best_version}, 评估指标: {eval_metric}: {best_loss}')

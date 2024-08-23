@@ -465,18 +465,17 @@ class AbstractMLOps(metaclass=ABCMeta):
         # logging.warning(f'best_data_args params ---------> {self.best_data_args}')
 
         # 记录模型的 model 和 datainst 关键参数
-        params_config = self.best_model_args
+        params_config = copy(self.best_model_args)
         logging.warning(f'--------> best model args: {self.best_model_args}')
-
-        params_config.update(self.best_data_args)
         logging.warning(f'--------> best data args: {self.best_data_args}')
-        # logging.warning(f'log mlflow params -----> {type(params_config["chunk_point"])}')
-        logging.warning(f'---------> params_config:')
-        pprint(params_config)
+
         params_config['training_loss'] = training_loss
         params_config[f'test_{metric_name}'] = tune_model_metric
         # 登记模型的注册日期
         params_config['regist_date'] = time.strftime('%Y-%m-%d')
+
+        params_config.update(self.best_data_args)
+        logging.warning(f'---------> params_config: {params_config}')
 
         if model_arch == 'nn':
             best_model.eval()
