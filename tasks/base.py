@@ -33,12 +33,18 @@ class AbstractModelFactory(metaclass=ABCMeta):
             ):
         '''
         Args:
-            model_loss_func: 模型损失函数
-            model_eval_metric: 模型评估指标名称. metric(s) to be evaluated on the evaluation set(s)
-            model_init_params: 模型初始化参数
-            model_train_params: 提供给 train 方法的参数
-            custom_loss_func: 非标准库的自定义损失函数类。必须定义 loss_name 属性 和 caculate 方法
-            optimize_mode: 表示模型在测试集评估指标上的优化方向, 而不是模型训练时候的损失函数的优化方向。
+            model_loss_func:
+                模型损失函数
+            model_eval_metric:
+                模型评估指标名称. metric(s) to be evaluated on the evaluation set(s)
+            model_init_params:
+                模型初始化参数
+            model_train_params:
+                提供给 train 方法的参数
+            custom_loss_func:
+                非标准库的自定义损失函数类。必须定义 "loss_name" 属性和 "caculate" 方法
+            optimize_mode:
+                表示模型在测试集评估指标上的优化方向, 而不是模型训练时候的损失函数的优化方向。
                 损失函数在框架里面已经默认定义了优化方向
         '''
         self.model_loss_func = model_loss_func
@@ -47,7 +53,6 @@ class AbstractModelFactory(metaclass=ABCMeta):
         self.model_train_params = model_train_params
         self.optimize_mode = optimize_mode
         self.custom_loss_func = custom_loss_func
-
         self.model_arch = None
 
 

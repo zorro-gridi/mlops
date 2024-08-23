@@ -4,6 +4,23 @@ import logging
 import pandas as pd
 from typing import Union
 
+import os
+import sys
+from pathlib import Path
+
+home_dir = Path(os.path.expanduser('~'))
+proj_path = (home_dir / 'project/pycharm').as_posix()
+sys.path.append(proj_path)
+
+
+"""
+@Desc:
+    序列数据分析处理工具箱
+@Author: Zorro
+@Date: 2024-03-12
+"""
+
+
 
 def phase_series_point(data: Union[pd.Series, list, np.array], start_point, n_clusters=3):
     '''

@@ -975,6 +975,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         '''
         is_reverse_point = self._check_reverse_point(index)
         _mark_point = self.current_data.y_point.tolist()[index]
+        index_live_markup = self.current_data.markup_csum.tolist()[index]
         # 注意⚠️：_pred_points 是小数
         _pred_points = self.current_data.y_pred.tolist()[index]
         test_loss = int(self.current_data.test_loss.tolist()[index])
@@ -991,10 +992,10 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 # 实践证明：这种方式错过涨的时机较多；
                 # _mark_point < 0 and _mark_point == _pred_points,
                 # 2. 且当前的_mark_point节点满足一定的条件
-                # 实践证明：该方式买到跌的机会较多
+                # 实践证明：该方式买到跌的机会较多, _mark_point < 0 表示指数在下跌
                 _mark_point < 0,
-                # 所谓买跌不买涨
-                self.live_markup < 0,
+                # 所谓基金买跌不买涨；规则允许买微涨, 指数跌，基金当日预测净值大涨，表明业绩背离，需要限制交易
+                self.live_markup < 0.5,
                 _mark_point <= _pred_points * (1 - self.temperature),
                 # 保证 _mark_point 在预测误差范围内
                 _mark_point <= ub_point,
@@ -1014,6 +1015,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 _mark_point > 0,
                 _mark_point <= 2,
                 # TODO: 此处的问题是，live_markup 的预测的符号可能; 直接写死
+                # 基金净值大跌也可以买入
                 self.live_markup <= -1 / 100,
             ])
         ])

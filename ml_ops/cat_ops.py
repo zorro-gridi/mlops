@@ -44,9 +44,14 @@ class CatBoostOps(AbstractMLOps):
 
         elif isinstance(test_data[0], np.ndarray):
             # 因为 np.ndarray 中不能设置文本分类变量
-            test_loader = Pool(
-                pd.DataFrame(test_data[0]), label=test_data[1], cat_features=params_config.get('categoric_features', None))
             X, y = test_data
+            X = pd.DataFrame(X)
+            cat_features = params_config.get('categoric_features', None)
+            # catboost 的分类变量需要设置为字符串
+            if cat_features is not None:
+                X.iloc[:, cat_features] = X.iloc[:, cat_features].astype(str)
+
+            test_loader = Pool(X, label=y, cat_features=cat_features)
             signature = infer_signature(X[:5], y[:5], params_config)
 
         else:

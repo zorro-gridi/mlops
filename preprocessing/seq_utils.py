@@ -119,7 +119,7 @@ def compute_vars_list(series, chunk_index: list, pool_func='np.max'):
     return vars_value
 
 
-def build_multi_vars_datas(data, chunk_index: list, external_vars_config: dict, target_series=None):
+def build_multi_vars_datas(data, chunk_index: list, external_vars_config: dict, target_series=None) -> pd.DataFrame:
     '''
     Desc:
         本函数实现将外部变量集成到预测的目标变量中

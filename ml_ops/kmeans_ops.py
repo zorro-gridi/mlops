@@ -11,17 +11,14 @@ from mlflow.client import MlflowClient
 from mlops.utils import mlflow_utils
 import ray
 from typing import Union
+from copy import copy
 
 
 
-@ray.remote(num_cpus=2)
+
 class KmeansOps(AbstractMLOps):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-
-    def run_data_args(self,):
-        pass
 
 
     def data_util_map(self, test_data, params_config=Union[None, dict]):
@@ -37,30 +34,57 @@ class KmeansOps(AbstractMLOps):
             params_config = self.exclude_non_mlflow_param_type(params_config)
 
         test_loader = test_data
-        X, y = test_data
-        signature = infer_signature(X[:5], y[:5], params_config)
+        if isinstance(test_data, tuple):
+            X, y = test_data.iloc[:5]
+        else:
+            X, y = test_data[:5, :], None
+        signature = infer_signature(X, y, params_config)
         return test_loader, signature
+
+
+
+    def find_best_model_args(self, params_space, **kwargs):
+        '''
+        Desc:
+            kmeans 算法寻找最优聚类数量
+        '''
+        logging.warning(f'------------> 启动 Kmeans 聚类搜索...')
+        best_checkpoint = self.model_task.tune_job(
+            params_space,
+            train_data=self.train_data,
+            test_data=self.test_data,
+            **kwargs
+            )
+        # best_model_args 和 best_data_args 都要更新
+        self.best_model_args = copy(self.model_task.model_init_params)
+        if self.dataset_inst:
+            self.best_data_args.update(copy(self.dataset_inst.__dict__))
+        return best_checkpoint
+
 
 
     def find_best_data_args(self, data_args_space):
         '''
-        凡是通过 for 循环寻找最优解的变量, 都必须初始化
-        # best_test_loss: 最优 loss
-        # final_best_estimator: 最优模型
+        Desc:
+            凡是通过 for 循环寻找最优解的变量, 都必须初始化
+        Return:
+            best_checkpoint
+        Rmeark:
+            TODO: 该方法专门设计用于聚类分析后的二分类数据研究。如果需要通用模式，请覆盖继承该方法
         '''
+        # 最优 loss
         best_test_loss = 0
+        # 最优模型
         final_best_estimator = None
 
         built_in_metric = self.model_task.model_eval_metric
-
         # 自定义的损失函数，必须具有 caculate (见下方代码) 方法和 loss_name 属性
         loss_fn = self.model_task.custom_loss_func
         loss_name = loss_fn.loss_name if loss_fn else None
 
         for data_args in data_args_space:
             logging.warning(f'''
-                data args:
-                    {data_args}
+                data args: {data_args}
                 ''')
 
             self.dataset_inst.__dict__.update(data_args)
@@ -123,7 +147,9 @@ class KmeansOps(AbstractMLOps):
     def test_hist_model(self, reg_model_name, model_version='1', model_frame=None):
         '''
         Desc:
-            此处重写父类的 test_hist_model 方法
+            此处重写父类的 test_hist_model 方法。 聚类算法与常规的分类/回归算法不同
+        Remark:
+            TODO: 该方法也是针对聚类模式识别的特殊方法。通用方法待继承覆盖定义
         '''
         hist_model = model_frame.load_model(f"models:/{reg_model_name}/{model_version}")
         hist_model_config = self.load_hist_model_config(reg_model_name, model_version)
@@ -141,11 +167,3 @@ class KmeansOps(AbstractMLOps):
 
     def save_checkpoint(self, *args, **kwargs):
         return super().save_checkpoint(*args, model_frame=mlflow.sklearn, **kwargs)
-
-
-    def run_model_args(self, *data_args_space, **kwargs):
-        pass
-
-
-    def find_best_model_args(self, *model_params_search_space, **kwargs):
-        pass

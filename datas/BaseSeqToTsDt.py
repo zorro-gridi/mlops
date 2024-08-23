@@ -75,10 +75,14 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
             logging.warning(f'return training datasets')
             vars_datasets = vars_datasets[:-pred_len]
         # 预测数据集
-        if split_name == 'pred':
+        elif pred_len > 0 and split_name == 'pred':
             logging.warning(f'return prediction datasets')
             vars_datasets = vars_datasets[-pred_len:]
+        else:
+            logging.warning(f'vars_datasets 数据默认模式')
+            pass
 
+        # 重整 vars_datasets
         if len(vars_datasets.shape) > 2:
             # logging.warning(f'vars_datasets shape: {vars_datasets.shape}')
             vars_datasets = vars_datasets.reshape(len(vars_datasets), -1)
@@ -140,6 +144,10 @@ class SeqToTsDt_NN(BaseSeqToTsDt):
 
 
     def data_split(self, raw_dataset, test_size=0.2, random_state=42):
+        '''
+        Desc:
+            网络模型的数据分割
+        '''
         generator = torch.Generator().manual_seed(random_state)
         train_dataset, test_dataset = random_split(
             raw_dataset, lengths=[1-test_size, test_size], generator=generator)

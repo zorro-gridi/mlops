@@ -40,9 +40,7 @@ class PreProcessSeqToTsDt_Base(BaseSeqToTsDt):
         Return:
             vars_datasets, 数组数据集
         '''
-        # 外部变量列表input_features 不为空，也需要交给 preprocess_func 预处理
-        # if self.input_features is not None:
-        #     prep_func = partial(self.preprocess_func, input_features=self.input_features)
+        # self.fn_config 穿给 self.preprocess_func 的关键字参数
         if self.fn_config is not None:
             fn_config = eval(self.fn_config)
             prep_func = partial(self.preprocess_func, **fn_config)

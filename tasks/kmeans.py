@@ -1,17 +1,24 @@
 import numpy as np
 import logging
-import random
-import time
+# import random
+# import time
 
 from sklearn.cluster import KMeans
 from sklearn import metrics
 from torch import randint
 from mlops.tasks.base import AbstractModelFactory
 
-import mlflow
-from mlflow.models import infer_signature
-import ray
-from ray.air.integrations.mlflow import setup_mlflow
+# import mlflow
+# from mlflow.models import infer_signature
+# import ray
+# from ray.air.integrations.mlflow import setup_mlflow
+
+
+"""
+@Desc:
+    TODO: kmeans 的架构需要重新设计 !!!
+"""
+
 
 
 class kmeans_task(AbstractModelFactory):
@@ -20,37 +27,44 @@ class kmeans_task(AbstractModelFactory):
         self.model_arch = 'kmeans'
 
 
-    def train_func(self, data, n_clusters=15):
+    def train_job(self, train_data, test_data, n_clusters=15):
         '''
-        # init_clusters: kmeans 迭代的最大族数
-        # max_clusters: 搜索空间的最大族数
+        Desc:
+            核心程序。启动 KMeans 聚类
+        Args:
+            n_clusters: 最大的聚类数量
         '''
-        km_estimator = KMeans(n_clusters=n_clusters, **self.model_init_params)
-        km_estimator.fit(data)
+        # 模型实例化的默认初始化参数
+        default_init_params = dict(
+            n_init=min(3, n_clusters),
+            init='k-means++',
+            )
 
-        silhouette_score = self.eval_job(km_estimator, test_X=data, metric_name=self.model_eval_metric)
+        if self.model_init_params:
+            default_init_params.update(self.model_init_params)
+
+        km_estimator = KMeans(n_clusters=n_clusters, **default_init_params)
+        km_estimator.fit(train_data)
+
+        silhouette_score = self.eval_job(km_estimator, test_X=test_data, metric_name=self.model_eval_metric)
         return km_estimator, silhouette_score
 
 
-    def train_job(self, data, init_clusters=15, max_clusters=30, **kwargs):
+    def tune_job(self, n_clusters: int, train_data=None, test_data=None, init_clusters=4):
         '''
+        Desc:
+            启动 train_func，开始聚类
         Args:
             init_clusters: kmeans 迭代的最大族数
-            max_clusters: 搜索空间的最大族数
+            n_clusters: 搜索空间的目标分类簇数
         '''
         silhouette_score_list = []
         estimators = []
 
-        # setup_mlflow(
-        #     tracking_uri=kwargs['tracking_uri'],
-        #     experiment_name=kwargs['experiment_name'],
-        #     run_name=f"kmeans_train_job_{time.strftime('%Y-%m-%d %H:%M')}_{random.randint(1e3, 9e3)}",
-        #     )
-
         logging.warning(f'start kmeans clusters......')
         # init_clusters 区别于 KMeans 自身的 init
-        for n in range(init_clusters, max_clusters):
-            kmeans, silhouette_score = self.train_func(data=data, n_clusters=n)
+        for n in range(init_clusters, n_clusters+1):
+            kmeans, silhouette_score = self.train_job(train_data, test_data, n_clusters=n)
             silhouette_score_list.append(silhouette_score)
             estimators.append(kmeans)
 
@@ -69,19 +83,22 @@ class kmeans_task(AbstractModelFactory):
                 ]
 
         # 自动筛选最优聚类数的 estimator
-        best_estimator_idx = np.argmax(score_diff)
-        best_estimator = estimators[best_estimator_idx]
-        return best_estimator
-
-
-    def tune_job(self, *args, **kwargs):
-        pass
+        best_idx = np.argmax(score_diff)
+        best_estimator = estimators[best_idx]
+        cluster_loss = silhouette_score_list[best_idx]
+        return {
+            'training_loss': cluster_distance,
+            self.model_eval_metric: cluster_loss,
+            'best_model': best_estimator,
+        }
 
 
     def eval_job(self, model_inst, test_X=None, test_y=None, metric_name=None):
         '''
-        该函数返回模型的按指定评估指标计算的得分
+        Desc:
+            该函数返回模型的按指定评估指标计算的得分
         '''
+        # 常见的聚类评估指标
         clustering_metrics = {
             'homogeneity_score': metrics.homogeneity_score,
             'completeness_score': metrics.completeness_score,
@@ -90,7 +107,7 @@ class kmeans_task(AbstractModelFactory):
             'adjusted_mutual_info_score': metrics.adjusted_mutual_info_score,
         }
 
-        if metric_name == 'silhouette_score':
+        if metric_name == 'silhouette_score' or metric_name is None:
             silhouette_score = metrics.silhouette_score(
                 test_X,
                 model_inst.labels_,
@@ -99,6 +116,7 @@ class kmeans_task(AbstractModelFactory):
                 )
             return silhouette_score
 
+
         eval_score = clustering_metrics[metric_name](test_y, model_inst.labels_)
         return eval_score
 
@@ -106,7 +124,10 @@ class kmeans_task(AbstractModelFactory):
 
     def test_job(self, model_inst, test_X=None, test_y=None):
         '''
-        eval_result: 统计各个聚类标签中正例的比例
+        Desc:
+            评估聚类的效果
+        Return:
+            eval_result: 统计各个聚类标签中正例的比例
         '''
         pred_labels = model_inst.predict(test_X)
         cluster_labels = np.unique(pred_labels)
@@ -122,5 +143,3 @@ class kmeans_task(AbstractModelFactory):
             logging.warning(f'cluster label: {c_label}, truth ratio: {truth_ratio:,.5f}, samples: {cluster_lens}')
 
         return pred_labels, eval_result
-
-

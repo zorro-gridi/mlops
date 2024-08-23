@@ -210,6 +210,8 @@ class AbstractMLOps(metaclass=ABCMeta):
 
     def data_util_map(self, test_data, params_config=Union[None, dict]):
         '''
+        Desc:
+            返回历史模型测试使用的 test data loader & 注册 mlflow 的 signature
         Args:
             test_data: 模型输入的的的 test_data
             params_config: mlflow signature 的 params 参数
@@ -254,11 +256,13 @@ class AbstractMLOps(metaclass=ABCMeta):
         hist_eval_metric = self.model_task.test_job(model, test_loader)
         return hist_eval_metric
 
-    # 一般情况
+
     def test_hist_model(self, reg_model_name, model_version='1', model_frame=None, update_interval=5):
         '''
         Desc:
-            可优先改写 load_hist_model_config 方法。
+            测试历史模型的一般方法
+        Usage:
+            可优先改写 load_hist_model_config 方法, 该方法返回 datainst 的 config 配置，mlops内部会自动更新实例配置
             该方法提供 BaseOps 测试历史注册模型的一般化方法，如果需要在应用中定制化，可以通过继承重写灵活满足实际需要。
             该方法实现以下功能：
                 1. 加载历史注册模型
@@ -281,9 +285,8 @@ class AbstractMLOps(metaclass=ABCMeta):
 
         # 下载历史模型的参数
         hist_model_config = self.load_hist_model_config(reg_model_name, model_version)
-        logging.warning(f'--------> 使用新数据测试历史模型, 模型配置:')
         if hist_model_config:
-            pprint(hist_model_config)
+            pass
         else:
             logging.warning(f'-------> hist_model_config: {type(hist_model_config)}')
             raise Exception(f'-------> 没有找到历史的模型配置')
@@ -382,69 +385,72 @@ class AbstractMLOps(metaclass=ABCMeta):
             model_info = mlflow_utils.get_best_model_version(
                 reg_model_name, metric_name, optimize_mode, delete=False)
 
-            best_model_version = model_info['version']
-            logging.warning(f'---------> save checkpoint pipeline 历史最佳注册模型版本: {best_model_version}')
-            hist_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{best_model_version}")
-            # 测试历史模型。当测试的序列数据特征工程切分异常时，表明最新数据已经变化，需要抛弃历史模型
-            # =========================================================================
+            if model_info is not None:
+                best_model_version = model_info['version']
+                logging.warning(f'---------> save checkpoint pipeline 历史最佳注册模型版本: {best_model_version}')
+                hist_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{best_model_version}")
+                # 测试历史模型。当测试的序列数据特征工程切分异常时，表明最新数据已经变化，需要抛弃历史模型
+                # =========================================================================
 
-            try:
-                hist_training_loss, hist_eval_metric = self.test_hist_model(
-                    reg_model_name, model_version=best_model_version, model_frame=model_frame)
-            except No_SeqDataException:
-                    exception_value = {
-                        'min': np.inf,
-                        'max': -np.inf,
+                try:
+                    hist_training_loss, hist_eval_metric = self.test_hist_model(
+                        reg_model_name, model_version=best_model_version, model_frame=model_frame)
+                except No_SeqDataException:
+                        exception_value = {
+                            'min': np.inf,
+                            'max': -np.inf,
+                            }
+                        hist_training_loss = hist_eval_metric = exception_value[optimize_mode]
+
+                # 更新评估指标的权重
+                hist_sum_loss = hist_training_loss + hist_eval_metric
+                hist_weight_loss = hist_training_loss * 0.2 + hist_eval_metric * 0.8
+
+                # 比较是测试指标
+                if loss_strategy == 'UNIT':
+                    if optimize_mode == 'min':
+                        compare_bools_result = -tune_model_metric <= -hist_eval_metric
+                    else:
+                        compare_bools_result = tune_model_metric <= hist_eval_metric
+                elif loss_strategy == 'WEIGHT':
+                    if optimize_mode == 'min':
+                        compare_bools_result = -tune_weight_loss <= -hist_weight_loss
+                    else:
+                        compare_bools_result = tune_weight_loss <= hist_weight_loss
+                else:
+                    if optimize_mode == 'min':
+                        compare_bools_result = -tune_sum_loss <= -hist_sum_loss
+                    else:
+                        compare_bools_result = tune_sum_loss <= hist_sum_loss
+
+                # 默认使用最大化模式
+                if compare_bools_result:
+                    # 更新输出的模型
+                    self.output_model = hist_regis_model
+
+                    logging.warning(f'''
+                        tune {model_arch} model {metric_name}: {tune_model_metric:,.3f}, {loss_strategy} loss: {tune_sum_loss:,.3f}
+                        hist {model_arch} model {metric_name}: {hist_eval_metric:,.3f}, {loss_strategy} loss: {hist_sum_loss:,.3f}
+                        --> 使用历史最优模型推理......
+                        ''')
+                    return {
+                        'training_loss': hist_training_loss,
+                        'test_loss': hist_eval_metric,
+                        'best_model': hist_regis_model,
+                        'save_mode': 'hist',
                         }
-                    hist_training_loss = hist_eval_metric = exception_value[optimize_mode]
-
-            # 更新评估指标的权重
-            hist_sum_loss = hist_training_loss + hist_eval_metric
-            hist_weight_loss = hist_training_loss * 0.2 + hist_eval_metric * 0.8
-
-            # 比较是测试指标
-            if loss_strategy == 'UNIT':
-                if optimize_mode == 'min':
-                    compare_bools_result = -tune_model_metric <= -hist_eval_metric
                 else:
-                    compare_bools_result = tune_model_metric <= hist_eval_metric
-            elif loss_strategy == 'WEIGHT':
-                if optimize_mode == 'min':
-                    compare_bools_result = -tune_weight_loss <= -hist_weight_loss
-                else:
-                    compare_bools_result = tune_weight_loss <= hist_weight_loss
+                    # 将针对数据实例的更改撤回。不删除历史模型
+                    # mlflow_client.delete_registered_model(reg_model_name)
+                    logging.warning(f'''
+                        test loss vs ------> hist: {hist_eval_metric:,.6f}, new: {tune_model_metric:,.6f}.
+                        sum loss vs  ------> hist: {hist_sum_loss:,.6f}, new: {tune_sum_loss:,.6f}.
+                        历史模型评分低, 将保存当前的模型...
+                        ''')
             else:
-                if optimize_mode == 'min':
-                    compare_bools_result = -tune_sum_loss <= -hist_sum_loss
-                else:
-                    compare_bools_result = tune_sum_loss <= hist_sum_loss
-
-            # 默认使用最大化模式
-            if compare_bools_result:
-                # 更新输出的模型
-                self.output_model = hist_regis_model
-
-                logging.warning(f'''
-                    tune {model_arch} model {metric_name}: {tune_model_metric:,.3f}, {loss_strategy} loss: {tune_sum_loss:,.3f}
-                    hist {model_arch} model {metric_name}: {hist_eval_metric:,.3f}, {loss_strategy} loss: {hist_sum_loss:,.3f}
-                    --> 使用历史最优模型推理......
-                    ''')
-                return {
-                    'training_loss': hist_training_loss,
-                    'test_loss': hist_eval_metric,
-                    'best_model': hist_regis_model,
-                    'save_mode': 'hist',
-                    }
-            else:
-                # 将针对数据实例的更改撤回。不删除历史模型
-                # mlflow_client.delete_registered_model(reg_model_name)
-                logging.warning(f'''
-                    test loss vs ------> hist: {hist_eval_metric:,.6f}, new: {tune_model_metric:,.6f}.
-                    sum loss vs  ------> hist: {hist_sum_loss:,.6f}, new: {tune_sum_loss:,.6f}.
-                    历史模型评分低, 将保存当前的模型...
-                    ''')
+                logging.warning(f'历史最优模型已经被更新删除，使用当前模型注册...')
         else:
-            logging.warning(f'没有注册的历史模型...')
+            logging.warning(f'没有注册的历史模型......')
 
         # TODO: 之前应该是误会了，评估指标可以为 0, 不代表训练失败
         # if tune_model_metric == 0:
@@ -461,10 +467,10 @@ class AbstractMLOps(metaclass=ABCMeta):
         # 记录模型的 model 和 datainst 关键参数
         params_config = self.best_model_args
         logging.warning(f'--------> best model args: {self.best_model_args}')
+
         params_config.update(self.best_data_args)
         logging.warning(f'--------> best data args: {self.best_data_args}')
         # logging.warning(f'log mlflow params -----> {type(params_config["chunk_point"])}')
-
         logging.warning(f'---------> params_config:')
         pprint(params_config)
         params_config['training_loss'] = training_loss
@@ -479,7 +485,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         if model_arch in ['xgb']:
             test_data = ray.get(self.test_data)
         else:
-            test_data = self.test_data if self.test_data else self.train_data
+            test_data = self.test_data if len(self.test_data) > 0 else self.train_data
 
         test_loader, signature = self.data_util_map(test_data, params_config=params_config)
         # with mlflow.start_run(run_name=run_name):
@@ -490,7 +496,7 @@ class AbstractMLOps(metaclass=ABCMeta):
         try:
             mlflow_client.delete_registered_model(reg_model_name)
         except:
-            logging.warning(f'------> reg_model_name: {reg_model_name} 版本已被清空')
+            logging.warning(f'------> 应删除的 reg_model_name: {reg_model_name} 版本已被清空, 忽略...')
             pass
 
         model_info = model_frame.log_model(

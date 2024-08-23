@@ -66,7 +66,11 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=Tr
     for idx, mv in enumerate(hist_models_info):
         mv = dict(mv)
         cur_version = mv['version']
-        model_config = load_register_model_args(reg_model_name, cur_version)
+        try:
+            model_config = load_register_model_args(reg_model_name, cur_version)
+        except:
+            logging.warning(f'----------> 模型仓库没有找到版本: {cur_version}')
+            return None
         # 获取该注册模型的测试评分
         eval_loss = model_config[f'test_{eval_metric}']
 

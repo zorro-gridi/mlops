@@ -107,7 +107,7 @@ class AbstractDatasetFactory(metaclass=ABCMeta):
             data: 默认可提供 mlops 的 raw_data
             inst_config: 类实例化的参数; 可为历史模型参数, 或new model 的参数
         Return:
-            返回提供给历史模型评估的最新的测试集
+            返回提供给历史模型评估的最新的测试集: test_data
         Remark: Important !!! 设计模式
             如果对于需要额外处理的数据集，可以通过继承重写的方式，来实现加载历史模型的测试数据集
         Remark: TODO

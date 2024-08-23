@@ -443,7 +443,7 @@ class BaseTradeEnv(gym.Env):
         # 记录股票当前最新的股价信息
         self.current_data = self.data.iloc[-self.stock_dim:]
         self.future_data = self.df.iloc[(self.day+1) * self.per_batch_size : (self.day+1) * self.per_batch_size + self.future_days]
-        # ===================================
+        # =================================================================
 
         # 先计算当前的账户累计金额
         # 更新 self.asset_memory
