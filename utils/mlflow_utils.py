@@ -7,6 +7,13 @@ import numpy as np
 tracking_uri = 'http://192.168.1.107:9001/'
 
 
+
+def load_model(model_frame, reg_model_name, model_version):
+    hist_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{model_version}")
+    return hist_regis_model
+
+
+
 def check_model_existence(model_name, tracking_uri=tracking_uri):
     '''
     Desc:
@@ -69,8 +76,8 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=Tr
         try:
             model_config = load_register_model_args(reg_model_name, cur_version)
         except:
-            logging.warning(f'----------> 模型仓库没有找到版本: {cur_version}')
-            return None
+            logging.warning(f'----------> {reg_model_name} 模型仓库没有找到版本: {cur_version}')
+            continue
         # 获取该注册模型的测试评分
         eval_loss = model_config[f'test_{eval_metric}']
 
@@ -97,10 +104,12 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=Tr
             except:
                 logging.warning(f'---------> 历史次优模型 reg model name: {reg_model_name}, version: {delete_version} 已删除')
 
-
     logging.warning(f'最优模型的版本号: {best_version}, 评估指标: {eval_metric}: {best_loss}')
-    return {
-        'model_name': reg_model_name,
-        'config': best_model_config,
-        'version': best_version,
-        }
+    if best_version and best_model_config:
+        return {
+            'model_name': reg_model_name,
+            'config': best_model_config,
+            'version': best_version,
+            }
+    else:
+        return None

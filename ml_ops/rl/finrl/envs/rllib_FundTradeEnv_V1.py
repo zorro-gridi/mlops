@@ -34,8 +34,7 @@ sys.path.append(env_path)
 from mlops.ml_ops.rl.finrl.envs.rllib_BaseTradeEnv import BaseTradeEnv
 # from mlops.ml_ops.rl.finrl.rule.v2 import FundTradeRules_V2
 # from mlops.ml_ops.rl.finrl.rule.v5 import FundTradeRules_V5
-
-matplotlib.use("Agg")
+# matplotlib.use("Agg")
 
 
 """
@@ -43,6 +42,11 @@ matplotlib.use("Agg")
 @Date: 2024-01-01
 @Desc:
     本代码定义了基于 rllib 强化学习训练框架的 gym 环境模型
+Release log:
+    2024-04-17:
+        1. 增加反弹、反转点的检测，在该点位后的 3 日内不卖出股票, 具体逻辑参考 self.selling_signal()
+    2024-08-24:
+        1. ENV 增加 self.buy_times 属性，根据周线的趋势，给买入订单金额乘上一个放缩系数。此变更对所有子类有效
 """
 
 
@@ -66,8 +70,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 @release log: 2024-04-12 删除！原因：早停导致策略无法学习，训练和推理环节都不能使用
             3. 卖出时，【策略建议份额】与【盈利持仓】取最大数 (不取最小的原因，因为策略空间有范围限制)
             4. 账户在满足持仓预期收益、或账户整体收益后, 自动实现清仓
-        Release log:
-            1. 2024-04-17: 增加反弹、反转点的检测，在该点位后的 3 日内不卖出股票, 具体逻辑参考 self.selling_signal()
         Conclusion:
             1. 交易频率较低，整体收益相对温和
             2. 对于单边行情，该策略表现出不适应。特别是，单边下跌行情中，当仓位达到控制线之后，因为限制了策略空间，不能主动有效的减仓，导致策略无法继续训练
@@ -100,6 +102,10 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         self.verbose = config.get('verbose', 0)
         # 2024-07-21 新增: 卖出费率的字典
         self.sell_cost_pct = config.get('sell_cost_pct', dict())
+
+        # 2024-08-24 新增：买入倍数的条件限制
+        self.buy_times = config.get('buy_times', 1)
+
         # 每次实例化都应该先更新持仓的收益
         self._update_acct_holdings_debit_yield()
 
@@ -974,11 +980,13 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
             判断买入的市场条件。区分训练模式与实盘交易模式。还需要结合长短期的均线趋势
         '''
         is_reverse_point = self._check_reverse_point(index)
-        _mark_point = self.current_data.y_point.tolist()[index]
-        index_live_markup = self.current_data.markup_csum.tolist()[index]
+        _mark_point = self.current_data['y_point'].tolist()[index]
+        # 指数阶段的累计涨跌幅
+        index_live_markup = self.current_data['markup_csum'].tolist()[index]
         # 注意⚠️：_pred_points 是小数
-        _pred_points = self.current_data.y_pred.tolist()[index]
-        test_loss = int(self.current_data.test_loss.tolist()[index])
+        _pred_points = self.current_data['y_pred'].tolist()[index]
+        test_loss = int(self.current_data['test_loss'].tolist()[index])
+
         # 主要针对买入，因为此时_mark_point为负
         ub_point = _pred_points + abs(test_loss)
         lb_point = _pred_points - abs(test_loss)
@@ -998,11 +1006,10 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 self.live_markup < 0.5,
                 _mark_point <= _pred_points * (1 - self.temperature),
                 # 保证 _mark_point 在预测误差范围内
-                _mark_point <= ub_point,
-                _mark_point >= lb_point,
+                _mark_point >= lb_point and _mark_point <= ub_point,
                 ]),
-            # 认为设定最大回撤天数，必须加仓。可以使用绝对点位, 待使用模型分析
-            _mark_point <= -8,
+            # 人为设定最大回撤天数，必须加仓。可以使用绝对点位, 待使用模型分析
+            _mark_point <= -7,
             ])
 
         zhuizhang_signal = any([
@@ -1015,7 +1022,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 _mark_point > 0,
                 _mark_point <= 2,
                 # TODO: 此处的问题是，live_markup 的预测的符号可能; 直接写死
-                # 基金净值大跌也可以买入
+                # 当日指数涨，基金净值大跌也可以买入
                 self.live_markup <= -1 / 100,
             ])
         ])
@@ -1103,7 +1110,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 # 计算可买入的最多股票数量（基于单笔交易金额限制的）
                 if available_shares > 0:
                     # logging.warning(f'-----------> buying amont choices: rule: {available_shares} vs action: {action}')
-                    buy_num_shares = min(available_shares, action)
+                    buy_num_shares = min(available_shares, action) * self.buy_times
+
                     if buy_num_shares > self.per_unit_amount:
                         buy_amount = buy_num_shares * (1 - self.buy_cost_pct[index])
                         buy_fee = buy_num_shares * self.buy_cost_pct[index]
@@ -1168,6 +1176,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                             })
             # 返回买入的份额数量
             return buy_num_shares, buy_amount
+
         buy_num_shares, buy_amount = _do_buy()
         return buy_num_shares, buy_amount
 

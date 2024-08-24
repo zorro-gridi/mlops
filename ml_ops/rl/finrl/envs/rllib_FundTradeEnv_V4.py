@@ -200,6 +200,6 @@ class FundQuantTradeEnv_V4(FundQuantTradeEnv_V1):
             return buy_num_shares, buy_amount
 
         buy_num_shares, buy_amount = _do_buy()
-        return buy_num_shares, buy_amount
+        return buy_num_shares * self.buy_times, buy_amount * self.buy_times
 
 # %%

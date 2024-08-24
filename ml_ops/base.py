@@ -12,6 +12,7 @@ from typing import Union
 from mlops.utils import mlflow_utils
 from mlops.datas.exceptions import (
     No_SeqDataException,
+    No_MLflow_Model_Found_Exception,
     )
 
 
@@ -280,8 +281,10 @@ class AbstractMLOps(metaclass=ABCMeta):
             training_loss: 训练损失
             hist_eval_metric: 测试损失
         '''
-        hist_regis_model = model_frame.load_model(
-            f"models:/{reg_model_name}/{model_version}")
+        try:
+            hist_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{model_version}")
+        except No_MLflow_Model_Found_Exception:
+            return np.inf, np.inf if self.model_task.optimize_mode == 'max' else -np.inf, -np.inf
 
         # 下载历史模型的参数
         hist_model_config = self.load_hist_model_config(reg_model_name, model_version)
@@ -388,14 +391,14 @@ class AbstractMLOps(metaclass=ABCMeta):
             if model_info is not None:
                 best_model_version = model_info['version']
                 logging.warning(f'---------> save checkpoint pipeline 历史最佳注册模型版本: {best_model_version}')
-                hist_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{best_model_version}")
-                # 测试历史模型。当测试的序列数据特征工程切分异常时，表明最新数据已经变化，需要抛弃历史模型
-                # =========================================================================
 
                 try:
+                    hist_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{best_model_version}")
+                    # 测试历史模型。当测试的序列数据特征工程切分异常时，表明最新数据已经变化，需要抛弃历史模型
+                    # =========================================================================
                     hist_training_loss, hist_eval_metric = self.test_hist_model(
                         reg_model_name, model_version=best_model_version, model_frame=model_frame)
-                except No_SeqDataException:
+                except (No_SeqDataException or No_MLflow_Model_Found_Exception):
                         exception_value = {
                             'min': np.inf,
                             'max': -np.inf,
@@ -483,8 +486,10 @@ class AbstractMLOps(metaclass=ABCMeta):
 
         if model_arch in ['xgb']:
             test_data = ray.get(self.test_data)
-        else:
+        elif isinstance(self.test_data, pd.DataFrame):
             test_data = self.test_data if len(self.test_data) > 0 else self.train_data
+        else:
+            test_data = self.test_data if self.test_data else self.train_data
 
         test_loader, signature = self.data_util_map(test_data, params_config=params_config)
         # with mlflow.start_run(run_name=run_name):
@@ -520,8 +525,8 @@ class AbstractMLOps(metaclass=ABCMeta):
         mlflow.end_run()
 
         logging.warning(f'''
+            ----> 使用当前模型推理
             {model_arch} model test {metric_name}: {tune_model_metric:,.3f}
-            --> 使用当前模型推理......
             ''')
         logging.warning(f'当前训练的 {model_arch} 模型已保存.')
         return {

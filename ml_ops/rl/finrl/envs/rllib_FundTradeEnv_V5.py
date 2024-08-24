@@ -185,11 +185,11 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
                             'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
                             })
 
-            # 返回买入的份额数量
+            # _do_buy() 返回买入的份额数量
             return buy_num_shares, buy_amount
 
         buy_num_shares, buy_amount = _do_buy()
-        return buy_num_shares, buy_amount
+        return buy_num_shares * self.buy_times, buy_amount * self.buy_times
 
 
 # %%
