@@ -5,13 +5,12 @@ import numpy as np
 
 
 tracking_uri = 'http://192.168.1.107:9001/'
-
+mlflow.set_tracking_uri(tracking_uri)
 
 
 def load_model(model_frame, reg_model_name, model_version):
     hist_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{model_version}")
     return hist_regis_model
-
 
 
 def check_model_existence(model_name, tracking_uri=tracking_uri):
@@ -22,7 +21,7 @@ def check_model_existence(model_name, tracking_uri=tracking_uri):
         bool
     '''
     # 获取注册的模型的所有版本
-    mlflow.set_tracking_uri(tracking_uri)
+    # mlflow.set_tracking_uri(tracking_uri)
     mlflow_client = MlflowClient(tracking_uri)
     registered_models = [
         dict(rm)['name'] for rm in mlflow_client.search_registered_models()]
@@ -38,7 +37,7 @@ def load_register_model_args(reg_model_name: str, model_version: str, tracking_u
     Remark:
         必须要要求 log_model 时传入 signature 参数
     '''
-    mlflow.set_tracking_uri(tracking_uri)
+    # mlflow.set_tracking_uri(tracking_uri)
     mlflow_client = MlflowClient(tracking_uri)
     hist_model_uri = mlflow_client.get_model_version_download_uri(reg_model_name, model_version)
     hist_model_info = mlflow.models.get_model_info(hist_model_uri)
@@ -59,7 +58,7 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=Tr
         eval_metric: 模型的比较指标
         delete: 是否删除旧模型
     '''
-    mlflow.set_tracking_uri(tracking_uri)
+    # mlflow.set_tracking_uri(tracking_uri)
     mlflow_client = MlflowClient(tracking_uri)
     # 初始化模型评分
     best_loss = -np.inf if optimize_mode == 'max' else np.inf
@@ -70,6 +69,9 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=Tr
 
     # 搜索注册模型的所有版本号
     hist_models_info = mlflow_client.search_model_versions(f"name='{reg_model_name}'")
+    if len(hist_models_info) == 0:
+        return None
+    logging.warning(f'-------> hist_models_info: {hist_models_info}')
     for idx, mv in enumerate(hist_models_info):
         mv = dict(mv)
         cur_version = mv['version']
@@ -113,3 +115,8 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=Tr
             }
     else:
         return None
+
+
+
+if __name__ == '__main__':
+    get_best_model_version('Stock_Volume_Breakout_Model_Cat', 'MCC', 'max')

@@ -109,6 +109,7 @@ class FundQuantTradeEnv_V2(FundQuantTradeEnv_V1):
                         'received_amount': 'null',
                         'opt_type': 3,
                         'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+                        'order_source': 'gridi',
                         })
             return sell_num_shares, sell_amount
 

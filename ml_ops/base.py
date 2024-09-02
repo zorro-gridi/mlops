@@ -38,7 +38,7 @@ import mlflow
 # from threading import Lock
 # lock = Lock()
 
-mlflow.set_tracking_uri(f'http://192.168.1.107:9001/')
+mlflow.set_tracking_uri(f'http://127.0.0.1:9001/')
 
 
 class AbstractMLOps(metaclass=ABCMeta):
@@ -484,9 +484,13 @@ class AbstractMLOps(metaclass=ABCMeta):
             best_model.eval()
         self.output_model = best_model
 
+        # logging.warning(f'--------> test data type: {type(self.test_data)}')
         if model_arch in ['xgb']:
             test_data = ray.get(self.test_data)
-        elif isinstance(self.test_data, pd.DataFrame):
+        elif any([
+            isinstance(self.test_data, pd.DataFrame),
+            isinstance(self.test_data, np.ndarray),
+            ]):
             test_data = self.test_data if len(self.test_data) > 0 else self.train_data
         else:
             test_data = self.test_data if self.test_data else self.train_data

@@ -183,6 +183,7 @@ class FundQuantTradeEnv_V5(FundQuantTradeEnv_V2):
                             'received_amount': buy_amount,
                             'opt_type': opt_type,
                             'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+                            'order_source': 'gridi',
                             })
 
             # _do_buy() 返回买入的份额数量

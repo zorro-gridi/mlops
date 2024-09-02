@@ -58,7 +58,6 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
     """
     metadata = {"render_modes": ["human"]}
 
-
     def __init__(self, config: EnvContext):
         '''
         Desc:
@@ -105,7 +104,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
 
         # 2024-08-24 新增：买入倍数的条件限制
         self.buy_times = config.get('buy_times', 1)
-
+        # 2024-08-27 新增：指数超跌天数的阈值
+        self.days_slope = config.get('days_slope', -7)
         # 每次实例化都应该先更新持仓的收益
         self._update_acct_holdings_debit_yield()
 
@@ -448,6 +448,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         '''
         if sell_amount == 0:
             return 0
+
+        # 获取指定基金的持仓信息
         acct_holdings = self.acct_info['pfo_shares_redeem'][fund_code]
         # 已兑换掉费率额度的单独摘开
         redeemOut_holdings = [h for h in acct_holdings if h['redeem_balance'] <= 0]
@@ -506,8 +508,8 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         # logging.warning(f'-----------> acct holdings:')
         # pprint(acct_holdings)
 
+        # 获取指定基金的持仓信息
         tic_holdings = acct_holdings[fund_code]
-        # tic_holdings = self.acct_info['pfo_shares_redeem'][fund_code]
         still_holdings = [h for h in tic_holdings if h['soldout'] == '0' and h['hold'] > 0]
         # 此处得按 yield 收益率逆序排序
         sort_holdings = list(sorted(still_holdings, key=lambda x: x['yield'], reverse=True))
@@ -524,17 +526,17 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         for i, h in enumerate(sort_holdings):
             # 在卖出阶段，如果被拆分，此处的 buy_shares 就是一笔的部分份额
             # 买入时到账的份额
-            buy_shares = round(h['shares'] * (1 - h['buy_rate']) / h['buy_price'], 2)
             buy_date = h['buy_date']
             # 可卖出的持仓份额
             sell_amount = h['hold']
+            # 考虑当日预测涨跌幅后的持仓收益率（持仓收益率已经考虑了买入费率，因为持仓金额已经扣除了买入手续费）
             hold_yield = h['yield'] + self.live_markup
 
-            # 动态最下止盈收益率
+            # 计算动态最小止盈收益率
             dyn_min_yield = self._caculate_holding_min_yield(fund_code, buy_date)
             # 计算卖出一笔持仓基于 fifo 规则的费率
             redeem_rate = self._cal_fifo_redeem_rate(fund_code, sell_amount, mode='Backtest')
-            # 考虑 申购 & 赎回 的净收益率
+            # 计算扣除【申购 + 赎回费率】的净收益率
             selling_yield = round(hold_yield - redeem_rate, 6)
             logging.warning(f'''
                 第 {i+1} 笔测试卖出收益 ----------->
@@ -684,17 +686,27 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         '''
         pfo_shares, pfo_asset = self._get_acct_pfo_shares()
         update_holdings = self._update_acct_holdings_debit_yield()
-        # fundcode_assets = {}
-        # for fundcode, holdings in update_holdings.items():
-        #     for h in holdings:
-        #         if h['soldout'] == '0':
-        #             fundcode_assets[fundcode] += h['hold']
-        # if update_holdings:
-        #   _cal_fifo_redeem_rate
+
+        fundcode_assets = {}
+        if update_holdings:
+            for fundcode, holdings in update_holdings.items():
+                fundcode_assets.setdefault(fundcode, 0)
+                for h in holdings:
+                    if h['soldout'] == '0':
+                        fundcode_assets[fundcode] += float(h['hold'])
+
+        total_redem_fee = 0
+        total_hold_shares = 0
+        for fundcode, hold_amount in fundcode_assets.items():
+            fifo_redem_rate = self._cal_fifo_redeem_rate(fundcode, hold_amount, mode='Backtest')
+            total_redem_fee += hold_amount * fifo_redem_rate
+            total_hold_shares += hold_amount
+        total_redem_rate = round(total_redem_fee / total_hold_shares, 4) if total_hold_shares != 0 else 0
+        # TODO: 暂时将清仓费率统一设置为 0.75%
+        # total_redem_rate = 0.75 / 100
+
         pfo_yield = pfo_asset / pfo_shares - 1 if pfo_shares > 0 else 0
-        # 暂时将清仓费率统一设置为 0.75%
-        redeem_rate = 0.75 / 100
-        soldout_return = pfo_yield - redeem_rate
+        soldout_return = pfo_yield - total_redem_rate
         logging.warning(f'----------> 当前清仓，整体定投的收益率: {soldout_return:.4f}')
         return soldout_return
 
@@ -760,6 +772,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 'received_amount': 'null',
                 'opt_type': 1,
                 'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'order_source': 'gridi',
                 })
 
         # 使用列表推倒式速度更快
@@ -811,6 +824,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         '''
         task_start = time.time()
         update_holdings = self._update_acct_holdings_debit_yield()
+        # 获取指定基金的持仓信息
         acct_holdings = copy(update_holdings[fund_code])
 
         sold_holdings = [
@@ -985,7 +999,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
         index_live_markup = self.current_data['markup_csum'].tolist()[index]
         # 注意⚠️：_pred_points 是小数
         _pred_points = self.current_data['y_pred'].tolist()[index]
-        test_loss = int(self.current_data['test_loss'].tolist()[index])
+        test_loss = self.current_data['test_loss'].tolist()[index]
 
         # 主要针对买入，因为此时_mark_point为负
         ub_point = _pred_points + abs(test_loss)
@@ -1005,12 +1019,18 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 # 所谓基金买跌不买涨；规则允许买微涨, 指数跌，基金当日预测净值大涨，表明业绩背离，需要限制交易
                 self.live_markup < 0.5,
                 _mark_point <= _pred_points * (1 - self.temperature),
-                # 保证 _mark_point 在预测误差范围内
+                # 重要‼️ 保证 _mark_point 在预测误差范围内
                 _mark_point >= lb_point and _mark_point <= ub_point,
                 ]),
-            # 人为设定最大回撤天数，必须加仓。可以使用绝对点位, 待使用模型分析
-            _mark_point <= -7,
+            # 人为设定最大回撤天数，必须加仓。可以使用绝对点位, 待使用模型分析, 可以统计中位数
+            # 如果超过该阈值，则每天都加仓
+            _mark_point <= self.days_slope,
             ])
+
+        # 如果超跌，需要抄底
+        # TODO: -3.5 阈值也可以数据分析
+        if _mark_point <= self.days_slope or self.live_markup <= -3.5:
+            self.buy_times = 1.5
 
         zhuizhang_signal = any([
             all([
@@ -1023,9 +1043,20 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                 _mark_point <= 2,
                 # TODO: 此处的问题是，live_markup 的预测的符号可能; 直接写死
                 # 当日指数涨，基金净值大跌也可以买入
+                # TODO: -1 阈值也可以分析; 传入指数的实时涨跌幅
                 self.live_markup <= -1 / 100,
             ])
         ])
+
+        if self.mode in ['live']:
+            logging.warning(f'''
+                --------> 
+                当前涨跌势: {_mark_point}, 预测走势: {_pred_points}, 测试损失: {test_loss}
+                抄底范围 lb_point: {lb_point:.1f} ~ ub_point: {ub_point:.1f}，温度：{(_pred_points * (1 - self.temperature)):.1f}
+                超跌交易倍数: {self.buy_times}
+                是否抄底信号: {chaodi_signal}
+                是否追涨信号: {zhuizhang_signal}
+                ''')
 
         return any([
             # 1. 下跌时，抄底
@@ -1173,6 +1204,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                             'received_amount': buy_amount,
                             'opt_type': 3,
                             'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+                            'order_source': 'gridi',
                             })
             # 返回买入的份额数量
             return buy_num_shares, buy_amount
@@ -1243,6 +1275,7 @@ class FundQuantTradeEnv_V1(BaseTradeEnv):
                             'received_amount': sell_num_shares,
                             'opt_type': 3,
                             'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+                            'order_source': 'gridi',
                             })
             return sell_num_shares, sell_amount
         sell_num_shares, sell_amount = _do_sell_normal()

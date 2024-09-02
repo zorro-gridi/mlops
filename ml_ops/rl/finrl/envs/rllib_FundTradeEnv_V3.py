@@ -117,6 +117,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                         'received_amount': 'null',
                         'opt_type': 3,
                         'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+                        'order_source': 'gridi',
                         })
 
             return sell_num_shares, sell_amount
@@ -251,6 +252,7 @@ class FundQuantTradeEnv_V3(FundQuantTradeEnv_V2):
                             'received_amount': buy_amount,
                             'opt_type': 3,
                             'order_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+                            'order_source': 'gridi',
                             })
 
             # 返回买入的份额数量
