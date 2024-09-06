@@ -13,8 +13,9 @@ class CNN_LSTM(nn.Module):
                  dropout=0.1,
                  model_loss_func=None):
         super(CNN_LSTM, self).__init__()
-
+        # Sequential 表达一个构件
         self.cnn = nn.Sequential(
+            # nn.Conv1d 是一个卷积核
             nn.Conv1d(in_channels=input_size, out_channels=64, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.MaxPool1d(kernel_size=2, stride=2),
@@ -47,6 +48,7 @@ class CNN_LSTM(nn.Module):
         X_lstm_out = self.dropout(X_lstm_out)
         # logging.warning(f'X_lstm_out dropout shape: {X_lstm_out.shape}')
 
+        # n: batch_size, h: hiden_size, l: seq_len
         n, l, h = X_lstm_out.shape
         # 因为 cnn 会压缩 输入的序列长度，把全连接层放在最后一层，可以满足自动获取 lstm 输出的序列长度
         fc_layer = nn.Linear(l * h, self.output_size)
@@ -60,13 +62,13 @@ if __name__ == '__main__':
     print(type(test))
 
     # 20 为 batch_sizze, 16 为 input_channels, 50 为 seq_len
-    X = torch.randn(20, 32, 16)
+    X = torch.randn(20, 50, 16)
     output = test(X)
     logging.warning(f'output shape: {output.shape}')
 
-    # # pool of size=3, stride=2
-    # m = nn.MaxPool1d(3, stride=2)
-    # input = torch.randn(20, 16, 50)
-    # output = m(input) # output shape: (20, 16, 24) 24 = int(25 / 2)
-
-    # logging.warning(f'output shape: {output.shape}')
+    # pool of kernel_size=3, stride=2
+    m = nn.MaxPool1d(kernel_size=3, stride=2)
+    input = torch.randn(20, 16, 50)
+    output = m(input)
+    # output shape: (20, 16, 24)
+    logging.warning(f'output shape: {output.shape}')

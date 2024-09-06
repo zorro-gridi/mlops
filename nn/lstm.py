@@ -27,6 +27,7 @@ class LstmModel(nn.Module):
         self.seq_len = seq_len
         self.input_size = input_size
         self.output_size = output_size
+        # 将batched的三维矩阵转为二维liner连接层
         self.fc_layer = nn.Linear(seq_len * hidden_size, hidden_size)
 
         # 此处还可以写多层神经网络
