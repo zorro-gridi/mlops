@@ -1,2 +1,0 @@
-date,tic,close,vibration,turnover,volume,sz_markup,closed_phase,closed_phase_percentile,closed_hurt_rs,sz_closed_phase,sz_closed_phase_percentile,sz_closed_hurt_rs,phase_csum_markup,training_loss,test_loss,y_point,y_pred,is_reverse_point,markup_csum
-2024-07-24,传媒,-1.7399999999999998,2.35,2.39,0.04,-0.46,0,0.26,0.7,1,0.03,0.6,-4,0.0,0.9,-2,-2.0,0,-40
