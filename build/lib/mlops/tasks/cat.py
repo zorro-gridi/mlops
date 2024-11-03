@@ -9,7 +9,7 @@ from catboost import (
     # metrics,
     cv,
     )
-import ray
+
 import hyperopt
 # 调参早停技术
 from hyperopt.early_stop import no_progress_loss
@@ -20,7 +20,7 @@ from functools import partial
 import logging
 from copy import copy
 import torch
-
+import pandas as pd
 
 
 class CatboostTask(AbstractModelFactory):
@@ -113,7 +113,7 @@ class CatboostTask(AbstractModelFactory):
         return round(cv_loss, 6)
 
 
-    def tune_job(self, params_space, train_data, test_data, max_evals=50, early_stop_round=10):
+    def tune_job(self, params_space, train_data, test_data, max_evals=50, early_stop_round=10, validation_mode='default'):
         '''
         Args:
             params_space: 搜索空间
@@ -121,39 +121,96 @@ class CatboostTask(AbstractModelFactory):
             test_data:
             max_evals: 实验的数量, 类似 ray[tune] 的 num_samples
             early_stop_round: 早停技术。如果 n 轮后损失没有提升，则停止实验
+            validation_mode: 模型验证的模式, OPTIONS:
+                1. "default": 默认的验证方式
+                2. "walk-forward": 前向步进验证。原理: 每前进一个测试时间步, 保存该步的测试误差，并合并该步的数据到训练集合，重新训练模型。最后，平均计算每一个测试步的平均误差
         Return:
             training checkpoint info dict
         '''
         trials = hyperopt.Trials()
 
-        trial_func = partial(self.train_job, train_data=train_data, test_data=test_data)
-        best_params = hyperopt.fmin(
-            trial_func,
-            space=params_space,
-            algo=hyperopt.tpe.suggest,
-            max_evals=max_evals,
-            trials=trials,
-            # 也可以自定义 stop fn
-            early_stop_fn=no_progress_loss(early_stop_round),
-            rstate=np.random.default_rng(random.seed(42))
-            )
+        def base_tune_loop(train_data, test_data):
+            '''
+            Desc:
+                执行 tune model 的核心工作流
+            '''
+            trial_func = partial(self.train_job, train_data=train_data, test_data=test_data)
+            best_params = hyperopt.fmin(
+                trial_func,
+                space=params_space,
+                algo=hyperopt.tpe.suggest,
+                max_evals=max_evals,
+                trials=trials,
+                # 也可以自定义 stop fn
+                early_stop_fn=no_progress_loss(early_stop_round),
+                rstate=np.random.default_rng(random.seed(42)),
+                )
 
-        # best_params = hyperopt.space_eval(params_space, best_params)
-        logging.warning(f'CatBoost best tune model params: {best_params}')
+            # best_params = hyperopt.space_eval(params_space, best_params)
+            logging.warning(f'CatBoost best tune model params: {best_params}')
 
-        self.model_init_params.update(best_params)
-        best_model = CatBoost(self.model_init_params)
+            self.model_init_params.update(best_params)
+            best_model = CatBoost(self.model_init_params)
 
-        # catboost 类似于神经网络，fit 完之后，得到的就是最后的模型
-        # 所以，应该可以使用数据集迭代训练
-        train_pool, test_pool = self.convert_data(train_data, test_data)
-        best_model.fit(train_pool, eval_set=test_pool, **self.model_train_params)
+            # catboost 类似于神经网络，fit 完之后，得到的就是最后的模型
+            # 所以，应该可以使用数据集迭代训练
+            train_pool, test_pool = self.convert_data(train_data, test_data)
+            best_model.fit(train_pool, eval_set=test_pool, **self.model_train_params)
+            return best_model
 
-        # 获取测试集的损失
-        best_score = best_model.get_best_score()
-        logging.warning(f'Best training & testing score: {best_score}')
-        test_loss = best_score["validation"][self.model_eval_metric]
-        training_loss = best_score["learn"][self.model_eval_metric]
+        def get_best_model_eval_result(best_model):
+            '''
+            Desc:
+                获取模型的测试集上的损失指标
+            '''
+            best_score = best_model.get_best_score()
+            logging.warning(f'Best training & testing score: {best_score}')
+
+            test_loss = best_score["validation"][self.model_eval_metric]
+            training_loss = best_score["learn"][self.model_eval_metric]
+            return training_loss, test_loss
+
+        def default_tune_loop():
+            '''
+            Desc:
+                返回默认模型验证方法返回的模型、和测试指标
+            '''
+            best_model = base_tune_loop(train_data, test_data)
+            training_loss, test_loss = get_best_model_eval_result(best_model)
+            return best_model, training_loss, test_loss
+
+        if validation_mode == 'default':
+            best_model, training_loss, test_loss = default_tune_loop()
+
+        elif validation_mode == 'walk-forward':
+            # 参考文档：https://www.kaggle.com/code/justozner/time-series-using-walk-forward-validation/notebook
+            # 函数: walk_forward_validation()
+
+            train_pool, test_pool = self.convert_data(train_data, test_data)
+            train_data_X, train_data_y = train_pool.get_features(), train_pool.get_label()
+            test_data_X, test_data_y = test_data_i.get_features(), test_data_i.get_label()
+
+            training_loss_loop = []
+            test_loss_loop = []
+
+            # 步进迭代式的训练模型并测试损失
+            for i in range(test_pool.shape[0]):
+                test_data_i = test_pool.slice([i])
+                best_model = base_tune_loop(train_pool, test_data_i)
+
+                training_loss_i, test_loss_i = get_best_model_eval_result(best_model)
+                train_data_X = np.concatenate([train_data_X, test_data_X[i]], axis=0)
+                train_data_y = np.concatenate([train_data_y, test_data_y[i]], axis=0)
+                train_pool = Pool(train_data_X, train_data_y)
+
+                training_loss_loop.append(training_loss_i)
+                test_loss_loop.append(test_loss_i)
+
+            training_loss = np.mean(training_loss_loop)
+            test_loss = np.mean(test_loss_loop)
+
+        else:
+            best_model, training_loss, test_loss = default_tune_loop()
 
         return {
             'best_model': best_model,
@@ -201,3 +258,9 @@ if __name__ == '__main__':
     # test_datas = (test_data, test_labels)
     # cat_task.tune_job(params_space, train_datas, test_datas)
     pass
+
+
+# %%
+a = [1, 2, 3]
+import numpy as np
+np.mean(a)

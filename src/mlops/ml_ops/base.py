@@ -232,8 +232,8 @@ class AbstractMLOps(metaclass=ABCMeta):
         '''
         Desc:
             评估历史模型的评分, 主要两个操作
-            1. dataset_inst 实例方法 load_test_data() 加载测试数据
-            2. .model_task.test_job() 方法评估模型
+            1. self.dataset_inst 实例方法 load_test_data() 加载测试数据
+            2. self.model_task.test_job() 方法评估模型
         Args:
             model: 历史模型实例
             config: 历史模型的配置

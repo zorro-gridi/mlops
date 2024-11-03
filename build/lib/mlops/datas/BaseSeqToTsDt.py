@@ -107,8 +107,9 @@ class BaseSeqToTsDt(AbstractDatasetFactory):
         # 此处 self.target 表示预测变量的长度, 一般为最后 1 个索引位置, 即 target = 1
         # 当使用外部变量时，raw_dataset 会变成多维数组, 因此需要 reshape 到二维数组
         X, y = raw_dataset[:, :-self.target], raw_dataset[:, -self.target]
+        # 时序数据最好不要打乱
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=random_state)
+            X, y, test_size=test_size, random_state=random_state, shuffle=False)
 
         logging.warning(f'train_dataset len: {len(X_train)}')
         train_data = (X_train, y_train)

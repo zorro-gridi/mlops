@@ -1,3 +1,4 @@
+LICENSE
 README.md
 setup.py
 src/mlops.egg-info/PKG-INFO
@@ -25,6 +26,7 @@ src/mlops/ml_ops/kmeans_ops.py
 src/mlops/ml_ops/lgb_ops.py
 src/mlops/ml_ops/lstm_ops.py
 src/mlops/ml_ops/xgb_ops.py
+src/mlops/ml_ops/ai/__init__.py
 src/mlops/ml_ops/ai/chatgpt.py
 src/mlops/nn/__init__.py
 src/mlops/nn/cnn_lstm.py
