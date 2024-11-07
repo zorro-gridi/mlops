@@ -1,8 +1,12 @@
+# %%
 import numpy as np
 from sklearn.cluster import KMeans
 import logging
 import pandas as pd
 from typing import Union
+
+import matplotlib.pyplot as plt
+from pprint import pprint
 
 import os
 import sys
@@ -69,16 +73,6 @@ def phase_series_point(data: Union[pd.Series, list, np.array], start_point, n_cl
     return point_phase, sorted_label_centers
 
 
-
-
-# %%
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from pprint import pprint
-import logging
-
-
 class Peak_and_Trough_Detecter:
     '''
     Desc:
@@ -91,7 +85,6 @@ class Peak_and_Trough_Detecter:
         self.min_chg = min_chg
         self.reverse_points = None
         self.Ei = None
-
 
     def fit(self, sequence, point_type, base_point, start_idx=0, make_plot=True):
         '''
@@ -289,7 +282,7 @@ class Peak_and_Trough_Detecter:
         reverse_points_data_copy = pd.DataFrame(self.reverse_points)
 
         # 获取第1条记录的 point_type, 分析是从【收益点】 -> 【回撤点】, 还是【回撤点】 -> 【收益点】
-        first_row_type = reverse_points_data_copy['type'].loc[0]
+        first_row_type = reverse_points_data_copy['type'].iloc[0]
 
         reverse_points_data_copy['next_sum_chg'] = reverse_points_data_copy['sum_chg'].shift(-1)
         reverse_points_data_copy['next_indx'] = reverse_points_data_copy['indx'].shift(-1)
@@ -304,7 +297,7 @@ class Peak_and_Trough_Detecter:
             start_type = 'peak'
 
         if first_row_type != start_type:
-            reverse_points_data_copy = reverse_points_data_copy.loc[1:, :]
+            reverse_points_data_copy = reverse_points_data_copy.iloc[1:, :]
             if len(reverse_points_data_copy) == 0:
                 logging.warning(f'-------> point type: {start_type} 筛选结果为空!!! 请检查序列分割阈值参数"min_cgh", 适当调小')
                 raise Exception
@@ -330,6 +323,7 @@ class Peak_and_Trough_Detecter:
             'return_days': return_days,
             'start_indx': int(start_indx),
             'end_indx': int(max_diff_indx),
+            'return_type': 'phase2phase',
             }
         return detecter_result
 
@@ -385,6 +379,7 @@ class Peak_and_Trough_Detecter:
                     'return_days': top_peak_indx,
                     'start_indx': 0,
                     'end_indx': int(top_peak_indx),
+                    'return_type': 's2peak',
                     }
                 return detecter_result
 
@@ -408,6 +403,7 @@ class Peak_and_Trough_Detecter:
                     'return_days': return_days,
                     'start_indx': int(top_trough_indx_before_peak),
                     'end_indx': int(top_peak_indx),
+                    'return_type': 'maxTrough2maxPeak',
                     }
                 return detecter_result
 
@@ -430,6 +426,7 @@ class Peak_and_Trough_Detecter:
                         'return_days': top_trough_indx,
                         'start_indx': 0,
                         'end_indx': int(top_trough_indx),
+                        'return_type': 's2trough',
                         }
                     return detecter_result
 
@@ -452,6 +449,7 @@ class Peak_and_Trough_Detecter:
                     'return_days': loss_days,
                     'start_indx': int(top_peak_indx),
                     'end_indx': int(top_trough_indx_after_peak),
+                    'return_type': 'maxPeak2maxTrough',
                     }
                 return detecter_result
 
@@ -460,3 +458,159 @@ class Peak_and_Trough_Detecter:
 
         else:
             raise Exception
+
+
+    def from_last_point_2_curr_return(self, reverse_points_data: pd.DataFrame):
+        '''
+        Desc:
+            从最后一个 reverse point 点计算到当前的收益
+        '''
+        reverse_points_data_f = reverse_points_data.iloc[-1:, :].copy()
+        if len(reverse_points_data_f) != 1:
+            raise Exception
+
+        last_point_type = reverse_points_data_f['type'].max()
+
+        if last_point_type == 'peak':
+            return_type = 'forePeak2curr'
+        elif last_point_type == 'trough':
+            return_type = 'foreTrough2curr'
+
+        point2curr_return = self.Ei[-1] - reverse_points_data_f['sum_chg'].max()
+        start_indx = int(reverse_points_data_f['indx'].max())
+        end_indx = len(self.Ei)
+        detecter_result = {
+            'max_return': point2curr_return,
+            'return_days': end_indx - start_indx,
+            'start_indx': start_indx,
+            'end_indx': end_indx,
+            'return_type': return_type,
+            }
+        return detecter_result
+
+    def from_named_point_2_curr_return(self, reverse_points_data: pd.DataFrame, point_type: str):
+        '''
+        Desc:
+            从最后一个 point 点到 curr 的累计收益
+        Args:
+            point_type:
+                options: ["peak", "trough"]
+        '''
+        named_point_cond = reverse_points_data['type'] == point_type
+        named_point_reverse_data = reverse_points_data.loc[named_point_cond].copy()
+
+        if len(named_point_reverse_data) == 0:
+            logging.warning(f'-------> 序列中没有 {point_type} 点, 默认从起始点开始 ...')
+            base_return = 0
+            start_indx = 0
+        else:
+            # 只有一条记录，不需要指定 stat_mothod 方法
+            reverse_points_data_f = named_point_reverse_data.iloc[-1:, :]
+            base_return = reverse_points_data_f['sum_chg'].min()
+            start_indx = int(reverse_points_data_f['indx'].min())
+
+        end_indx = len(self.Ei)
+        detecter_result = {
+            'max_return': self.Ei[-1] - base_return,
+            'return_days': end_indx - start_indx,
+            'start_indx': start_indx,
+            'end_indx': end_indx,
+            'return_type': f'last{point_type.capitalize()}2curr',
+            }
+        return detecter_result
+
+    def from_max_point_2_curr_return(self, reverse_points_data: pd.DataFrame, point_type: str):
+        '''
+        Desc:
+            从最大的回撤、收益点到当前的累计收益
+        Args:
+            point_type:
+                optinos: ["max_peak", "max_trough"]
+        '''
+        if point_type not in ["max_peak", "max_trough"]:
+            logging.warning(f'-------> Arg "point_type" Parame Options: ["max_peak", "max_trough"]')
+            raise Exception
+
+        named_point_type = point_type.split('_')[1].lower()
+
+        stat_method_map = {
+            'peak': np.max,
+            'trough': np.min,
+            }
+        stat_method = stat_method_map[named_point_type]
+
+        max_point_type_cond = reverse_points_data['type'] == named_point_type
+        reverse_points_data_f = reverse_points_data.loc[max_point_type_cond].copy()
+
+        if len(reverse_points_data_f) == 0:
+            logging.warning(f'-------> 序列中没有 {point_type} 点, 默认从起始点开始 ...')
+            base_return = 0
+            start_indx = 0
+        else:
+            base_return = stat_method(reverse_points_data_f['sum_chg'].tolist())
+            max_point_row_cond = reverse_points_data_f['sum_chg'] == base_return
+            start_indx = reverse_points_data_f.loc[max_point_row_cond, 'indx'].max()
+
+        end_indx = len(self.Ei)
+        detecter_result = {
+            'max_return': self.Ei[-1] - base_return,
+            'return_days': end_indx - start_indx,
+            'start_indx': start_indx,
+            'end_indx': end_indx,
+            'return_type': f'max{named_point_type.capitalize()}2curr',
+            }
+        return detecter_result
+
+    def curr_return_base_hist_reverse_point(self, base_point='default'):
+        '''
+        Desc:
+            统计从当前点的上一个回撤、或收益点以来的累计收益
+        Args:
+            base_point: 上一个 base 极值点的类型
+                1. default: 不特别指定, 即从当前点的上一点(可能是 peak / trough)计算累计收益
+                2. peak: 从最后一个 peak 点计算累计收益
+                3. trough: 从最后一个 trough 点计算累计收益
+                4. max_peak: 从最高收益点
+                5. max_trough: 从最大回撤点
+        '''
+        if not self.reverse_points:
+            logging.warning(f'-------> self.reverse_points 还没有完成赋值')
+            raise Exception
+
+        reverse_points_data = pd.DataFrame(self.reverse_points)
+        if base_point == 'default':
+            return self.from_last_point_2_curr_return(reverse_points_data)
+        elif base_point in ['peak', 'trough']:
+            return self.from_named_point_2_curr_return(reverse_points_data, base_point)
+        elif base_point in ['max_peak', 'max_trough']:
+            return self.from_max_point_2_curr_return(reverse_points_data, base_point)
+
+
+# %%
+if __name__ == '__main__':
+    from tools.DB_Client import DB_Client
+    db_session = DB_Client('pg_aliyun')
+
+    fund_values = db_session.data_read(
+        f'''
+        select
+            dwjz
+        from fund.fund_networth_record_from_tt_web
+        where 1=1
+            and fundcode = '008798'
+        order by
+            fsrq
+        ''')['dwjz'].tolist()
+    fund_values = np.array(fund_values, dtype=float)
+
+    # %%
+    min_chg = 0.5 / 100
+    peak_trough_detecter = Peak_and_Trough_Detecter(min_chg)
+
+    peak_detecter_result = peak_trough_detecter.fit(fund_values, point_type='peak', base_point='phase')
+    trough_detecter_result = peak_trough_detecter.fit(fund_values, point_type='trough', base_point='phase')
+    # peak_detecter_result
+
+    # %%
+    peak_trough_detecter.curr_return_base_hist_reverse_point(base_point='max_trough')
+    # %%
