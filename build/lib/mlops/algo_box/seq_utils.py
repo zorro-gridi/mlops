@@ -83,6 +83,7 @@ class Peak_and_Trough_Detecter:
             logging.warning(f'-------> min_chg 设置的太小, min_chg 阈值最小值: {min_chg}')
             raise Exception
         self.min_chg = min_chg
+        self.reverse_indxs = None
         self.reverse_points = None
         self.Ei = None
 
@@ -192,6 +193,7 @@ class Peak_and_Trough_Detecter:
             logging.warning(f'-------> 回撤、收益点列表返回为空!!! 请缩小统计阶段回撤、或收益的阈值参数"min_chg", 适当调小')
             raise Exception
 
+        # for unit-test
         # logging.warning(f'-------> gain_down_list 回撤、收益点初始记录列表:')
         # pprint(gain_down_list)
         return gain_down_list
@@ -215,7 +217,9 @@ class Peak_and_Trough_Detecter:
             logging.warning(f'-------> gain_down_list 回撤、收益点列表只有 {unique_point_type} 一种极值点')
             return [0, len(gain_down_list)]
 
+        # 第1批、和最后1批的 point_type 批次在循环中没有加入
         reverse_indxs.insert(0, 0)
+        reverse_indxs.append(len(gain_down_list)-1)
         return reverse_indxs
 
 
@@ -262,6 +266,7 @@ class Peak_and_Trough_Detecter:
             return gain_down_list
 
         reverse_indxs = self.find_batch_point_indx(gain_down_list)
+        self.reverse_indxs = reverse_indxs
         reverse_points = []
 
         for i in range(1, len(reverse_indxs)):

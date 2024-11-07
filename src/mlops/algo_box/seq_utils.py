@@ -83,6 +83,7 @@ class Peak_and_Trough_Detecter:
             logging.warning(f'-------> min_chg 设置的太小, min_chg 阈值最小值: {min_chg}')
             raise Exception
         self.min_chg = min_chg
+        self.gain_down_list = None
         self.reverse_indxs = None
         self.reverse_points = None
         self.Ei = None
@@ -113,6 +114,8 @@ class Peak_and_Trough_Detecter:
             raise Exception
 
         gain_down_list = self.cal_sequence_peak_and_trough_point(sequence, start_idx=start_idx)
+        self.gain_down_list = gain_down_list
+
         reverse_points = self.get_batch_top_point(gain_down_list)
         self.reverse_points = reverse_points
 
@@ -143,6 +146,8 @@ class Peak_and_Trough_Detecter:
 
         ax.plot(np.arange(len(self.Ei)), self.Ei)
         for i, point in enumerate(self.reverse_points):
+        # for unit-test
+        # for i, point in enumerate(self.gain_down_list):
             if point['type'] == 'peak':
                 color = 'r'
                 label = 'peak' if i <= 1 else None
@@ -179,15 +184,54 @@ class Peak_and_Trough_Detecter:
         Ei_peak, Ei_trough = 0, 0
         gain_down_list = []
 
+        is_peak_reverse = False
+        is_trough_reverse = False
+
+        last_point_type = None
+        phase_peak, phase_trough = 0, 0
+
         for j, (diff_j, sum_chg_j) in enumerate(zip(Ei_diff, Ei[1:])):
             if diff_j > 0:
-                if sum_chg_j - Ei_trough >= self.min_chg:
+                if any([
+                    # 1. 当前点位相比前期最低点累计上涨超过 self.min_chg
+                    sum_chg_j - Ei_trough >= self.min_chg and not is_peak_reverse,
+                    sum_chg_j - phase_trough >= self.min_chg,
+                    ]):
                     Ei_peak = sum_chg_j
                     gain_down_list.append({'indx': j+1, 'type': 'peak', 'sum_chg': Ei_peak})
-            else:
-                if sum_chg_j - Ei_peak <= -self.min_chg:
+
+                    # 始终保持阶段的收益点为局部最大值，而Ei_peak需要迭代更新，目的是判断趋势是否持续上涨，从而判断 peak 反转点
+                    if Ei_peak > phase_peak:
+                        phase_peak = Ei_peak
+
+                    if last_point_type and last_point_type != 'peak':
+                        is_trough_reverse = True
+                        # 下跌趋势被反转，进入上涨通道，所以应该重新定义收益的基点。phase_peak 目的的是定义新基点
+                        phase_peak = sum_chg_j
+                        is_peak_reverse = False
+
+            elif diff_j < 0:
+                if any([
+                    # 1. 当前点位相比前期最高点累计下跌超过 self.min_chg
+                    sum_chg_j - Ei_peak <= -self.min_chg and not is_trough_reverse,
+                    sum_chg_j - phase_peak <= -self.min_chg,
+                    ]):
                     Ei_trough = sum_chg_j
                     gain_down_list.append({'indx': j+1, 'type': 'trough', 'sum_chg': Ei_trough})
+
+                    # 始终保持阶段的回撤点为局部最小值，而 Ei_trough 需要迭代更新，目的是判断下跌趋势是否持续，从而判断 trough 反转点
+                    if Ei_trough < phase_trough:
+                        phase_trough = Ei_trough
+
+                    if last_point_type and last_point_type != 'trough':
+                        is_peak_reverse = True
+                        # 上涨趋势被反转，进入下跌通道，所以应该重新定义回撤点的基点
+                        phase_trough = sum_chg_j
+                        is_trough_reverse = False
+
+            if gain_down_list:
+                last_point_type = gain_down_list[-1]['type']
+
 
         if len(gain_down_list) == 0:
             logging.warning(f'-------> 回撤、收益点列表返回为空!!! 请缩小统计阶段回撤、或收益的阈值参数"min_chg", 适当调小')
@@ -272,7 +316,10 @@ class Peak_and_Trough_Detecter:
         for i in range(1, len(reverse_indxs)):
             s_indx = reverse_indxs[i-1]
             e_indx = reverse_indxs[i]
-            top_point = self.find_the_top_point(gain_down_list[s_indx:e_indx])
+            patch_phase = gain_down_list[s_indx:e_indx]
+            if len(patch_phase) == 0:
+                continue
+            top_point = self.find_the_top_point(patch_phase)
             reverse_points.append(top_point)
         return reverse_points
 
@@ -674,7 +721,7 @@ if __name__ == '__main__':
     fund_values = np.array(fund_values, dtype=float)
 
     # %%
-    min_chg = 3 / 100
+    min_chg = 5 / 100
     peak_trough_detecter = Peak_and_Trough_Detecter(min_chg)
 
     peak_detecter_result = peak_trough_detecter.fit(fund_values, point_type='peak', base_point='trough', end_point='phase')
