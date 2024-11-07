@@ -199,12 +199,12 @@ class CatboostTask(AbstractModelFactory):
                 best_model = base_tune_loop(train_pool, test_data_i)
 
                 training_loss_i, test_loss_i = get_best_model_eval_result(best_model)
-                train_data_X = np.concatenate([train_data_X, test_data_X[i]], axis=0)
-                train_data_y = np.concatenate([train_data_y, test_data_y[i]], axis=0)
-                train_pool = Pool(train_data_X, train_data_y)
-
                 training_loss_loop.append(training_loss_i)
                 test_loss_loop.append(test_loss_i)
+
+                train_data_X = np.concatenate([train_data_X, test_data_X[i].reshape(-1, 1)], axis=0)
+                train_data_y = np.concatenate([train_data_y, test_data_y[i].reshape(-1)], axis=0)
+                train_pool = Pool(train_data_X, train_data_y)
 
             training_loss = np.mean(training_loss_loop)
             test_loss = np.mean(test_loss_loop)
@@ -258,9 +258,3 @@ if __name__ == '__main__':
     # test_datas = (test_data, test_labels)
     # cat_task.tune_job(params_space, train_datas, test_datas)
     pass
-
-
-# %%
-a = [1, 2, 3]
-import numpy as np
-np.mean(a)
