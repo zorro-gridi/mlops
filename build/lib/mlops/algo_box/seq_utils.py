@@ -86,7 +86,7 @@ class Peak_and_Trough_Detecter:
         self.reverse_points = None
         self.Ei = None
 
-    def fit(self, sequence, point_type, base_point=None, end_point='current', start_idx=0, make_plot=True):
+    def fit(self, sequence, point_type=None, base_point=None, end_point='current', start_idx=0, make_plot=True):
         '''
         Desc:
             执行寻找最大回撤、收益点流程
@@ -117,11 +117,12 @@ class Peak_and_Trough_Detecter:
 
         detecter_result = None
         if end_point == 'phase':
-            if base_point is None:
-                logging.warning(f'-------> end_point 为 "phase" 的模式下, base_point 参数不能为空！')
+            if base_point is None or point_type is None:
+                logging.warning(f'-------> end_point 为 "phase" 的模式下, point_type 和 base_point 参数不能为空！')
                 raise Exception
 
             detecter_result = self.get_max_return_or_loss(point_type=point_type, base_point=base_point)
+
         elif end_point == 'current':
             self.curr_return_base_hist_reverse_point(base_point=base_point)
 
@@ -532,7 +533,7 @@ class Peak_and_Trough_Detecter:
 
         point2curr_return = self.Ei[-1] - reverse_points_data_f['sum_chg'].max()
         start_indx = int(reverse_points_data_f['indx'].max())
-        end_indx = len(self.Ei)
+        end_indx = len(self.Ei) - 1
         detecter_result = {
             'max_return': point2curr_return,
             'return_days': end_indx - start_indx,
@@ -563,7 +564,7 @@ class Peak_and_Trough_Detecter:
             base_return = reverse_points_data_f['sum_chg'].min()
             start_indx = int(reverse_points_data_f['indx'].min())
 
-        end_indx = len(self.Ei)
+        end_indx = len(self.Ei) - 1
         detecter_result = {
             'max_return': self.Ei[-1] - base_return,
             'return_days': end_indx - start_indx,
@@ -605,7 +606,7 @@ class Peak_and_Trough_Detecter:
             max_point_row_cond = reverse_points_data_f['sum_chg'] == base_return
             start_indx = reverse_points_data_f.loc[max_point_row_cond, 'indx'].max()
 
-        end_indx = len(self.Ei)
+        end_indx = len(self.Ei) - 1
         detecter_result = {
             'max_return': self.Ei[-1] - base_return,
             'return_days': end_indx - start_indx,
@@ -661,10 +662,10 @@ if __name__ == '__main__':
             dwjz
         from fund.fund_networth_record_from_tt_web
         where 1=1
-            and fundcode = '012414'
+            and fundcode = '005176'
         order by
             fsrq
-        ''')['dwjz'].tolist()
+        ''')['dwjz'].tolist()[-242*2:]
     fund_values = np.array(fund_values, dtype=float)
 
     # %%
@@ -675,5 +676,5 @@ if __name__ == '__main__':
     trough_detecter_result = peak_trough_detecter.fit(fund_values, point_type='trough', base_point='peak', end_point='phase')
 
     # %%
-    peak_trough_detecter.fit(fund_values, point_type='trough', base_point='trough', end_point='current')
+    peak_trough_detecter.fit(fund_values, base_point='peak', end_point='current')
     # %%
