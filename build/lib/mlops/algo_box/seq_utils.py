@@ -717,16 +717,16 @@ if __name__ == '__main__':
             and fundcode = '005176'
         order by
             fsrq
-        ''')['dwjz'].tolist()[-242*2:]
+        ''')['dwjz'].tolist()[-242*2:][:120]
     fund_values = np.array(fund_values, dtype=float)
 
     # %%
-    min_chg = 5 / 100
+    min_chg = 3 / 100
     peak_trough_detecter = Peak_and_Trough_Detecter(min_chg)
 
     peak_detecter_result = peak_trough_detecter.fit(fund_values, point_type='peak', base_point='trough', end_point='phase')
     trough_detecter_result = peak_trough_detecter.fit(fund_values, point_type='trough', base_point='peak', end_point='phase')
 
     # %%
-    peak_trough_detecter.fit(fund_values, base_point='peak', end_point='current')
+    peak_trough_detecter.fit(fund_values, base_point='max_peak', end_point='current')
     # %%

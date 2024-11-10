@@ -1,6 +1,9 @@
 from openai import OpenAI
 from pathlib import Path
-api_key = Path('ChatGpt_API_Key.txt').open().read()
+import os
+
+home_dir = Path(os.path.expanduser('~'))
+api_key = Path(home_dir / 'project/pycharm/ChatGpt_API_Key.txt').open().read()
 
 
 client = OpenAI(
