@@ -404,6 +404,7 @@ class AbstractMLOps(metaclass=ABCMeta):
                     No_MLflow_Model_Found_Exception,
                     RestException,
                     ]):
+                        logging.warning(f'--------> 数据源切分错误、或者找不到 mlflow 注册模型 ...')
                         exception_value = {
                             'min': np.inf,
                             'max': -np.inf,
