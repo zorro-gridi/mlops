@@ -34,6 +34,7 @@ from ray.air.integrations.mlflow import setup_mlflow
 import pandas as pd
 import mlflow
 
+from mlflow.exceptions import RestException
 
 # from threading import Lock
 # lock = Lock()
@@ -398,7 +399,11 @@ class AbstractMLOps(metaclass=ABCMeta):
                     # =========================================================================
                     hist_training_loss, hist_eval_metric = self.test_hist_model(
                         reg_model_name, model_version=best_model_version, model_frame=model_frame)
-                except (No_SeqDataException or No_MLflow_Model_Found_Exception):
+                except any([
+                    No_SeqDataException,
+                    No_MLflow_Model_Found_Exception,
+                    RestException,
+                    ]):
                         exception_value = {
                             'min': np.inf,
                             'max': -np.inf,

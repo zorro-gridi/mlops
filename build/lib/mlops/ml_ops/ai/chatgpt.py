@@ -46,7 +46,9 @@ def gpt_35_api_stream(messages: list):
 
 
 if __name__ == '__main__':
-    messages = [{'role': 'user', 'content': '在强化学习中，智能体与环境的交互数据是用来直接训练模型吗？'},]
+    messages = [
+        {'role': 'user', 'content': '在强化学习中，智能体与环境的交互数据是用来直接训练模型吗？'},
+        ]
     # 非流式调用
     # gpt_35_api(messages)
     # 流式调用

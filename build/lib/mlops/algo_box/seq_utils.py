@@ -52,7 +52,7 @@ def phase_series_point(data: Union[pd.Series, list, np.array], start_point, n_cl
     # 只能在循环中实例化: 因为不同族群点位不同
     # point_datas 中不能有 NaN 值
     eatimator_list = [
-        KMeans(n_clusters=n_clusters, n_init=2).fit(point_datas)
+        KMeans(n_clusters=n_clusters, n_init=2, random_state=42).fit(point_datas)
         for point_datas in point_kmeans_data]
 
     # 取每组的最后 1 个点标签作为结果。因为，参照的是近期的整体数据
