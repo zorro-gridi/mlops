@@ -43,7 +43,7 @@ class CNN_LSTM(nn.Module):
     def forward(self, X):
         # logging.warning(f' X shape: {X.shape}')
         # lstm input shape: (N, L, H-in), cnn Conv1d input shape: (N, H-in, L)
-        # 因此需要 permute 调换1，2维的位置
+        # cnn的输出维度和lstm有所不同，需要 permute 调换1，2维的位置
         x_cnn = X.permute(0, 2, 1)
         X_cnn_out = self.cnn(x_cnn)
         # logging.warning(f'X_cnn_out shape: {X_cnn_out.shape}')
