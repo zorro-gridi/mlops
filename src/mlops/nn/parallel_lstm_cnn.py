@@ -3,6 +3,13 @@ from torch import nn
 import logging
 
 
+"""
+@Desc:
+    CNN parallelizism LSTM 模型的组合
+@Url: https://medium.com/@mijanr/different-ways-to-combine-cnn-and-lstm-networks-for-time-series-classification-tasks-b03fc37e91b6
+"""
+
+
 
 
 class Parallel_LSTM_CNN(nn.Module):

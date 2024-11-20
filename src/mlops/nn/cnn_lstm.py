@@ -5,7 +5,7 @@ import logging
 
 """
 @Desc:
-    LSTM + CNN 模型的组合
+    CNN + LSTM 模型的组合
 @Url: https://medium.com/@mijanr/different-ways-to-combine-cnn-and-lstm-networks-for-time-series-classification-tasks-b03fc37e91b6
 """
 
