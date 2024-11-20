@@ -41,6 +41,7 @@ class Parallel_LSTM_CNN(nn.Module):
         lstm_fc = nn.Linear(l * h, 128)
         # 注意 lstm 的 fc layer 层
         lstm_out = lstm_fc(lstm_out.reshape(n, l * h))
+        # 最后一层使用 cat 合并输入到线性层
         out = torch.cat([cnn_out, lstm_out], dim=1)
         out = self.fc(out)
         return out
