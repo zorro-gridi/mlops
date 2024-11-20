@@ -25,7 +25,9 @@ class CNN_LSTM(nn.Module):
             # nn.Conv1d 是一个卷积核
             nn.Conv1d(in_channels=input_size, out_channels=64, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
+            # 池化操作
             nn.MaxPool1d(kernel_size=2, stride=2),
+
             nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1,),
             nn.ReLU(),
             nn.MaxPool1d(kernel_size=2, stride=2),
