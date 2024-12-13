@@ -717,7 +717,7 @@ if __name__ == '__main__':
             and fundcode = '005176'
         order by
             fsrq
-        ''')['dwjz'].tolist()[-242*2:][:120]
+        ''')['dwjz'].tolist()[-120:]
     fund_values = np.array(fund_values, dtype=float)
 
     # %%
