@@ -93,6 +93,8 @@ class Peak_and_Trough_Detecter:
         Desc:
             执行寻找最大回撤、收益点流程
         Args:
+            sequence: 待分析的序列
+            point_type: 指明找最大回撤 trough、或最大收益点 peak.
             base_point: 计算最大回撤、收益区间的起始点
                 options: ["start", "default", "peak", "trough", "max_peak", "max_trough", ]
                 # 具体含义参考 curr_return_base_hist_reverse_point() 方法定义
