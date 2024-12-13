@@ -706,7 +706,7 @@ class Peak_and_Trough_Detecter:
 # %%
 if __name__ == '__main__':
     from tools.DB_Client import DB_Client
-    db_session = DB_Client('pg_aliyun')
+    db_session = DB_Client('pg_tencent')
 
     fund_values = db_session.data_read(
         f'''
