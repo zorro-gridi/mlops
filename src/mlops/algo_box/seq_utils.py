@@ -95,9 +95,10 @@ class Peak_and_Trough_Detecter:
         Args:
             base_point: 计算最大回撤、收益区间的起始点
                 options: ["start", "default", "peak", "trough", "max_peak", "max_trough", ]
+                # 具体含义参考 curr_return_base_hist_reverse_point() 方法定义
             end_point: 计算最大回撤、收益区间的结束点
                 options: ["phase", "current"]
-                具体含义参考 curr_return_base_hist_reverse_point() 方法定义
+                # 具体含义参考 curr_return_base_hist_reverse_point() 方法定义
             start_idx: 索引切片的起始点
         '''
         base_point_options = [
@@ -730,5 +731,5 @@ if __name__ == '__main__':
         fund_values, point_type='trough', base_point='peak', end_point='phase')
 
     # %%
-    peak_trough_detecter.fit(fund_values, base_point='max_peak', end_point='current')
+    peak_trough_detecter.fit(fund_values, base_point='peak', end_point='current')
     # %%
