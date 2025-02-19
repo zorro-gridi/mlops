@@ -85,8 +85,9 @@ class Peak_and_Trough_Detecter:
         self.min_chg = min_chg
         self.gain_down_list = None
         self.reverse_indxs = None
-        self.reverse_points = None
         self.Ei = None
+        self.last_top_point = {'indx': 0}
+        self.reverse_points = []
 
     def fit(self, sequence, point_type=None, base_point=None, end_point='current', start_idx=0, make_plot=True):
         '''
@@ -118,11 +119,14 @@ class Peak_and_Trough_Detecter:
             logging.warning(f'-------> Invalid args value! Args "end_point" Params Options: {end_point_options}')
             raise Exception
 
-        gain_down_list = self.cal_sequence_peak_and_trough_point(sequence, start_idx=start_idx)
-        self.gain_down_list = gain_down_list
-
-        reverse_points = self.get_batch_top_point(gain_down_list)
-        self.reverse_points = reverse_points
+        while True:
+            try:
+                gain_down_list = self.cal_sequence_peak_and_trough_point(sequence, start_idx=self.last_top_point['indx'])
+                self.gain_down_list = gain_down_list
+                self.get_batch_top_point(gain_down_list)
+            except:
+                logging.warning(f'----------> gain_down_list 循环完成..., 准备作图')
+                break
 
         detecter_result = None
         if end_point == 'phase':
@@ -180,10 +184,13 @@ class Peak_and_Trough_Detecter:
             min_chg: 阶段上涨或下跌的趋势逆转的的阈值
             start_idx: 序列分析的起始点, 默认为 0
         '''
+        self.Ei = np.array(sequence / sequence[0]) - 1
+
         Ei = np.array(sequence[start_idx:] / sequence[start_idx]) - 1
         Ei_diff = np.diff(Ei)
+        Ei_diff = np.around(Ei_diff, 4)
 
-        self.Ei = Ei
+        # self.Ei = Ei
         self.Ei_diff = Ei_diff
 
         Ei_peak, Ei_trough = 0, 0
@@ -316,17 +323,29 @@ class Peak_and_Trough_Detecter:
 
         reverse_indxs = self.find_batch_point_indx(gain_down_list)
         self.reverse_indxs = reverse_indxs
-        reverse_points = []
+        # self.reverse_points = []
 
-        for i in range(1, len(reverse_indxs)):
-            s_indx = reverse_indxs[i-1]
-            e_indx = reverse_indxs[i]
-            patch_phase = gain_down_list[s_indx:e_indx]
-            if len(patch_phase) == 0:
-                continue
-            top_point = self.find_the_top_point(patch_phase)
-            reverse_points.append(top_point)
-        return reverse_points
+        # # version1: 一次性提取完
+        # for i in range(1, len(reverse_indxs)):
+        #     s_indx = reverse_indxs[i-1]
+        #     e_indx = reverse_indxs[i]
+        #     patch_phase = gain_down_list[s_indx:e_indx]
+        #     if len(patch_phase) == 0:
+        #         continue
+        #     top_point = self.find_the_top_point(patch_phase)
+        #     self.reverse_points.append(top_point)
+
+        # version2: 为保证准确性，一次提取一个
+        s_indx = reverse_indxs[0]
+        e_indx = reverse_indxs[1]
+        patch_phase = gain_down_list[s_indx:e_indx]
+        top_point = self.find_the_top_point(patch_phase)
+        top_point['indx'] += self.last_top_point['indx']
+        top_point['sum_chg'] = self.Ei[top_point['indx']]
+        self.reverse_points.append(top_point)
+        print(f'-------------> test: {top_point}')
+        self.last_top_point = top_point
+        return top_point
 
 
     def get_top_point_indx(self, reverse_points_data: pd.DataFrame, point_type='peak'):
@@ -716,20 +735,25 @@ if __name__ == '__main__':
     fund_values = db_session.data_read(
         f'''
         select
-            dwjz
+             fsrq
+            ,dwjz
         from fund.fund_networth_record_from_tt_web
         where 1=1
             and fundcode = '005176'
         order by
             fsrq
-        ''')['dwjz'].tolist()[-180:]
-    fund_values = np.array(fund_values, dtype=float)
+        ''')
+    fund_values = fund_values.astype({'dwjz': 'float'})
+    fund_values.tail()
 
     # %%
     min_chg = 6 / 100
+
+    fund_values = fund_values['dwjz'].tolist()[-180:]
+    fund_values = np.array(fund_values, dtype=float)
     peak_trough_detecter = Peak_and_Trough_Detecter(min_chg)
 
-    # 阶段高点检测
+    # # 阶段高点检测
     peak_detecter_result = peak_trough_detecter.fit(
         fund_values, point_type='peak', base_point='trough', end_point='phase')
 
@@ -737,12 +761,13 @@ if __name__ == '__main__':
     trough_detecter_result = peak_trough_detecter.fit(
         fund_values, point_type='trough', base_point='peak', end_point='phase')
 
-    # %%
+    # # %%
     # 最高点至今的回撤
     peak_to_curr_result = peak_trough_detecter.fit(fund_values, base_point='peak', end_point='current')
     print(f'peak_to_curr_result:\n {peak_to_curr_result}')
-    # %%
-    # 回撤至今的收益
+    # # %%
+    # # 回撤至今的收益
     trough_to_curr_result = peak_trough_detecter.fit(fund_values, base_point='trough', end_point='current')
     print(f'trough_to_curr_result:\n {trough_to_curr_result}')
-# %%
+    # # %%
+    pprint(peak_trough_detecter.reverse_points)
