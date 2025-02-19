@@ -1,6 +1,6 @@
 # GRIDi MLOps Workflow Framework
-该MLOps框架基于传统机器学习框架sklearn、与深度学习框架PyTorch，集成了包含回归分析、分类算法、聚类算法、LSTM、RNN、Transformer、encoder-decoder架构等主流时序算法能力。
-框架主要亮点在于整合了从数据处理、数据建模、模型checkpoint、及模型部署应用等模块全流程服务，大幅度减少业务建模的重复性工作，显著提高了建模效率，对于初学者掌握数据建模流程，也是一个非常好的实践模版。
+* 该MLOps框架基于传统机器学习框架sklearn、与深度学习框架PyTorch，集成了包含回归分析、分类算法、聚类算法、LSTM、RNN、Transformer、encoder-decoder架构等主流时序算法能力。
+* 框架主要亮点在于整合了从数据处理、数据建模、模型checkpoint、及模型部署应用等模块全流程服务，大幅度减少业务建模的重复性工作，显著提高了建模效率，对于初学者掌握数据建模流程，也是一个非常好的实践模版。
 
 ## 1. 数据处理类
 ### 1. algo_box
