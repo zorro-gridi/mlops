@@ -95,11 +95,13 @@ class Peak_and_Trough_Detecter:
         Args:
             sequence: 待分析的序列
             point_type: 指明找最大回撤 trough、或最大收益点 peak.
-            base_point: 计算最大回撤、收益区间的起始点
+            base_point: 收益区间的起始点
                 options: ["start", "default", "peak", "trough", "max_peak", "max_trough", ]
                 # 具体含义参考 curr_return_base_hist_reverse_point() 方法定义
-            end_point: 计算最大回撤、收益区间的结束点
-                options: ["phase", "current"]
+            end_point: 收益区间的结束点
+                options:
+                    1. "phase": 表示阶段点, 可能是最低回撤点, 也可能是阶段高点; 因此，得到的收益统计可能是最大回撤、或最大收益
+                    2. "current": 表示收益区间的结束点为当前最新点
                 # 具体含义参考 curr_return_base_hist_reverse_point() 方法定义
             start_idx: 索引切片的起始点
         '''
@@ -131,7 +133,7 @@ class Peak_and_Trough_Detecter:
             detecter_result = self.get_max_return_or_loss(point_type=point_type, base_point=base_point)
 
         elif end_point == 'current':
-            self.curr_return_base_hist_reverse_point(base_point=base_point)
+            detecter_result = self.curr_return_base_hist_reverse_point(base_point=base_point)
 
         if make_plot:
             self.make_plot()
@@ -264,9 +266,9 @@ class Peak_and_Trough_Detecter:
             logging.warning(f'-------> gain_down_list 回撤、收益点列表只有 {unique_point_type} 一种极值点')
             return [0, len(gain_down_list)]
 
-        # 第1批、和最后1批的 point_type 批次在循环中没有加入
+        # TODO: 第1批、和最后1批的 point_type 批次在循环中没有加入
         reverse_indxs.insert(0, 0)
-        reverse_indxs.append(len(gain_down_list)-1)
+        reverse_indxs.append(len(gain_down_list))
         return reverse_indxs
 
 
@@ -677,7 +679,7 @@ class Peak_and_Trough_Detecter:
             统计从当前点的上一个回撤、或收益点以来的累计收益
         Args:
             base_point: 上一个 base 极值点的类型
-                1. default: 不特别指定, 即从当前点的上一点(可能是 peak / trough)计算累计收益
+                1. default: 不特别指定, 即，从当前点的上一点(可能是 peak / trough)计算累计收益
                 2. peak: 从最后一个 peak 点计算累计收益
                 3. trough: 从最后一个 trough 点计算累计收益
                 4. max_peak: 从最高收益点
@@ -720,18 +722,27 @@ if __name__ == '__main__':
             and fundcode = '005176'
         order by
             fsrq
-        ''')['dwjz'].tolist()[-120:]
+        ''')['dwjz'].tolist()[-180:]
     fund_values = np.array(fund_values, dtype=float)
 
     # %%
-    min_chg = 3 / 100
+    min_chg = 6 / 100
     peak_trough_detecter = Peak_and_Trough_Detecter(min_chg)
 
+    # 阶段高点检测
     peak_detecter_result = peak_trough_detecter.fit(
         fund_values, point_type='peak', base_point='trough', end_point='phase')
+
+    # 回撤点检测
     trough_detecter_result = peak_trough_detecter.fit(
         fund_values, point_type='trough', base_point='peak', end_point='phase')
 
     # %%
-    peak_trough_detecter.fit(fund_values, base_point='peak', end_point='current')
+    # 最高点至今的回撤
+    peak_to_curr_result = peak_trough_detecter.fit(fund_values, base_point='peak', end_point='current')
+    print(f'peak_to_curr_result:\n {peak_to_curr_result}')
     # %%
+    # 回撤至今的收益
+    trough_to_curr_result = peak_trough_detecter.fit(fund_values, base_point='trough', end_point='current')
+    print(f'trough_to_curr_result:\n {trough_to_curr_result}')
+# %%
