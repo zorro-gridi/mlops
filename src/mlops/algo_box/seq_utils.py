@@ -491,7 +491,7 @@ class Peak_and_Trough_Detecter:
                     'return_days': top_peak_indx,
                     'start_indx': 0,
                     'end_indx': int(top_peak_indx),
-                    'return_type': 's2peak',
+                    'return_type': 's2MaxPeak',
                     }
                 return detecter_result
 
@@ -550,7 +550,7 @@ class Peak_and_Trough_Detecter:
                         'return_days': top_trough_indx,
                         'start_indx': 0,
                         'end_indx': int(top_trough_indx),
-                        'return_type': 's2trough',
+                        'return_type': 's2MaxTrough',
                         }
                     return detecter_result
 
@@ -567,7 +567,7 @@ class Peak_and_Trough_Detecter:
                         'return_days': 0,
                         'start_indx': 0,
                         'end_indx': 0,
-                        'return_type': 'maxPeak2maxTrough',
+                        'return_type': 'stillPeakStatus',
                         }
                     return detecter_result
 
@@ -707,8 +707,8 @@ class Peak_and_Trough_Detecter:
                 1. default: 不特别指定, 即，从当前点的上一点(可能是 peak / trough)计算累计收益
                 2. peak: 从最后一个 peak 点计算累计收益
                 3. trough: 从最后一个 trough 点计算累计收益
-                4. max_peak: 从最高收益点
-                5. max_trough: 从最大回撤点
+                4. max_peak: 从"最高收益点"开始
+                5. max_trough: 从"最大回撤点"开始
         '''
         if not self.reverse_points:
             logging.warning(f'-------> self.reverse_points 还没有完成赋值')
@@ -737,9 +737,9 @@ def user_guide():
     '''
     Desc:
         提供 “Peak_and_Trough_Detecter” 回撤检测工具的使用教程
+        包含 7 个完整使用样例
     '''
     db_session = DB_Client('mysql_centos')
-
     fund_values = db_session.data_read(
         f'''
         select
@@ -762,26 +762,55 @@ def user_guide():
     fund_values = np.array(fund_values, dtype=float)
     peak_trough_detecter = Peak_and_Trough_Detecter(min_chg)
 
-    # 含 point_type：阶段最大盈利点检测
-    peak_detecter_result = peak_trough_detecter.fit(
+    # NOTE: 含 point_type：起始到【最大】盈利点检测
+    s2peak = peak_trough_detecter.fit(
+        fund_values, point_type='peak', base_point='start', end_point='phase', make_plot=True)
+    print(f'Start s2peak:\n{s2peak}')
+
+    # NOTE: 含 point_type：起始到【最大】回撤点检测
+    s2trough = peak_trough_detecter.fit(
+        fund_values, point_type='trough', base_point='start', end_point='phase', make_plot=False)
+    print(f'Start s2trough:\n{s2trough}')
+
+    # NOTE: 含 point_type：记录【最大】盈利点检测
+    trough2peak = peak_trough_detecter.fit(
         fund_values, point_type='peak', base_point='trough', end_point='phase', make_plot=False)
-    print(f'Phase trough2peak:\n{peak_detecter_result}')
+    print(f'Max trough2peak:\n{trough2peak}')
 
-    # 含 point_type：阶段最大回撤点检测
-    trough_detecter_result = peak_trough_detecter.fit(
-        fund_values, point_type='trough', base_point='peak', end_point='phase')
-    print(f'Phase peak2trough:\n{trough_detecter_result}')
+    # NOTE: 含 point_type：记录【最大】回撤点检测
+    peak2trough = peak_trough_detecter.fit(
+        fund_values, point_type='trough', base_point='peak', end_point='phase', make_plot=False)
+    print(f'Max peak2trough:\n{peak2trough}')
+
+    # NOTE: 含 point_type：【阶段】盈利点检测
+    trough2peak = peak_trough_detecter.fit(
+        fund_values, point_type='peak', base_point='trough', end_point='phase', make_plot=False)
+    print(f'Phase trough2peak:\n{trough2peak}')
+
+    # NOTE: 含 point_type：【阶段】回撤点检测
+    peak2trough = peak_trough_detecter.fit(
+        fund_values, point_type='trough', base_point='peak', end_point='phase', make_plot=False)
+    print(f'Phase peak2trough:\n{peak2trough}')
 
     # # %%
-    # 最高点至今的回撤
-    peak_to_curr_result = peak_trough_detecter.fit(fund_values, base_point='peak', end_point='current')
-    print(f'peak_to_curr_result:\n {peak_to_curr_result}')
+    # NOTE: 【最近最高点】【至今】的回撤
+    peak2curr = peak_trough_detecter.fit(fund_values, base_point='peak', end_point='current', make_plot=False)
+    print(f'Last peak2curr:\n {peak2curr}')
+
+    # NOTE: 【最近回撤点】【至今】的收益
+    trough2curr = peak_trough_detecter.fit(fund_values, base_point='trough', end_point='current', make_plot=False)
+    print(f'Last trough2curr:\n {trough2curr}')
+
+    # NOTE: 【最高收益点】【至今】的收益
+    maxPeak2curr = peak_trough_detecter.fit(fund_values, base_point='max_peak', end_point='current', make_plot=False)
+    print(f'Last maxPeak2curr:\n {maxPeak2curr}')
+
+    # NOTE: 【最大回撤点】【至今】的收益
+    maxTrough2curr = peak_trough_detecter.fit(fund_values, base_point='max_trough', end_point='current', make_plot=False)
+    print(f'Last maxTrough2curr:\n {maxTrough2curr}')
+
     # # %%
-    # # 回撤至今的收益
-    trough_to_curr_result = peak_trough_detecter.fit(fund_values, base_point='trough', end_point='current')
-    print(f'trough_to_curr_result:\n {trough_to_curr_result}')
-    # # %%
-    # 返回反转点的索引点，可根据获取对应的日期
+    # NOTE: 返回反转点的索引点，可根据获取对应的日期
     pprint(peak_trough_detecter.reverse_points)
 
 
