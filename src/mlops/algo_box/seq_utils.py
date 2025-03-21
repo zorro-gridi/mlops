@@ -154,6 +154,8 @@ class Peak_and_Trough_Detecter:
         ax = fig.add_subplot(1, 1, 1)
 
         ax.plot(np.arange(len(self.Ei)), self.Ei)
+        ax.plot(np.arange(len(self.Ei)), [self.Ei[-1]] * len(self.Ei), ls='--')
+        ax.scatter(len(self.Ei), self.Ei[-1], c='blue')
         for i, point in enumerate(self.reverse_points):
         # for unit-test
         # for i, point in enumerate(self.gain_down_list):
@@ -730,7 +732,7 @@ class Peak_and_Trough_Detecter:
 # %%
 if __name__ == '__main__':
     from tools.DB_Client import DB_Client
-    db_session = DB_Client('pg_tencent')
+    db_session = DB_Client('mysql_centos')
 
     fund_values = db_session.data_read(
         f'''
@@ -739,7 +741,7 @@ if __name__ == '__main__':
             ,dwjz
         from fund.fund_networth_record_from_tt_web
         where 1=1
-            and fundcode = '005176'
+            and fundcode = '008798'
         order by
             fsrq
         ''')
@@ -747,9 +749,9 @@ if __name__ == '__main__':
     fund_values.tail()
 
     # %%
-    min_chg = 6 / 100
+    min_chg = 1 / 100
 
-    fund_values = fund_values['dwjz'].tolist()[-180:]
+    fund_values = fund_values['dwjz'].tolist()[-720:]
     fund_values = np.array(fund_values, dtype=float)
     peak_trough_detecter = Peak_and_Trough_Detecter(min_chg)
 

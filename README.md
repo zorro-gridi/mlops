@@ -19,7 +19,7 @@
 神经网络相关算法，如lstm、rnn等基础服务模块
 ### 3.2 tasks
 包含传统机器学习模型，如kmeans聚类、random forest随机森林、xgboost、lightgbm、catboost树模型等常用算法训练、与测试任务模块
-
+s
 ## 4 AI大模型问答模块
 ### 4.1 ai
 
