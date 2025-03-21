@@ -829,7 +829,9 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     detect_table['return_sdate'] = detect_table['start_indx'].map(lambda x: date_list[x])
     detect_table['return_edate'] = detect_table['end_indx'].map(lambda x: date_list[x])
     detect_table['calender_days'] = (pd.to_datetime(detect_table['return_edate']) - pd.to_datetime(detect_table['return_sdate'])).dt.days
+    detect_table['phase_er'] = (1 + detect_table['max_return']).map(lambda x: np.power())
 
+    # 通过分析得出结论：牛短熊长！！！
     detect_table['etldate'] = time.strftime('%Y-%m-%d')
     logging.warning(f'---------> 基金 {fundcode} 的净值回撤Trough点、与最高Peak点的区间收益统计:')
     print(detect_table)
