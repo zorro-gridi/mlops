@@ -16,6 +16,8 @@ home_dir = Path(os.path.expanduser('~'))
 proj_path = (home_dir / 'project/pycharm').as_posix()
 sys.path.append(proj_path)
 
+from tools.DB_Client import DB_Client
+
 
 """
 @Desc:
@@ -353,7 +355,7 @@ class Peak_and_Trough_Detecter:
     def get_top_point_indx(self, reverse_points_data: pd.DataFrame, point_type='peak'):
         '''
         Desc:
-            返回最大回撤、或最大收益点的记录点索引。注意, 不是 df 的行索引记录
+            返回最大回撤、或最大收益记录点的索引。注意: 不是 df 的行索引记录
         Args:
             reverse_points_data: 经过去重后的回撤、收益点的 df. 也可以是该 df 的子集
             point_type:
@@ -458,8 +460,9 @@ class Peak_and_Trough_Detecter:
         else:
             logging.warning(f'-------> get_max_return_or_loss() point_type 参数不合法')
             raise Exception
-
+        # 原始的反转点记录数据
         reverse_points_data = pd.DataFrame(self.reverse_points)
+
         if base_point == 'phase':
             logging.warning(f'-------> 统计阶段的最大回撤与最高收益')
             detecter_result = self.get_phase_max_return_or_loss(point_type=point_type)
@@ -468,6 +471,7 @@ class Peak_and_Trough_Detecter:
             logging.warning(f'-------> {stat_name}: {phase_return}, 持续 {return_days} 个交易日\n')
             return detecter_result
 
+        # s2 标识从记录数据开始，s2peak 表示从记录开始到最高收益点
         s2peak_return = reverse_points_data['sum_chg'].max()
         s2trough_loss = reverse_points_data['sum_chg'].min()
         # 根据point_type参数，动态变化
@@ -478,7 +482,7 @@ class Peak_and_Trough_Detecter:
 
         # 如果计算最大收益
         if point_type == 'peak':
-            # 从起始点开始计算最大收益
+            # 从起始点开始, 计算最大收益
             if base_point == 'start':
                 logging.warning(f'-------> 从【起始点】开始计算【最高收益】')
                 logging.warning(f'-------> 最大收益: {s2peak_return}, 持续 {top_peak_indx} 个交易日')
@@ -491,9 +495,8 @@ class Peak_and_Trough_Detecter:
                     }
                 return detecter_result
 
-            # 从最大回撤点开始计算最大收益
+            # 从区间最大回撤点开始，计算最大收益
             elif base_point == 'trough':
-                # 从最大回撤点开始，计算最大回撤到最高收益的累计收益
                 after_trough_cond = reverse_points_data['indx'] >= top_trough_indx
                 reverse_points_data_after_trough = reverse_points_data.loc[after_trough_cond, :].copy()
                 if len(reverse_points_data_after_trough) == 1:
@@ -503,16 +506,17 @@ class Peak_and_Trough_Detecter:
                         'return_days': 0,
                         'start_indx': 0,
                         'end_indx': 0,
-                        'return_type': 'maxTrough2maxPeak',
+                        'return_type': 'stillTroughStatus',
                         }
                     return detecter_result
 
                 logging.warning(f'-------> 统计从【最大回撤】-> 【最高收益】的结果表:\n{reverse_points_data_after_trough}')
 
                 top_peak_return_after_trough = reverse_points_data_after_trough['sum_chg'].max()
-                top_peak_indx_after_trough = self.get_top_point_indx(reverse_points_data_after_trough, point_type='trough')
+                top_peak_indx_after_trough = self.get_top_point_indx(reverse_points_data_after_trough, point_type='peak')
 
-                trough2peak_return = s2peak_return - top_peak_return_after_trough
+                # 从记录的的最低回撤点，到回撤点右侧的最高收益点的区间收益
+                trough2peak_return = top_peak_return_after_trough - s2trough_loss
                 return_days = top_peak_indx_after_trough - top_trough_indx
 
                 logging.warning(f'-------> 从【最大回撤】开始计算【最高收益】')
@@ -532,7 +536,7 @@ class Peak_and_Trough_Detecter:
 
         # 如果计算最大回撤
         elif point_type == 'trough':
-            # 从起始点开始计算最大回撤
+            # 从起始点开始, 计算最大回撤
             if base_point == 'start':
                 if s2trough_loss > 0:
                     logging.warning(f'-------> 从起始点以来, 最大回撤大于0, 因此, 阶段最大回撤替代')
@@ -550,7 +554,7 @@ class Peak_and_Trough_Detecter:
                         }
                     return detecter_result
 
-            # 从最大收益点开始计算最大回撤
+            # 从最大收益点开始, 计算最大回撤
             elif base_point == 'peak':
                 # 从最大收益点之后的数据，获取新的最大回撤点
                 after_peak_cond = reverse_points_data['indx'] >= top_peak_indx
@@ -729,9 +733,11 @@ class Peak_and_Trough_Detecter:
         return detect_result
 
 
-# %%
-if __name__ == '__main__':
-    from tools.DB_Client import DB_Client
+def user_guide():
+    '''
+    Desc:
+        提供 “Peak_and_Trough_Detecter” 回撤检测工具的使用教程
+    '''
     db_session = DB_Client('mysql_centos')
 
     fund_values = db_session.data_read(
@@ -749,19 +755,22 @@ if __name__ == '__main__':
     fund_values.tail()
 
     # %%
+    # 检测回撤点的最小波动幅度，债券基金一般为 1% 左右；股票基金一般为 3% 左右
     min_chg = 1 / 100
 
     fund_values = fund_values['dwjz'].tolist()[-720:]
     fund_values = np.array(fund_values, dtype=float)
     peak_trough_detecter = Peak_and_Trough_Detecter(min_chg)
 
-    # # 阶段高点检测
+    # 含 point_type：阶段最大盈利点检测
     peak_detecter_result = peak_trough_detecter.fit(
-        fund_values, point_type='peak', base_point='trough', end_point='phase')
+        fund_values, point_type='peak', base_point='trough', end_point='phase', make_plot=False)
+    print(f'Phase trough2peak:\n{peak_detecter_result}')
 
-    # 回撤点检测
+    # 含 point_type：阶段最大回撤点检测
     trough_detecter_result = peak_trough_detecter.fit(
         fund_values, point_type='trough', base_point='peak', end_point='phase')
+    print(f'Phase peak2trough:\n{trough_detecter_result}')
 
     # # %%
     # 最高点至今的回撤
@@ -772,4 +781,11 @@ if __name__ == '__main__':
     trough_to_curr_result = peak_trough_detecter.fit(fund_values, base_point='trough', end_point='current')
     print(f'trough_to_curr_result:\n {trough_to_curr_result}')
     # # %%
+    # 返回反转点的索引点，可根据获取对应的日期
     pprint(peak_trough_detecter.reverse_points)
+
+
+
+# %%
+if __name__ == '__main__':
+    user_guide()
