@@ -755,11 +755,13 @@ def user_guide():
     fund_values.tail()
 
     # %%
-    # 检测回撤点的最小波动幅度，债券基金一般为 1% 左右；股票基金一般为 3% 左右
-    min_chg = 1 / 100
-
+    # 获取基金的历史净值数据
     fund_values = fund_values['dwjz'].tolist()[-720:]
     fund_values = np.array(fund_values, dtype=float)
+
+    # NOTE: 实例化 Peak_and_Trough_Detecter
+    # 检测回撤点的最小波动幅度，债券基金一般为 1% 左右；股票基金一般为 3% 左右
+    min_chg = 1 / 100
     peak_trough_detecter = Peak_and_Trough_Detecter(min_chg)
 
     # NOTE: 含 point_type：起始到【最大】盈利点检测

@@ -3,6 +3,12 @@ from torch import nn
 import logging
 
 
+"""
+@Desc:
+    LSTM + CNN 模型的组合
+@Url: https://medium.com/@mijanr/different-ways-to-combine-cnn-and-lstm-networks-for-time-series-classification-tasks-b03fc37e91b6
+"""
+
 
 class LSTM_CNN(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, num_classes):
