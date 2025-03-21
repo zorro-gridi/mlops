@@ -399,7 +399,7 @@ class Peak_and_Trough_Detecter:
         reverse_points_data_copy.dropna(how='any', inplace=True)
 
         reverse_points_data_copy['diff'] = reverse_points_data_copy['next_sum_chg'] - reverse_points_data_copy['sum_chg']
-        reverse_points_data_copy['return_days'] = reverse_points_data_copy['next_indx'] - reverse_points_data_copy['indx']
+        reverse_points_data_copy['trade_days'] = reverse_points_data_copy['next_indx'] - reverse_points_data_copy['indx']
 
         if point_type == 'peak':
             start_type = 'trough'
@@ -426,11 +426,11 @@ class Peak_and_Trough_Detecter:
         max_diff_cond = reverse_points_data_copy['diff'] == max_diff
         max_diff_indx = reverse_points_data_copy.loc[max_diff_cond, 'next_indx'].max()
         start_indx = reverse_points_data_copy.loc[max_diff_cond, 'indx'].max()
-        return_days = max_diff_indx - start_indx
+        trade_days = max_diff_indx - start_indx
 
         detecter_result = {
             'max_return': max_diff,
-            'return_days': return_days,
+            'trade_days': trade_days,
             'start_indx': int(start_indx),
             'end_indx': int(max_diff_indx),
             'return_type': 'phase2phase',
@@ -468,8 +468,8 @@ class Peak_and_Trough_Detecter:
             logging.warning(f'-------> 统计阶段的最大回撤与最高收益')
             detecter_result = self.get_phase_max_return_or_loss(point_type=point_type)
             phase_return = detecter_result['max_return']
-            return_days = detecter_result['return_days']
-            logging.warning(f'-------> {stat_name}: {phase_return}, 持续 {return_days} 个交易日\n')
+            trade_days = detecter_result['trade_days']
+            logging.warning(f'-------> {stat_name}: {phase_return}, 持续 {trade_days} 个交易日\n')
             return detecter_result
 
         # s2 标识从记录数据开始，s2peak 表示从记录开始到最高收益点
@@ -489,7 +489,7 @@ class Peak_and_Trough_Detecter:
                 logging.warning(f'-------> 最大收益: {s2peak_return}, 持续 {top_peak_indx} 个交易日')
                 detecter_result = {
                     'max_return': s2peak_return,
-                    'return_days': top_peak_indx,
+                    'trade_days': top_peak_indx,
                     'start_indx': 0,
                     'end_indx': int(top_peak_indx),
                     'return_type': 's2MaxPeak',
@@ -504,7 +504,7 @@ class Peak_and_Trough_Detecter:
                     logging.warning(f'-------> 该序列第1个点即是最高点, 此后持续下跌, 最高点还未收复!!! 从【最大回撤】-> 【最高收益】的结果为 0')
                     detecter_result = {
                         'max_return': 0,
-                        'return_days': 0,
+                        'trade_days': 0,
                         'start_indx': 0,
                         'end_indx': 0,
                         'return_type': 'stillTroughStatus',
@@ -518,13 +518,13 @@ class Peak_and_Trough_Detecter:
 
                 # 从记录的的最低回撤点，到回撤点右侧的最高收益点的区间收益
                 trough2peak_return = top_peak_return_after_trough - s2trough_loss
-                return_days = top_peak_indx_after_trough - top_trough_indx
+                trade_days = top_peak_indx_after_trough - top_trough_indx
 
                 logging.warning(f'-------> 从【最大回撤】开始计算【最高收益】')
-                logging.warning(f'-------> 最大收益: {trough2peak_return}, 持续 {return_days} 个交易日')
+                logging.warning(f'-------> 最大收益: {trough2peak_return}, 持续 {trade_days} 个交易日')
                 detecter_result = {
                     'max_return': trough2peak_return,
-                    'return_days': return_days,
+                    'trade_days': trade_days,
                     'start_indx': int(top_trough_indx),
                     'end_indx': int(top_peak_indx_after_trough),
                     'return_type': 'maxTrough2maxPeak',
@@ -548,7 +548,7 @@ class Peak_and_Trough_Detecter:
                     logging.warning(f'-------> 最大回撤: {s2trough_loss}, 持续 {top_trough_indx} 个交易日')
                     detecter_result = {
                         'max_return': s2trough_loss,
-                        'return_days': top_trough_indx,
+                        'trade_days': top_trough_indx,
                         'start_indx': 0,
                         'end_indx': int(top_trough_indx),
                         'return_type': 's2MaxTrough',
@@ -565,7 +565,7 @@ class Peak_and_Trough_Detecter:
                     logging.warning(f'-------> 该序列最高点即是当前最新的数据点, 已创新高!!! 从【最大收益】-> 【最大回撤】的结果为 0')
                     detecter_result = {
                         'max_return': 0,
-                        'return_days': 0,
+                        'trade_days': 0,
                         'start_indx': 0,
                         'end_indx': 0,
                         'return_type': 'stillPeakStatus',
@@ -583,7 +583,7 @@ class Peak_and_Trough_Detecter:
                 logging.warning(f'-------> 最大回撤: {peak2trough_loss}, 持续 {loss_days} 个交易日')
                 detecter_result = {
                     'max_return': peak2trough_loss,
-                    'return_days': loss_days,
+                    'trade_days': loss_days,
                     'start_indx': int(top_peak_indx),
                     'end_indx': int(top_trough_indx_after_peak),
                     'return_type': 'maxPeak2maxTrough',
@@ -619,7 +619,7 @@ class Peak_and_Trough_Detecter:
         end_indx = len(self.Ei) - 1
         detecter_result = {
             'max_return': point2curr_return,
-            'return_days': end_indx - start_indx,
+            'trade_days': end_indx - start_indx,
             'start_indx': start_indx,
             'end_indx': end_indx,
             'return_type': return_type,
@@ -650,7 +650,7 @@ class Peak_and_Trough_Detecter:
         end_indx = len(self.Ei) - 1
         detecter_result = {
             'max_return': self.Ei[-1] - base_return,
-            'return_days': end_indx - start_indx,
+            'trade_days': end_indx - start_indx,
             'start_indx': start_indx,
             'end_indx': end_indx,
             'return_type': f'last{point_type.capitalize()}2curr',
@@ -692,7 +692,7 @@ class Peak_and_Trough_Detecter:
         end_indx = len(self.Ei) - 1
         detecter_result = {
             'max_return': self.Ei[-1] - base_return,
-            'return_days': end_indx - start_indx,
+            'trade_days': end_indx - start_indx,
             'start_indx': start_indx,
             'end_indx': end_indx,
             'return_type': f'max{named_point_type.capitalize()}2curr',
@@ -793,18 +793,6 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     print(f'Max peak2trough:\n{peak2trough}')
     detect_results.append(peak2trough)
 
-    # NOTE: 含 point_type：【阶段】盈利点检测
-    trough2peak = peak_trough_detecter.fit(
-        fund_values, point_type='peak', base_point='trough', end_point='phase', make_plot=False)
-    print(f'Phase trough2peak:\n{trough2peak}')
-    detect_results.append(trough2peak)
-
-    # NOTE: 含 point_type：【阶段】回撤点检测
-    peak2trough = peak_trough_detecter.fit(
-        fund_values, point_type='trough', base_point='peak', end_point='phase', make_plot=False)
-    print(f'Phase peak2trough:\n{peak2trough}')
-    detect_results.append(peak2trough)
-
     # # %%
     # NOTE: 【最近最高点】【至今】的回撤
     peak2curr = peak_trough_detecter.fit(fund_values, base_point='peak', end_point='current', make_plot=False)
@@ -827,8 +815,11 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     detect_results.append(maxTrough2curr)
 
     # # %%
+    # NOTE: 含 point_type：【阶段】盈利点检测
     # NOTE: 返回反转点的索引点，可根据获取对应的日期（该表可以回答任意两个回撤、收益区间的收益统计）
-    pprint(peak_trough_detecter.reverse_points)
+    reverse_points = pd.DataFrame(peak_trough_detecter.reverse_points)
+    logging.warning(f'---------> 基金 {fundcode} 的净值回撤点、与收益点记录:')
+    print(reverse_points)
 
     detect_table = pd.DataFrame(detect_results)
     detect_table['fundcode'] = fundcode
@@ -837,8 +828,10 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
 
     detect_table['return_sdate'] = detect_table['start_indx'].map(lambda x: date_list[x])
     detect_table['return_edate'] = detect_table['end_indx'].map(lambda x: date_list[x])
+    detect_table['calender_days'] = (pd.to_datetime(detect_table['return_edate']) - pd.to_datetime(detect_table['return_sdate'])).dt.days
 
     detect_table['etldate'] = time.strftime('%Y-%m-%d')
+    logging.warning(f'---------> 基金 {fundcode} 的净值回撤Trough点、与最高Peak点的区间收益统计:')
     print(detect_table)
     return detect_table
 
@@ -846,4 +839,9 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
 
 # %%
 if __name__ == '__main__':
-    peak_trough_detect_table('008798', 1/100, drange=720)
+    min_chg_map = {
+        '008798': 1/100,
+        '005176': 3/100,
+        }
+    fundcode = '005176'
+    peak_trough_detect_table('005176', min_chg_map[fundcode], drange=720, make_plot=True)
