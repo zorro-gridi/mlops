@@ -4,6 +4,7 @@ from sklearn.cluster import KMeans
 import logging
 import pandas as pd
 from typing import Union
+import time
 
 import matplotlib.pyplot as plt
 from pprint import pprint
@@ -733,83 +734,108 @@ class Peak_and_Trough_Detecter:
         return detect_result
 
 
-def user_guide():
+def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     '''
     Desc:
         提供 “Peak_and_Trough_Detecter” 回撤检测工具的使用教程
-        包含 7 个完整使用样例
+    Args:
+        min_chg: 检测回撤点的最小波动幅度，债券基金一般为 1% 左右；股票基金一般为 3% 左右
     '''
     db_session = DB_Client('mysql_centos')
-    fund_values = db_session.data_read(
+    fundnet_data = db_session.data_read(
         f'''
         select
              fsrq
             ,dwjz
         from fund.fund_networth_record_from_tt_web
         where 1=1
-            and fundcode = '008798'
+            and fundcode = '{fundcode}'
         order by
             fsrq
         ''')
-    fund_values = fund_values.astype({'dwjz': 'float'})
-    fund_values.tail()
+    fundnet_data = fundnet_data.astype({'dwjz': 'float'})
+    fundnet_data.tail()
+
+    detect_results = []
 
     # %%
     # 获取基金的历史净值数据
-    fund_values = fund_values['dwjz'].tolist()[-720:]
+    panel_data = fundnet_data.iloc[-drange:, :]
+    date_list = panel_data['fsrq'].tolist()
+    data_sdate = panel_data['fsrq'].min()
+    fund_values = panel_data['dwjz'].tolist()
     fund_values = np.array(fund_values, dtype=float)
 
     # NOTE: 实例化 Peak_and_Trough_Detecter
-    # 检测回撤点的最小波动幅度，债券基金一般为 1% 左右；股票基金一般为 3% 左右
-    min_chg = 1 / 100
     peak_trough_detecter = Peak_and_Trough_Detecter(min_chg)
 
     # NOTE: 含 point_type：起始到【最大】盈利点检测
     s2peak = peak_trough_detecter.fit(
-        fund_values, point_type='peak', base_point='start', end_point='phase', make_plot=True)
+        fund_values, point_type='peak', base_point='start', end_point='phase', make_plot=make_plot)
     print(f'Start s2peak:\n{s2peak}')
+    detect_results.append(s2peak)
 
     # NOTE: 含 point_type：起始到【最大】回撤点检测
     s2trough = peak_trough_detecter.fit(
         fund_values, point_type='trough', base_point='start', end_point='phase', make_plot=False)
     print(f'Start s2trough:\n{s2trough}')
+    detect_results.append(s2trough)
 
     # NOTE: 含 point_type：记录【最大】盈利点检测
     trough2peak = peak_trough_detecter.fit(
         fund_values, point_type='peak', base_point='trough', end_point='phase', make_plot=False)
     print(f'Max trough2peak:\n{trough2peak}')
+    detect_results.append(trough2peak)
 
     # NOTE: 含 point_type：记录【最大】回撤点检测
     peak2trough = peak_trough_detecter.fit(
         fund_values, point_type='trough', base_point='peak', end_point='phase', make_plot=False)
     print(f'Max peak2trough:\n{peak2trough}')
+    detect_results.append(peak2trough)
 
     # NOTE: 含 point_type：【阶段】盈利点检测
     trough2peak = peak_trough_detecter.fit(
         fund_values, point_type='peak', base_point='trough', end_point='phase', make_plot=False)
     print(f'Phase trough2peak:\n{trough2peak}')
+    detect_results.append(trough2peak)
 
     # NOTE: 含 point_type：【阶段】回撤点检测
     peak2trough = peak_trough_detecter.fit(
         fund_values, point_type='trough', base_point='peak', end_point='phase', make_plot=False)
     print(f'Phase peak2trough:\n{peak2trough}')
+    detect_results.append(peak2trough)
 
     # # %%
     # NOTE: 【最近最高点】【至今】的回撤
     peak2curr = peak_trough_detecter.fit(fund_values, base_point='peak', end_point='current', make_plot=False)
     print(f'Last peak2curr:\n {peak2curr}')
+    detect_results.append(peak2curr)
 
     # NOTE: 【最近回撤点】【至今】的收益
     trough2curr = peak_trough_detecter.fit(fund_values, base_point='trough', end_point='current', make_plot=False)
     print(f'Last trough2curr:\n {trough2curr}')
+    detect_results.append(trough2curr)
 
     # NOTE: 【最高收益点】【至今】的收益
     maxPeak2curr = peak_trough_detecter.fit(fund_values, base_point='max_peak', end_point='current', make_plot=False)
     print(f'Last maxPeak2curr:\n {maxPeak2curr}')
+    detect_results.append(maxPeak2curr)
 
     # NOTE: 【最大回撤点】【至今】的收益
     maxTrough2curr = peak_trough_detecter.fit(fund_values, base_point='max_trough', end_point='current', make_plot=False)
     print(f'Last maxTrough2curr:\n {maxTrough2curr}')
+    detect_results.append(maxTrough2curr)
+
+    detect_table = pd.DataFrame(detect_results)
+    detect_table['fundcode'] = fundcode
+    detect_table['min_chg'] = min_chg
+    detect_table['data_sdate'] = data_sdate
+
+    detect_table['return_sdate'] = detect_table['start_indx'].map(lambda x: date_list[x])
+    detect_table['return_edate'] = detect_table['end_indx'].map(lambda x: date_list[x])
+
+    detect_table['etldate'] = time.strftime('%Y-%m-%d')
+    print(detect_table)
 
     # # %%
     # NOTE: 返回反转点的索引点，可根据获取对应的日期
@@ -817,6 +843,8 @@ def user_guide():
 
 
 
+
+
 # %%
 if __name__ == '__main__':
-    user_guide()
+    peak_trough_detect_table('008798', 1/100)
