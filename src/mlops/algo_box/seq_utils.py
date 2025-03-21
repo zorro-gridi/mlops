@@ -826,6 +826,10 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     print(f'Last maxTrough2curr:\n {maxTrough2curr}')
     detect_results.append(maxTrough2curr)
 
+    # # %%
+    # NOTE: 返回反转点的索引点，可根据获取对应的日期（该表可以回答任意两个回撤、收益区间的收益统计）
+    pprint(peak_trough_detecter.reverse_points)
+
     detect_table = pd.DataFrame(detect_results)
     detect_table['fundcode'] = fundcode
     detect_table['min_chg'] = min_chg
@@ -836,15 +840,10 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
 
     detect_table['etldate'] = time.strftime('%Y-%m-%d')
     print(detect_table)
-
-    # # %%
-    # NOTE: 返回反转点的索引点，可根据获取对应的日期
-    pprint(peak_trough_detecter.reverse_points)
-
-
+    return detect_table
 
 
 
 # %%
 if __name__ == '__main__':
-    peak_trough_detect_table('008798', 1/100)
+    peak_trough_detect_table('008798', 1/100, drange=720)
