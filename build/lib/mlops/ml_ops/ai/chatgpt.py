@@ -41,8 +41,9 @@ def gpt_35_api_stream(messages: list):
         stream=True,
     )
     for chunk in stream:
-        if chunk.choices[0].delta.content is not None:
-            print(chunk.choices[0].delta.content, end="")
+        if len(chunk.choices) > 0:
+            if chunk.choices[0].delta.content is not None:
+                print(chunk.choices[0].delta.content, end="")
 
 
 if __name__ == '__main__':

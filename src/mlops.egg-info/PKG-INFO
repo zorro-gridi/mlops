@@ -1,6 +1,8 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.2
 Name: mlops
 Version: 1.0
 Summary: This is a utility, written by Zorro
 Author: Zorro
 License-File: LICENSE
+Dynamic: author
+Dynamic: summary
