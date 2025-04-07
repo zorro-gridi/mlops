@@ -4,7 +4,7 @@ import logging
 import numpy as np
 
 
-tracking_uri = 'http://192.168.1.107:9001/'
+tracking_uri = 'http://192.168.5.7:9001/'
 mlflow.set_tracking_uri(tracking_uri)
 
 
