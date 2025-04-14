@@ -1,4 +1,6 @@
 
+import numpy as np
+
 
 def transform_list(input_list):
     '''
@@ -22,12 +24,7 @@ def transform_list(input_list):
 def calculate_quantile(target, seq):
     '''
     Desc:
-        计算给定一个数 target 计算在已知序列 seq 中的分位数，分数制
+        计算给定一个数 target, 计算其在已知序列 seq 中的分位数（分数制）
     '''
-    sorted_data = sorted(seq)
-    length = len(sorted_data)
-    count = 0
-    for num in sorted_data:
-        if num <= target:
-            count = count + 1
-    return round(count / length, 2)
+    max_value = max(np.abs(seq))
+    return round(target / max_value, 2)
