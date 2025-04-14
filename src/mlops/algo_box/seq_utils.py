@@ -1008,6 +1008,9 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
         logging.warning(f'当前【最高收益】的 {curr_return_name} 累计回撤: {lastPeak2curr_yield:0.4f}，历史百分位数: {peak2curr_percentile}%; 后续潜在[收益范围]: {potential_peak_range}')
 
 
+
+
+
 # %%
 if __name__ == '__main__':
     min_chg_map = {
