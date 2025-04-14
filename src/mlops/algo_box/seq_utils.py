@@ -811,6 +811,7 @@ class Peak_and_Trough_Detecter:
         '''
         reverse_points = self.format_reverse_point()
         trou_peak_pnum = len(reverse_points)
+
         # TODO: 这里可以考虑回撤修复收益、与顶点回撤损失分开计算
         phase_return_req = sorted(reverse_points['phase_return'].tolist())[exclude_num:-exclude_num]
         phase_return_avg = round(np.abs(phase_return_req).mean(), 3)
@@ -928,7 +929,7 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     print(peak2trough_returns)
 
     # NOTE: 基于“回撤、收益”点的序列波动性分析
-    trou_peak_pnum, phase_return_avg = peak_trough_detecter.volatility_analysis()
+    trou_peak_pnum, phase_return_avg = peak_trough_detecter.volatility_analysis(exclude_num=1)
     logging.warning(f'序列的回撤点、与收益点个数（即收益上下振荡次数）: {trou_peak_pnum}, 区间平均波动: {phase_return_avg}')
 
     # 整合“回撤点、收益点波动转换”的收益统计表
@@ -1014,5 +1015,5 @@ if __name__ == '__main__':
         '005176': 3/100,
         '013074': 3/100,
         }
-    fundcode = '013074'
+    fundcode = '005176'
     peak_trough_detect_table(fundcode, min_chg_map[fundcode], drange=720, make_plot=True)
