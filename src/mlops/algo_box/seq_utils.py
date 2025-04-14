@@ -994,15 +994,15 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     peak2curr_percentile = round(1 - abs(lastPeak2curr_yield) / phase_return_avg, 4)
 
     # 判断当前是处于“回撤修复、或收益回撤”阶段
-    current_stage = peak_trough_detecter.get_current_stage()
+    current_stage, curr_return_name = peak_trough_detecter.get_current_stage()
     logging.warning(f'基金 {fundcode} 当前处于: 【{current_stage}】阶段!')
 
     # NOTE: 对于债券基金来说，因为走势整体基本是向上的，因此，阶段回撤修复收益占历史阶段收益的百分位数可能经常出现 0% 的情况
     # 因此，阶段收益百分位数指标可能不适合分析债券基金
     if current_stage == 'peak':
-        logging.warning(f'当前【回撤修复】的累计收益: {lastTough2curr_yield:0.4f}，收益百分位数: {trough2curr_percentile * 100}%; 后续潜在[回撤范围]: {potential_trough_range}')
+        logging.warning(f'当前【回撤修复】的 {curr_return_name} 累计收益: {lastTough2curr_yield:0.4f}，收益百分位数: {trough2curr_percentile * 100}%; 后续潜在[回撤范围]: {potential_trough_range}')
     else:
-        logging.warning(f'当前【最高收益】的累计回撤: {lastPeak2curr_yield:0.4f}，历史百分位数: {peak2curr_percentile * 100}%; 后续潜在[收益范围]: {potential_peak_range}')
+        logging.warning(f'当前【最高收益】的 {curr_return_name} 累计回撤: {lastPeak2curr_yield:0.4f}，历史百分位数: {peak2curr_percentile * 100}%; 后续潜在[收益范围]: {potential_peak_range}')
 
 
 # %%
