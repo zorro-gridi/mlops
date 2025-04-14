@@ -907,6 +907,7 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     logging.warning(f'---------> 基金 {fundcode} 的净值回撤点、与收益点记录:')
     print(reverse_points)
 
+    db_session.run_ddl(f'delete from fund.fund_trough_peak_point_record where fundcode = "{fundcode}"')
     db_session.data_load(
         df=reverse_points,
         schema='fund',
@@ -951,6 +952,7 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     logging.warning(f'基金 {fundcode} 的净值回撤 Trough 点、与最高 Peak 点的区间收益统计:')
     print(detect_table)
 
+    db_session.run_ddl(f'delete from fund.fund_trough_peak_phase_return_stats where fundcode = "{fundcode}"')
     db_session.data_load(
         df=detect_table,
         schema='fund',
