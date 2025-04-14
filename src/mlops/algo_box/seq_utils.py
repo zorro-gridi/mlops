@@ -807,7 +807,7 @@ class Peak_and_Trough_Detecter:
             2. 使用收益上下波动的区间范围
         Return:
             1. trou_peak_pnum: 序列的“收益点、与回撤点”的总数
-            2. phase_return_avg: 收益点、回撤点之间的上下波动的平均收益率
+            2. phase_return_avg: 收益点、回撤点之间的上下波动的平均收益率; 注意，这个收益率加了绝对值
         '''
         reverse_points = self.format_reverse_point()
         trou_peak_pnum = len(reverse_points)
