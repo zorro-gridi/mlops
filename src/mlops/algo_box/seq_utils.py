@@ -1005,5 +1005,5 @@ if __name__ == '__main__':
         '005176': 3/100,
         '013074': 3/100,
         }
-    fundcode = '008798'
+    fundcode = '013074'
     peak_trough_detect_table(fundcode, min_chg_map[fundcode], drange=720, make_plot=True)
