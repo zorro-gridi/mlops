@@ -808,7 +808,6 @@ class Peak_and_Trough_Detecter:
         return trou_peak_pnum, phase_return_avg
 
 
-
 def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     '''
     Desc:
@@ -1005,5 +1004,5 @@ if __name__ == '__main__':
         '005176': 3/100,
         '013074': 3/100,
         }
-    fundcode = '013074'
+    fundcode = '008798'
     peak_trough_detect_table(fundcode, min_chg_map[fundcode], drange=720, make_plot=True)
