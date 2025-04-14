@@ -803,6 +803,7 @@ class Peak_and_Trough_Detecter:
         '''
         reverse_points = self.format_reverse_point()
         trou_peak_pnum = len(reverse_points)
+        # TODO: 这里可以考虑回撤修复收益、与顶点回撤损失分开计算
         phase_return_req = sorted(reverse_points['phase_return'].tolist())[exclude_num:-exclude_num]
         phase_return_avg = round(np.abs(phase_return_req).mean(), 3)
         return trou_peak_pnum, phase_return_avg
