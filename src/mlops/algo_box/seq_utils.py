@@ -732,7 +732,7 @@ class Peak_and_Trough_Detecter:
         '''
         Desc:
             规整序列的 reverse_point, 同于统计各阶段回撤点到收益点、或收益点到回撤点的区间收益
-        #TODO: Usage:
+        # TODO: Usage:
             1. 利用该回撤与收益点序列，可以分析序列的波动幅度情况，用于选取定投佳品！
             2. 利用回撤、与收益之间的连续关系，分析在收益一波后的潜在回撤，与回撤后的潜在收益分析，用于定投抄底、与逃顶!
         '''
@@ -758,11 +758,19 @@ class Peak_and_Trough_Detecter:
         '''
         Desc:
             返回序列最新的点状态: 1. 回撤修复(上涨阶段); 2. 收益回撤(下跌阶段）
+        Return:
+            current_state: 当前的点位状态
+            current_state_return_name: 当前状态的累计收益
         '''
         reverse_points = self.format_reverse_point()
         current_state = reverse_points['type'].iloc[-1]
         # 达到顶点，意味着下跌；达到低点，意味着上涨
-        return current_state
+        current_state_return_map = {
+            'peak': 'lastTrough2curr',
+            'trough': 'lastPeak2curr',
+            }
+        current_state_return_name = current_state_return_map[current_state]
+        return current_state, current_state_return_name
 
     def peak2trough_analysis(self):
         '''
@@ -995,7 +1003,6 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
         logging.warning(f'当前【回撤修复】的累计收益: {lastTough2curr_yield:0.4f}，收益百分位数: {trough2curr_percentile * 100}%; 后续潜在[回撤范围]: {potential_trough_range}')
     else:
         logging.warning(f'当前【最高收益】的累计回撤: {lastPeak2curr_yield:0.4f}，历史百分位数: {peak2curr_percentile * 100}%; 后续潜在[收益范围]: {potential_peak_range}')
-
 
 
 # %%
