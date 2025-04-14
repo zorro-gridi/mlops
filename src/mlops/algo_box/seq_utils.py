@@ -161,7 +161,7 @@ class Peak_and_Trough_Detecter:
 
         ax.plot(np.arange(len(self.Ei)), self.Ei)
         ax.plot(np.arange(len(self.Ei)), [self.Ei[-1]] * len(self.Ei), ls='--')
-        ax.scatter(len(self.Ei), self.Ei[-1], c='blue')
+        ax.scatter(len(self.Ei), self.Ei[-1], c='blue', s=15)
         for i, point in enumerate(self.reverse_points):
         # for unit-test
         # for i, point in enumerate(self.gain_down_list):
@@ -171,7 +171,7 @@ class Peak_and_Trough_Detecter:
             else:
                 color = 'g'
                 label = 'trough' if i <= 1 else None
-            ax.scatter(point['indx'], point['sum_chg'], c=color, label=label)
+            ax.scatter(point['indx'], point['sum_chg'], c=color, label=label, s=15)
 
         plt.xlabel('time tick')
         plt.ylabel(f'YTD Return')
@@ -290,11 +290,11 @@ class Peak_and_Trough_Detecter:
     def find_the_top_point(self, point_list):
         '''
         Desc:
-            寻找每个最大回撤、收益批次里面的top点
+            寻找每个最大回撤、收益批次里面的 top 点
         Args:
             point_list: 最大回撤、或最高收益批次点
         Return:
-            top_point: 批次中的最大的一个回撤或收益点
+            top_point: 批次中最大的一个回撤、或收益点
         '''
         top_point = None
         point_type = point_list[0]['type']
@@ -312,6 +312,7 @@ class Peak_and_Trough_Detecter:
                     top_point_chg = point['sum_chg']
                     top_point = point
 
+        logging.warning(f'find_the_top_point result: {top_point}')
         return top_point
 
 
@@ -321,37 +322,28 @@ class Peak_and_Trough_Detecter:
             获取每一个批次的最大收益、回撤点
         Args:
             gain_down_list: 序列的初始检测的收益点和回撤点(未去重)
-            reverse_indxs: find_batch_point_indx() 方法返回的索引号列表
         Return:
-            reverse_points: 过滤后的有效最大回撤、最大收益点记录列表
+            top_point: 过滤后的有效最大回撤、最大收益点记录列表
         '''
         if len(gain_down_list) == 1:
-            logging.warning(f'-------> gain_down_list 只有 1 条回撤、或收益点记录, 直接返回')
-            return gain_down_list
+            logging.warning(f'-------> gain_down_list 只有 1 条回撤、或收益点记录: {gain_down_list[0]}, 直接返回')
+            top_point = gain_down_list[0]
+            self.reverse_indxs = top_point['indx']
+        else:
+            reverse_indxs = self.find_batch_point_indx(gain_down_list)
+            self.reverse_indxs = reverse_indxs
 
-        reverse_indxs = self.find_batch_point_indx(gain_down_list)
-        self.reverse_indxs = reverse_indxs
-        # self.reverse_points = []
+            # version2: 为保证准确性，一次提取一个
+            s_indx = reverse_indxs[0]
+            e_indx = reverse_indxs[1]
+            patch_phase = gain_down_list[s_indx:e_indx]
+            top_point = self.find_the_top_point(patch_phase)
 
-        # # version1: 一次性提取完
-        # for i in range(1, len(reverse_indxs)):
-        #     s_indx = reverse_indxs[i-1]
-        #     e_indx = reverse_indxs[i]
-        #     patch_phase = gain_down_list[s_indx:e_indx]
-        #     if len(patch_phase) == 0:
-        #         continue
-        #     top_point = self.find_the_top_point(patch_phase)
-        #     self.reverse_points.append(top_point)
-
-        # version2: 为保证准确性，一次提取一个
-        s_indx = reverse_indxs[0]
-        e_indx = reverse_indxs[1]
-        patch_phase = gain_down_list[s_indx:e_indx]
-        top_point = self.find_the_top_point(patch_phase)
+        # 定位当前 point_type 的索引号
         top_point['indx'] += self.last_top_point['indx']
+        # 获取当前 point_type 从起始点的累计收益
         top_point['sum_chg'] = self.Ei[top_point['indx']]
         self.reverse_points.append(top_point)
-        print(f'-------------> test: {top_point}')
         self.last_top_point = top_point
         return top_point
 
@@ -757,7 +749,7 @@ class Peak_and_Trough_Detecter:
         reverse_points['phase_return'] = (reverse_points['to_point_schg'] - reverse_points['sum_chg']).round(3)
         # 计算回撤后修复、回收益点回撤后的收益统计
         reverse_points['phase_return_repair'] = reverse_points['phase_return'].shift(-1).round(3)
-        # return_rho 验证回撤损失、与上涨收益之间的比例关系：
+        # NOTE: return_rho 验证回撤损失、与上涨收益之间的比例关系：即是否跌的多，反弹的也高
         # NOTE: 分析是否是涨的多，跌的就多；反之，类似
         reverse_points['return_rho'] = (reverse_points['phase_return_repair'] / reverse_points['phase_return']).abs().round(2)
         return reverse_points
@@ -770,12 +762,7 @@ class Peak_and_Trough_Detecter:
         reverse_points = self.format_reverse_point()
         current_state = reverse_points['type'].iloc[-1]
         # 达到顶点，意味着下跌；达到低点，意味着上涨
-        type_point_map = {
-            'trough': 'peak',
-            'peak': 'trough',
-            }
-        return type_point_map[current_state]
-
+        return current_state
 
     def peak2trough_analysis(self):
         '''
@@ -804,7 +791,7 @@ class Peak_and_Trough_Detecter:
     def volatility_analysis(self, exclude_num=3):
         '''
         Desc:
-            基于“回撤、收益”震荡的波动性分析，用于选择定投标的；同时，也可以作为定投组合分析的指标参考
+            基于“回撤、收益”上下震荡的波动性分析，用于选择定投标的；同时，也可以作为定投组合分析的指标参考
         Args:
             exclude_num: 剔除序列中，首、尾极值的个数，用于避免极值对平均数据的影响
         Method:
@@ -812,7 +799,7 @@ class Peak_and_Trough_Detecter:
             2. 使用收益上下波动的区间范围
         Return:
             1. trou_peak_pnum: 序列的“收益点、与回撤点”的总数
-            2. phase_return_avg: 收益点、回撤点之间的上下波动平均收益
+            2. phase_return_avg: 收益点、回撤点之间的上下波动的平均收益率
         '''
         reverse_points = self.format_reverse_point()
         trou_peak_pnum = len(reverse_points)
@@ -906,12 +893,20 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     # NOTE: 含 point_type：【阶段】盈利点检测
     # NOTE: 返回反转点的索引点，可根据获取对应的日期（该表可以回答任意两个回撤、收益区间的收益统计）
     reverse_points = peak_trough_detecter.format_reverse_point()
+    reverse_points['fundcode'] = fundcode
+    reverse_points['min_chg'] = min_chg
+    reverse_points['drange'] = drange
     logging.warning(f'---------> 基金 {fundcode} 的净值回撤点、与收益点记录:')
     print(reverse_points)
 
-    # 判断当前是处于“回撤修复、或收益回撤”阶段
-    current_stage = peak_trough_detecter.get_current_stage()
-    logging.warning(f'---------> 基金 {fundcode} 当前处于: 【{current_stage}】阶段!')
+    db_session.data_load(
+        df=reverse_points,
+        schema='fund',
+        table_name='fund_trough_peak_point_record',
+        primary_key='indx, fundcode',
+        operation='append',
+        verbose=1,
+        )
 
     # NOTE: 回撤点、到收益点的区间收益统计分析
     trough2peak_returns = peak_trough_detecter.trough2peak_analysis()
@@ -925,7 +920,7 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
 
     # NOTE: 基于“回撤、收益”点的序列波动性分析
     trou_peak_pnum, phase_return_avg = peak_trough_detecter.volatility_analysis()
-    print(f'序列的回撤点、与收益点个数: {trou_peak_pnum}, 区间平均波动: {phase_return_avg}')
+    logging.warning(f'序列的回撤点、与收益点个数（即收益上下振荡次数）: {trou_peak_pnum}, 区间平均波动: {phase_return_avg}')
 
     # 整合“回撤点、收益点波动转换”的收益统计表
     detect_table = pd.DataFrame(detect_results)
@@ -939,15 +934,25 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
 
     detect_table['phase_er'] = [
         round(np.power(1+y, 1 / (d/365)) - 1, 4)
+        if d > 0 else y
         for y, d in zip(detect_table['max_return'], detect_table['calender_days'])
         ]
 
     # 通过分析得出结论：牛短熊长！！！
     detect_table['etldate'] = time.strftime('%Y-%m-%d')
-    logging.warning(f'---------> 基金 {fundcode} 的净值回撤Trough点、与最高Peak点的区间收益统计:')
+    logging.warning(f'基金 {fundcode} 的净值回撤 Trough 点、与最高 Peak 点的区间收益统计:')
     print(detect_table)
 
-    # NOTE: 分析当前的回撤、或收益在历史回撤、收益中的分为数
+    db_session.data_load(
+        df=detect_table,
+        schema='fund',
+        table_name='fund_trough_peak_phase_return_stats',
+        primary_key='fundcode, return_type',
+        operation='append',
+        verbose=1,
+        )
+
+    # NOTE: 分析当前【回撤修复收益】的百分位数
     lastTough2curr_yield = detect_table.loc[detect_table['return_type'] == 'lastTrough2curr', 'max_return'].max()
     # 统计（trough2peak_returns）当前【累计收益情况】下，后续的【潜在回撤范围】，取当前累计收益的 0.75 ～ 1.25 的范围
     potential_trough_scope = (
@@ -955,16 +960,17 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
         (trough2peak_returns['phase_return'] <= lastTough2curr_yield * 1.25)
         )
     trough2peak_returns_scope = trough2peak_returns.loc[potential_trough_scope, 'phase_return_repair'].copy()
-    # 最小、最大潜在回撤 (因为回撤是负值)（当极值为 nan 时，表示收益可能才刚刚开始）
+    # NOTE: 最小、最大潜在回撤 (因为回撤是负值)（当极值为 nan 时，表示收益可能才刚刚开始）
     min_p_trough = trough2peak_returns_scope.max()
     max_p_trough = trough2peak_returns_scope.min()
     potential_trough_range = (min_p_trough, max_p_trough)
     # 统计当前累计收益的历史分位数
-    trough2curr_percentile = utils.calculate_quantile(lastTough2curr_yield, trough2peak_returns['phase_return'])
-    print(f'当前【回撤修复】的累计收益: {lastTough2curr_yield:0.4f}，历史百分位数: {trough2curr_percentile * 100}%; 后续潜在[回撤范围]: {potential_trough_range}')
+    # trough2curr_percentile = utils.calculate_quantile(lastTough2curr_yield, trough2peak_returns['phase_return'].tolist())
+    trough2curr_percentile = round(lastTough2curr_yield / phase_return_avg, 4)
 
+    # NOTE: 分析当前【高点回撤损失】的百分位数
     lastPeak2curr_yield = detect_table.loc[detect_table['return_type'] == 'lastPeak2curr', 'max_return'].max()
-    # 统计 （peak2trough_returns）当前【累计回撤情况】下，后续的【潜在收益范围】，取当前累计回撤的 0.75 ～ 1.25 的范围
+    # 统计（peak2trough_returns）当前【累计回撤情况】下，后续的【潜在收益范围】，取当前累计回撤的 0.75 ～ 1.25 的范围
     potential_peak_scope = (
         (peak2trough_returns['phase_return'] >= lastPeak2curr_yield * 0.75) &
         (peak2trough_returns['phase_return'] <= lastPeak2curr_yield * 1.25)
@@ -975,9 +981,20 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     max_p_peak = peak2trough_returns_scope.max()
     potential_peak_range = (min_p_peak, max_p_peak)
 
-    # 因为回撤是负值，所以分位数位 1 - percentile
-    peak2curr_percentile = round(1 - utils.calculate_quantile(lastPeak2curr_yield, peak2trough_returns['phase_return']), 2)
-    print(f'当前【最高收益】的累计回撤: {lastPeak2curr_yield:0.4f}，历史百分位数: {peak2curr_percentile * 100}%; 后续潜在[收益范围]: {potential_peak_range}')
+    # 因为回撤是负值，所以分位数位为： 1 - percentile
+    # peak2curr_percentile = round(1 - utils.calculate_quantile(lastPeak2curr_yield, peak2trough_returns['phase_return'].tolist()), 4)
+    peak2curr_percentile = round(1 - abs(lastPeak2curr_yield) / phase_return_avg, 4)
+
+    # 判断当前是处于“回撤修复、或收益回撤”阶段
+    current_stage = peak_trough_detecter.get_current_stage()
+    logging.warning(f'基金 {fundcode} 当前处于: 【{current_stage}】阶段!')
+
+    # NOTE: 对于债券基金来说，因为走势整体基本是向上的，因此，阶段回撤修复收益的占历史阶段收益的百分位数可能经常出现 0% 的情况
+    # 因此，阶段收益百分位数指标可能不适合分析债券基金
+    if current_stage == 'peak':
+        logging.warning(f'当前【回撤修复】的累计收益: {lastTough2curr_yield:0.4f}，收益百分位数: {trough2curr_percentile * 100}%; 后续潜在[回撤范围]: {potential_trough_range}')
+    else:
+        logging.warning(f'当前【最高收益】的累计回撤: {lastPeak2curr_yield:0.4f}，历史百分位数: {peak2curr_percentile * 100}%; 后续潜在[收益范围]: {potential_peak_range}')
 
 
 
@@ -988,5 +1005,5 @@ if __name__ == '__main__':
         '005176': 3/100,
         '013074': 3/100,
         }
-    fundcode = '005176'
+    fundcode = '013074'
     peak_trough_detect_table(fundcode, min_chg_map[fundcode], drange=720, make_plot=True)
