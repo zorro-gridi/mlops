@@ -124,11 +124,13 @@ class Peak_and_Trough_Detecter:
             logging.warning(f'-------> Invalid args value! Args "end_point" Params Options: {end_point_options}')
             raise Exception
 
+        # start_idx 迭代获取每一阶段的回撤、收益点
         while True:
             try:
                 gain_down_list = self.cal_sequence_peak_and_trough_point(sequence, start_idx=self.last_top_point['indx'])
                 self.gain_down_list = gain_down_list
-                self.get_batch_top_point(gain_down_list)
+                top_point = self.get_batch_top_point(gain_down_list)
+                logging.warning(f'---------> loop top_point: {top_point}')
             except:
                 logging.warning(f'----------> gain_down_list 循环完成..., 准备作图')
                 break
@@ -161,15 +163,18 @@ class Peak_and_Trough_Detecter:
         ax.plot(np.arange(len(self.Ei)), self.Ei)
         ax.plot(np.arange(len(self.Ei)), [self.Ei[-1]] * len(self.Ei), ls='--')
         ax.scatter(len(self.Ei), self.Ei[-1], c='blue', s=15)
+
         for i, point in enumerate(self.reverse_points):
         # for unit-test
         # for i, point in enumerate(self.gain_down_list):
             if point['type'] == 'peak':
                 color = 'r'
+                # NOTE: <= 1 是因为 2 条记录，刚好是一个 peak/trough 周期。不限定的话，会导致 lengend 很多重复的 label
                 label = 'peak' if i <= 1 else None
             else:
                 color = 'g'
                 label = 'trough' if i <= 1 else None
+
             ax.scatter(point['indx'], point['sum_chg'], c=color, label=label, s=15)
 
         plt.xlabel('time tick')
@@ -207,6 +212,8 @@ class Peak_and_Trough_Detecter:
         is_trough_reverse = False
 
         last_point_type = None
+        last_point_sum_chg = None
+
         phase_peak, phase_trough = 0, 0
 
         for j, (diff_j, sum_chg_j) in enumerate(zip(Ei_diff, Ei[1:])):
@@ -216,13 +223,17 @@ class Peak_and_Trough_Detecter:
                     sum_chg_j - Ei_trough >= self.min_chg and not is_peak_reverse,
                     sum_chg_j - phase_trough >= self.min_chg,
                     ]):
+
                     Ei_peak = sum_chg_j
+
                     gain_down_list.append({'indx': j+1, 'type': 'peak', 'sum_chg': Ei_peak})
+                    last_point_sum_chg = Ei_peak
 
                     # 始终保持阶段的收益点为局部最大值，而Ei_peak需要迭代更新，目的是判断趋势是否持续上涨，从而判断 peak 反转点
                     if Ei_peak > phase_peak:
                         phase_peak = Ei_peak
 
+                    # NOTE: 上一个点位的类型
                     if last_point_type and last_point_type != 'peak':
                         is_trough_reverse = True
                         # 下跌趋势被反转，进入上涨通道，所以应该重新定义收益的基点。phase_peak 目的的是定义新基点
@@ -237,6 +248,7 @@ class Peak_and_Trough_Detecter:
                     ]):
                     Ei_trough = sum_chg_j
                     gain_down_list.append({'indx': j+1, 'type': 'trough', 'sum_chg': Ei_trough})
+                    last_point_sum_chg = Ei_trough
 
                     # 始终保持阶段的回撤点为局部最小值，而 Ei_trough 需要迭代更新，目的是判断下跌趋势是否持续，从而判断 trough 反转点
                     if Ei_trough < phase_trough:
@@ -251,7 +263,6 @@ class Peak_and_Trough_Detecter:
             if gain_down_list:
                 last_point_type = gain_down_list[-1]['type']
 
-
         if len(gain_down_list) == 0:
             logging.warning(f'-------> 回撤、收益点列表返回为空!!! 请缩小统计阶段回撤、或收益的阈值参数"min_chg", 适当调小')
             raise Exception
@@ -265,7 +276,7 @@ class Peak_and_Trough_Detecter:
     def find_batch_point_indx(self, gain_down_list):
         '''
         Desc:
-            将peak、trough点batch批次化, 用于后续计算每个批次的最大收益、回撤点
+            将peak、trough 点 batch 批次化, 用于后续计算每个批次的最大收益、回撤点
         Args:
             gain_down_list: 回撤点和收益点的信息列表
         Return:
@@ -281,6 +292,7 @@ class Peak_and_Trough_Detecter:
             return [0, len(gain_down_list)]
 
         # TODO: 第1批、和最后1批的 point_type 批次在循环中没有加入
+        # 因为后面要分段，分别取每一段的最高，最低点，所以必须添加首尾的索引号
         reverse_indxs.insert(0, 0)
         reverse_indxs.append(len(gain_down_list))
         return reverse_indxs
@@ -289,7 +301,7 @@ class Peak_and_Trough_Detecter:
     def find_the_top_point(self, point_list):
         '''
         Desc:
-            寻找每个最大回撤、收益批次里面的 top 点
+            寻找每个阶段最大回撤、收益批次里面的 top 点
         Args:
             point_list: 最大回撤、或最高收益批次点
         Return:
@@ -310,15 +322,13 @@ class Peak_and_Trough_Detecter:
                 if point['sum_chg'] < top_point_chg:
                     top_point_chg = point['sum_chg']
                     top_point = point
-
-        logging.warning(f'find_the_top_point result: {top_point}')
         return top_point
 
 
     def get_batch_top_point(self, gain_down_list):
         '''
         Desc:
-            获取每一个批次的最大收益、回撤点
+            获取每一个批次的最大收益点、与回撤点
         Args:
             gain_down_list: 序列的初始检测的收益点和回撤点(未去重)
         Return:
@@ -342,6 +352,20 @@ class Peak_and_Trough_Detecter:
         top_point['indx'] += self.last_top_point['indx']
         # 获取当前 point_type 从起始点的累计收益
         top_point['sum_chg'] = self.Ei[top_point['indx']]
+
+        # 2025-04-16 新增：修复在迭代阶段的回撤、收益点时，如果前后两个点相同，清除相同点的情况。特别是在初始化开始时，因为只有一种 point 点，容易重复
+        curr_point_type = top_point['type']
+        curr_point_schg = top_point['sum_chg']
+
+        if self.reverse_points:
+            if all([
+                # 记录的 reverse_points 的最后一个 point_type 与当前区间获取的 curr_point_type 相同
+                self.reverse_points[-1]['type'] == curr_point_type,
+                # 如果当前的 top_point 记录的累计收益率点位更低，则删除之前的记录
+                abs(curr_point_schg) >= abs(self.reverse_points[-1]['sum_chg'])
+                ]):
+                self.reverse_points.pop()
+
         self.reverse_points.append(top_point)
         self.last_top_point = top_point
         return top_point
