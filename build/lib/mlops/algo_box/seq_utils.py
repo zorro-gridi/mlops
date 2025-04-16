@@ -1,4 +1,13 @@
 # %%
+import os
+import sys
+from pathlib import Path
+home_dir = Path(os.path.expanduser('~'))
+current_dir = Path(__file__).parent.resolve()
+sys.path.insert(0, current_dir.as_posix())
+
+import utils
+
 import numpy as np
 from sklearn.cluster import KMeans
 import logging
@@ -8,17 +17,7 @@ import time
 
 import matplotlib.pyplot as plt
 from pprint import pprint
-
-import utils
 import numpy as np
-
-import os
-import sys
-from pathlib import Path
-
-home_dir = Path(os.path.expanduser('~'))
-proj_path = (home_dir / 'project/pycharm').as_posix()
-sys.path.append(proj_path)
 
 from tools.DB_Client import DB_Client
 
@@ -537,7 +536,7 @@ class Peak_and_Trough_Detecter:
                 if s2trough_loss > 0:
                     logging.warning(f'-------> 从起始点以来, 最大回撤大于0, 因此, 阶段最大回撤替代')
                     logging.warning(f'-------> 最大回撤: {s2trough_loss}, 持续 {top_trough_indx} 个交易日')
-                    return self.get_phase_max_return_or_loss(reverse_points_data, point_type=point_type)
+                    return self.get_phase_max_return_or_loss(point_type=point_type)
                 else:
                     logging.warning(f'-------> 从【起始点】开始计算【最大回撤】')
                     logging.warning(f'-------> 最大回撤: {s2trough_loss}, 持续 {top_trough_indx} 个交易日')
@@ -807,7 +806,7 @@ class Peak_and_Trough_Detecter:
             2. 使用收益上下波动的区间范围
         Return:
             1. trou_peak_pnum: 序列的“收益点、与回撤点”的总数
-            2. phase_return_avg: 收益点、回撤点之间的上下波动的平均收益率
+            2. phase_return_avg: 收益点、回撤点之间的上下波动的平均收益率; 注意，这个收益率加了绝对值
         '''
         reverse_points = self.format_reverse_point()
         trou_peak_pnum = len(reverse_points)
@@ -977,7 +976,7 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     potential_trough_range = (min_p_trough, max_p_trough)
     # 统计当前累计收益的历史分位数
     # trough2curr_percentile = utils.calculate_quantile(lastTough2curr_yield, trough2peak_returns['phase_return'].tolist())
-    trough2curr_percentile = round(lastTough2curr_yield / phase_return_avg, 4)
+    trough2curr_percentile = round(lastTough2curr_yield / phase_return_avg * 100, 2)
 
     # NOTE: 分析当前【高点回撤损失】的百分位数
     lastPeak2curr_yield = detect_table.loc[detect_table['return_type'] == 'lastPeak2curr', 'max_return'].max()
@@ -994,7 +993,7 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
 
     # 因为回撤是负值，所以分位数位为： 1 - percentile
     # peak2curr_percentile = round(1 - utils.calculate_quantile(lastPeak2curr_yield, peak2trough_returns['phase_return'].tolist()), 4)
-    peak2curr_percentile = round(1 - abs(lastPeak2curr_yield) / phase_return_avg, 4)
+    peak2curr_percentile = round(1 - abs(lastPeak2curr_yield) / phase_return_avg * 100, 2)
 
     # 判断当前是处于“回撤修复、或收益回撤”阶段
     current_stage, curr_return_name = peak_trough_detecter.get_current_stage()
@@ -1003,9 +1002,12 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     # NOTE: 对于债券基金来说，因为走势整体基本是向上的，因此，阶段回撤修复收益占历史阶段收益的百分位数可能经常出现 0% 的情况
     # 因此，阶段收益百分位数指标可能不适合分析债券基金
     if current_stage == 'peak':
-        logging.warning(f'当前【回撤修复】的 {curr_return_name} 累计收益: {lastTough2curr_yield:0.4f}，收益百分位数: {trough2curr_percentile * 100}%; 后续潜在[回撤范围]: {potential_trough_range}')
+        logging.warning(f'当前【回撤修复】的 {curr_return_name} 累计收益: {lastTough2curr_yield:0.4f}，收益百分位数: {trough2curr_percentile}%; 后续潜在[回撤范围]: {potential_trough_range}')
     else:
-        logging.warning(f'当前【最高收益】的 {curr_return_name} 累计回撤: {lastPeak2curr_yield:0.4f}，历史百分位数: {peak2curr_percentile * 100}%; 后续潜在[收益范围]: {potential_peak_range}')
+        logging.warning(f'当前【最高收益】的 {curr_return_name} 累计回撤: {lastPeak2curr_yield:0.4f}，历史百分位数: {peak2curr_percentile}%; 后续潜在[收益范围]: {potential_peak_range}')
+
+
+
 
 
 # %%
@@ -1014,6 +1016,8 @@ if __name__ == '__main__':
         '008798': 1/100,
         '005176': 3/100,
         '013074': 3/100,
+        '010573': 3/100,
+        '001230': 3/100,
         }
-    fundcode = '005176'
+    fundcode = '001230'
     peak_trough_detect_table(fundcode, min_chg_map[fundcode], drange=720, make_plot=True)

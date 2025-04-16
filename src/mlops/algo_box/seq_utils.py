@@ -1,4 +1,13 @@
 # %%
+import os
+import sys
+from pathlib import Path
+home_dir = Path(os.path.expanduser('~'))
+current_dir = Path(__file__).parent.resolve()
+sys.path.insert(0, current_dir.as_posix())
+
+import utils
+
 import numpy as np
 from sklearn.cluster import KMeans
 import logging
@@ -8,17 +17,7 @@ import time
 
 import matplotlib.pyplot as plt
 from pprint import pprint
-
-import utils
 import numpy as np
-
-import os
-import sys
-from pathlib import Path
-
-home_dir = Path(os.path.expanduser('~'))
-proj_path = (home_dir / 'project/pycharm').as_posix()
-sys.path.append(proj_path)
 
 from tools.DB_Client import DB_Client
 
@@ -537,7 +536,7 @@ class Peak_and_Trough_Detecter:
                 if s2trough_loss > 0:
                     logging.warning(f'-------> 从起始点以来, 最大回撤大于0, 因此, 阶段最大回撤替代')
                     logging.warning(f'-------> 最大回撤: {s2trough_loss}, 持续 {top_trough_indx} 个交易日')
-                    return self.get_phase_max_return_or_loss(reverse_points_data, point_type=point_type)
+                    return self.get_phase_max_return_or_loss(point_type=point_type)
                 else:
                     logging.warning(f'-------> 从【起始点】开始计算【最大回撤】')
                     logging.warning(f'-------> 最大回撤: {s2trough_loss}, 持续 {top_trough_indx} 个交易日')
@@ -930,6 +929,23 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
 
     # NOTE: 基于“回撤、收益”点的序列波动性分析
     trou_peak_pnum, phase_return_avg = peak_trough_detecter.volatility_analysis(exclude_num=1)
+    fundcode_vibration_and_phase_return_info = pd.DataFrame([{
+        'trou_peak_pnum': trou_peak_pnum,
+        'phase_return_avg': phase_return_avg,
+        'drange': drange,
+        'fundcode': fundcode,
+        'etldate': time.strftime('%Y-%m-%d'),
+        }])
+
+    for conn in ['mysql_centos', 'pg_tencent']:
+        db_client = DB_Client(conn)
+        db_client.data_load(
+            df=fundcode_vibration_and_phase_return_info,
+            schema='report',
+            table_name='fundcode_vibration_and_phase_return_info',
+            operation='append',
+            primary_key='fundcode',
+            )
     logging.warning(f'序列的回撤点、与收益点个数（即收益上下振荡次数）: {trou_peak_pnum}, 区间平均波动: {phase_return_avg}')
 
     # 整合“回撤点、收益点波动转换”的收益统计表
@@ -1017,6 +1033,8 @@ if __name__ == '__main__':
         '008798': 1/100,
         '005176': 3/100,
         '013074': 3/100,
+        '010573': 3/100,
+        '001230': 3/100,
         }
-    fundcode = '005176'
+    fundcode = '001230'
     peak_trough_detect_table(fundcode, min_chg_map[fundcode], drange=720, make_plot=True)
