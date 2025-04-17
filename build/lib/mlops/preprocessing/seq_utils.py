@@ -1,8 +1,9 @@
 import pandas as pd
 import numpy as np
+from typing import Union, List
 
 
-def chunk_series(datas: pd.DataFrame, column='markup', checkpoint=0.1):
+def chunk_series(datas: pd.DataFrame, index: Union[List, str] = 'trade_date', column='markup', checkpoint=0.1):
     '''
     Desc:
         将序列按照涨跌分组切块, data 中必须包含 "markup" 涨跌幅指标
@@ -27,7 +28,7 @@ def chunk_series(datas: pd.DataFrame, column='markup', checkpoint=0.1):
 
     # markup 字段重新赋值
     data[column] = markup_list
-    data[f'last_{column}'] = data.sort_values(by=['trade_date'])[column].shift(1)
+    data[f'last_{column}'] = data.sort_values(by=index)[column].shift(1)
 
     data['is_split_point'] = [
         i if np.sign(x) != np.sign(y) else -1
