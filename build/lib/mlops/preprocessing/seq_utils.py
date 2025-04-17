@@ -48,6 +48,12 @@ def chunk_series(datas: pd.DataFrame, index: Union[List, str] = 'trade_date', co
     vars_data = dict(
         markup_days=[len(d) if sum(d) > 0 else -len(d) for d in markup_chunk_list],
         markup_vol=[sum(d) for d in markup_chunk_list],
+        # 2025-04-17 新增，当前序列块的 下一个序列块中最大的 markup，目的是为了增加最新的信息
+        next_max_vol=[
+            max(np.abs(markup_chunk_list[i+1])) * np.sign(sum(markup_chunk_list[i+1]))
+            if i + 1 < len(markup_chunk_list)
+            else d[-1]
+            for i, d in enumerate(markup_chunk_list)],
         )
     vars_data = pd.DataFrame(vars_data)
 
