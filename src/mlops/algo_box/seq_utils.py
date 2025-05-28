@@ -22,7 +22,7 @@ from tools.DB_Client import DB_Client
 
 
 
-def phase_series_point(data: Union[pd.Series, list, np.array], start_point, n_clusters=3):
+def phase_series_point(data: Union[pd.Series, list, np.array], start_point: int, n_clusters=3):
     '''
     Desc:
         本函数实现将一段序列聚类为几类关键点位。
@@ -30,10 +30,12 @@ def phase_series_point(data: Union[pd.Series, list, np.array], start_point, n_cl
              0: 熊; 1: 平; 2: 牛 的固定位置关系
     Args:
         data: 需要分段的序列
-        start_point: 序列中需要聚类的点的起始位置。
+        start_point: int
+            序列中需要聚类的点的起始位置。
             这个参数的潜在bug: 如果需要例如近180天的数据，
             对于交易日来说，没有180个，因此导致错位，所以在实际查询数据的时候，需要适当的放宽查询的日期范围
-        n_clusters: phase point 聚类的个数
+        n_clusters: int
+            phase point 聚类的个数
     Return:
         phase_point: 序列中每个点对应的聚类类别
         sorted_label_centers: 经过排序的族类的中心点, 与phase_point匹配
