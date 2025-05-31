@@ -49,7 +49,7 @@ def load_register_model_args(reg_model_name: str, model_version: str, tracking_u
     return hist_model_args
 
 
-def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=True):
+def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=False):
     '''
     Desc:
         获取最优模型的版本号

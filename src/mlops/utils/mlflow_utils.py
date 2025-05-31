@@ -56,7 +56,9 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=Tr
     Args:
         reg_model_name: 模型名称
         eval_metric: 模型的比较指标
-        delete: 是否删除旧模型
+        delete: 是否删除旧模型; 使用方法：
+            1. 训练阶段请设为 False 保证模型库不出错 key 错误，训练最后阶段可以设为 True, 保存最优模型
+            2. 预测阶段也设为 True, 保留最优
     '''
     # mlflow.set_tracking_uri(tracking_uri)
     mlflow_client = MlflowClient(tracking_uri)
@@ -71,14 +73,14 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=Tr
     hist_models_info = mlflow_client.search_model_versions(f"name='{reg_model_name}'")
     if len(hist_models_info) == 0:
         return None
-    logging.warning(f'-------> hist_models_info: {hist_models_info}')
+    logging.warning(f'✅ hist_models_info: {hist_models_info}')
     for idx, mv in enumerate(hist_models_info):
         mv = dict(mv)
         cur_version = mv['version']
         try:
             model_config = load_register_model_args(reg_model_name, cur_version)
         except:
-            logging.warning(f'----------> {reg_model_name} 模型仓库没有找到版本: {cur_version}')
+            logging.warning(f'✅ {reg_model_name} 模型仓库没有找到版本: {cur_version}')
             continue
         # 获取该注册模型的测试评分
         eval_loss = model_config[f'test_{eval_metric}']
@@ -96,15 +98,15 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=Tr
             else:
                 delete_version = cur_version
 
-        # logging.warning(f'-------> best loss: {best_loss}, eval loss: {eval_loss}, best version: {best_version}')
+        # logging.warning(f'✅ best loss: {best_loss}, eval loss: {eval_loss}, best version: {best_version}')
         best_loss = eval_loss
 
         if delete and delete_version:
             try:
                 mlflow_client.delete_model_version(reg_model_name, delete_version)
-                logging.warning(f'---------> reg model name: {reg_model_name}, version: {delete_version} 已删除')
+                logging.warning(f'❌ reg model name: {reg_model_name}, version: {delete_version} 已删除')
             except:
-                logging.warning(f'---------> 历史次优模型 reg model name: {reg_model_name}, version: {delete_version} 已删除')
+                logging.warning(f'❌ 历史次优模型 reg model name: {reg_model_name}, version: {delete_version} 已删除')
 
     logging.warning(f'最优模型的版本号: {best_version}, 评估指标: {eval_metric}: {best_loss}')
     if best_version and best_model_config:
