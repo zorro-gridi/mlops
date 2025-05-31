@@ -99,7 +99,7 @@ def get_best_model_version(reg_model_name, eval_metric, optimize_mode, delete=Tr
         # logging.warning(f'-------> best loss: {best_loss}, eval loss: {eval_loss}, best version: {best_version}')
         best_loss = eval_loss
 
-        if delete:
+        if delete and delete_version:
             try:
                 mlflow_client.delete_model_version(reg_model_name, delete_version)
                 logging.warning(f'---------> reg model name: {reg_model_name}, version: {delete_version} 已删除')
