@@ -391,7 +391,7 @@ class AbstractMLOps(metaclass=ABCMeta):
 
             if model_info is not None:
                 best_model_version = model_info['version']
-                logging.warning(f'---------> save checkpoint pipeline 历史最佳注册模型版本: {best_model_version}')
+                logging.warning(f'✅ save checkpoint pipeline 历史最佳注册模型版本: {best_model_version}')
 
                 try:
                     hist_regis_model = model_frame.load_model(f"models:/{reg_model_name}/{best_model_version}")
@@ -404,7 +404,7 @@ class AbstractMLOps(metaclass=ABCMeta):
                     No_MLflow_Model_Found_Exception,
                     RestException,
                     ]):
-                        logging.warning(f'--------> 数据源切分错误、或者找不到 mlflow 注册模型 ...')
+                        logging.warning(f'❌ 数据源切分错误、或者找不到 mlflow 注册模型 ...')
                         exception_value = {
                             'min': np.inf,
                             'max': -np.inf,
@@ -415,7 +415,7 @@ class AbstractMLOps(metaclass=ABCMeta):
                 hist_sum_loss = hist_training_loss + hist_eval_metric
                 hist_weight_loss = hist_training_loss * 0.2 + hist_eval_metric * 0.8
 
-                # 比较是测试指标
+                # NOTE: 比较测试指标
                 if loss_strategy == 'UNIT':
                     if optimize_mode == 'min':
                         compare_bools_result = -tune_model_metric <= -hist_eval_metric
@@ -511,7 +511,6 @@ class AbstractMLOps(metaclass=ABCMeta):
             mlflow_client.delete_registered_model(reg_model_name)
         except:
             logging.warning(f'------> 应删除的 reg_model_name: {reg_model_name} 版本已被清空, 忽略...')
-            pass
 
         model_info = model_frame.log_model(
             best_model,

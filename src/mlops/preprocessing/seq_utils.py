@@ -31,7 +31,12 @@ def chunk_series(datas: pd.DataFrame, index: Union[List, str] = 'trade_date', co
     data[f'last_{column}'] = data.sort_values(by=index)[column].shift(1)
 
     data['is_split_point'] = [
-        i if np.sign(x) != np.sign(y) else -1
+        # np.sign 有 3 种情况: -1, 0, 1
+        i if all([
+            np.sign(x) != np.sign(y),
+            np.sign(x) != 0,
+            ])
+        else -1
         for i, (x, y) in enumerate(zip(data[column], data[f'last_{column}']))]
 
     markup_list = list(data[column])
