@@ -3,6 +3,27 @@ import numpy as np
 from typing import Union, List
 
 
+def expand_sequence(input_sequence):
+    '''
+    Desc:
+        按照给定的序列，将其中的每一个数计数展开
+    '''
+    result = []
+    for num in input_sequence:
+        if num > 0:
+            # 正数：从1到num的递增序列
+            sub_sequence = list(range(1, num + 1))
+        elif num < 0:
+            # 负数：从-1到num的递减序列
+            sub_sequence = list(range(-1, num - 1, -1))
+        else:
+            # 0的情况（题目未明确，暂不处理）
+            sub_sequence = []
+        result.extend(sub_sequence)
+    return result
+
+
+
 def chunk_series(datas: pd.DataFrame, index: Union[List, str] = 'trade_date', column='markup', checkpoint=0.1):
     '''
     Desc:
