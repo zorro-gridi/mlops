@@ -39,7 +39,7 @@ from mlflow.exceptions import RestException
 # from threading import Lock
 # lock = Lock()
 
-mlflow.set_tracking_uri(f'http://127.0.0.1:9001/')
+mlflow.set_tracking_uri(f'http://192.168.5.7:9001/')
 
 
 class AbstractMLOps(metaclass=ABCMeta):
@@ -64,7 +64,7 @@ class AbstractMLOps(metaclass=ABCMeta):
                 config demo:
                 mlflow_config = {
                     'experiment_name': experiment_name,
-                    'tracking_uri': f'http://127.0.0.1:9001/',
+                    'tracking_uri': f'http://192.168.5.7:9001/',
                     }
         '''
         self.model_task = model_task
