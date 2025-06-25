@@ -126,6 +126,8 @@ class CatboostTask(AbstractModelFactory):
                 2. "walk-forward": 前向步进验证。原理: 每前进一个测试时间步, 保存该步的测试误差，并合并该步的数据到训练集合，重新训练模型。最后，平均计算每一个测试步的平均误差
         Return:
             training checkpoint info dict
+        NOTE:
+            覆盖了默认的 ray tune 接口
         '''
         trials = hyperopt.Trials()
 
