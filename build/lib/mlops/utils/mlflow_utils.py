@@ -21,10 +21,8 @@ def check_model_existence(model_name, tracking_uri=tracking_uri):
         bool
     '''
     # 获取注册的模型的所有版本
-    # mlflow.set_tracking_uri(tracking_uri)
-    mlflow_client = MlflowClient(tracking_uri)
     registered_models = [
-        dict(rm)['name'] for rm in mlflow_client.search_registered_models()]
+        dict(rm)['name'] for rm in mlflow.search_registered_models()]
     return model_name in registered_models
 
 
