@@ -3,6 +3,37 @@ import numpy as np
 from typing import Union, List
 
 
+def recursive_sum(change_sequence, judgment_sequence):
+    '''
+    Desc:
+        实现涨跌幅序列的递归求和
+    Args:
+        change_sequence: 涨跌幅序列
+        judgment_sequence: 涨跌判断序列
+    # 测试用例
+        change_sequence = [-1.1, -1.2, -0.8, -3, 1.0, 0.5, -0.5]
+        judgment_sequence = [-1, -1, -1, -1, 1, 1, -1]
+        print(recursive_sum(change_sequence, judgment_sequence))
+    '''
+    if len(change_sequence) != len(judgment_sequence):
+        raise ValueError("change_sequence 和 judgment_sequence 长度必须相同")
+
+    if not change_sequence:
+        return []
+
+    current_sum = change_sequence[0]
+    result = [current_sum]
+
+    for i in range(1, len(judgment_sequence)):
+        if judgment_sequence[i] == judgment_sequence[i-1]:
+            current_sum += change_sequence[i]
+        else:
+            current_sum = change_sequence[i]
+
+        result.append(round(current_sum, 2))  # 添加最后一个累加值
+    return result
+
+
 def expand_sequence(input_sequence):
     '''
     Desc:
