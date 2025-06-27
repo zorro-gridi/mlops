@@ -76,11 +76,13 @@ class Peak_and_Trough_Detecter:
     Desc:
         分析一段序列的Peak(最高点)和Trough(最低点)
     '''
-    def __init__(self, min_chg) -> None:
+    def __init__(self, min_chg, verbose=1) -> None:
         if min_chg < 0.5 / 100:
-            logging.warning(f'-------> min_chg 设置的太小, min_chg 阈值最小值: {min_chg}')
+            logging.warning(f'❌ min_chg 设置的太小, min_chg 阈值最小值: {min_chg}')
             raise Exception
         self.min_chg = min_chg
+        self.verbose = verbose
+
         self.gain_down_list = None
         self.reverse_indxs = None
         self.Ei = None
@@ -109,12 +111,12 @@ class Peak_and_Trough_Detecter:
             "default", "peak", "trough", "max_peak", "max_trough",
             ]
         if base_point not in base_point_options:
-            logging.warning(f'---------> Invalid args value! Args "base_point" Params Options: {base_point_options}')
+            logging.warning(f'--------> Invalid args value! Args "base_point" Params Options: {base_point_options}')
             raise Exception
 
         end_point_options = ["phase", "current"]
         if end_point not in end_point_options:
-            logging.warning(f'---------> Invalid args value! Args "end_point" Params Options: {end_point_options}')
+            logging.warning(f'--------> Invalid args value! Args "end_point" Params Options: {end_point_options}')
             raise Exception
 
         # start_idx 迭代获取每一阶段的回撤、收益点
@@ -125,15 +127,16 @@ class Peak_and_Trough_Detecter:
                 self.gain_down_list = gain_down_list
                 # NOTE: get_batch_top_point 方法会更新 peak_trough 类的属性
                 top_point = self.get_batch_top_point(gain_down_list)
-                logging.warning(f'---------> loop top_point: {top_point}')
+                if self.verbose:
+                    logging.warning(f'--------> loop top_point: {top_point}')
             except:
-                logging.warning(f'---------> gain_down_list 循环完成..., 准备作图')
+                logging.warning(f'--------> gain_down_list 循环完成..., 准备作图')
                 break
 
         detecter_result = None
         if end_point == 'phase':
             if base_point is None or point_type is None:
-                logging.warning(f'---------> end_point 为 "phase" 的模式下, point_type 和 base_point 参数不能为空！')
+                logging.warning(f'--------> end_point 为 "phase" 的模式下, point_type 和 base_point 参数不能为空！')
                 raise Exception
 
             detecter_result = self.get_max_return_or_loss(point_type=point_type, base_point=base_point)
@@ -922,7 +925,7 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     reverse_points['fundcode'] = fundcode
     reverse_points['min_chg'] = min_chg
     reverse_points['drange'] = drange
-    logging.warning(f'---------> 基金 {fundcode} 的净值回撤点、与收益点记录:')
+    logging.warning(f'--------> 基金 {fundcode} 的净值回撤点、与收益点记录:')
     print(reverse_points)
 
     db_session.run_ddl(f'delete from fund.fund_trough_peak_point_record where fundcode = "{fundcode}"')
