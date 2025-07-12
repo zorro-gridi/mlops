@@ -9,6 +9,7 @@ import time
 import matplotlib.pyplot as plt
 from pprint import pprint
 import numpy as np
+from copy import copy
 
 from tools.DB_Client import DB_Client
 
@@ -158,9 +159,14 @@ class Peak_and_Trough_Detecter:
         fig = plt.figure(figsize=(10, 6))
         ax = fig.add_subplot(1, 1, 1)
 
-        ax.plot(np.arange(len(self.Ei)), self.Ei)
-        ax.plot(np.arange(len(self.Ei)), [self.Ei[-1]] * len(self.Ei), ls='--')
-        ax.scatter(len(self.Ei), self.Ei[-1], c='blue', s=15)
+        # ax.plot(np.arange(len(self.Ei)), self.Ei)
+        # NOTE: 给当前的点着蓝色+虚线点位
+        # ax.scatter(len(self.Ei), self.Ei[-1], c='blue', s=15)
+        # ax.plot(np.arange(len(self.Ei)), [self.Ei[-1]] * len(self.Ei), ls='--')
+
+        ax.plot(np.arange(len(self.Seq)-1), self.Seq[1:])
+        ax.scatter(len(self.Seq) - 1, self.Seq[-1], c='blue', s=15)
+        ax.plot(np.arange(len(self.Seq)-1), [self.Seq[-1]] * (len(self.Seq)-1), ls='--')
 
         for i, point in enumerate(self.reverse_points):
         # for unit-test
@@ -173,7 +179,8 @@ class Peak_and_Trough_Detecter:
                 color = 'g'
                 label = 'trough' if i <= 1 else None
 
-            ax.scatter(point['indx'], point['sum_chg'], c=color, label=label, s=15)
+            # ax.scatter(point['indx'], point['sum_chg'], c=color, label=label, s=15)
+            ax.scatter(point['indx']-1, self.Seq[point['indx']], c=color, label=label, s=15)
 
         plt.xlabel('time tick')
         plt.ylabel(f'YTD Return')
@@ -194,6 +201,7 @@ class Peak_and_Trough_Detecter:
             min_chg: 阶段上涨或下跌的趋势逆转的的阈值
             start_idx: 序列分析的起始点, 默认为 0
         '''
+        self.Seq = copy(sequence)
         self.Ei = np.array(sequence / sequence[0]) - 1
 
         Ei = np.array(sequence[start_idx:] / sequence[start_idx]) - 1
@@ -204,6 +212,7 @@ class Peak_and_Trough_Detecter:
         self.Ei_diff = Ei_diff
 
         Ei_peak, Ei_trough = 0, 0
+        Ei_peak_indx, Ei_trough_indx = 0, 0
         gain_down_list = []
 
         is_peak_reverse = False
@@ -213,6 +222,7 @@ class Peak_and_Trough_Detecter:
         last_point_sum_chg = None
 
         phase_peak, phase_trough = 0, 0
+        phase_peak_indx, phase_trough_indx = 0, 0
 
         for j, (diff_j, sum_chg_j) in enumerate(zip(Ei_diff, Ei[1:])):
             if diff_j > 0:
@@ -220,9 +230,13 @@ class Peak_and_Trough_Detecter:
                     # 1. 当前点位相比前期最低点累计上涨超过 self.min_chg
                     sum_chg_j - Ei_trough >= self.min_chg and not is_peak_reverse,
                     sum_chg_j - phase_trough >= self.min_chg,
+
+                    # self.Seq[j+1] / self.Seq[Ei_trough_indx] - 1 >= self.min_chg and not is_peak_reverse,
+                    # self.Seq[j+1] / self.Seq[phase_trough_indx] - 1 >= self.min_chg,
                     ]):
 
                     Ei_peak = sum_chg_j
+                    Ei_peak_indx = j + 1
 
                     gain_down_list.append({'indx': j+1, 'type': 'peak', 'sum_chg': Ei_peak})
                     last_point_sum_chg = Ei_peak
@@ -231,11 +245,15 @@ class Peak_and_Trough_Detecter:
                     if Ei_peak > phase_peak:
                         phase_peak = Ei_peak
 
+                    if self.Seq[Ei_peak_indx] > self.Seq[phase_peak_indx]:
+                        phase_peak_indx = Ei_peak_indx
+
                     # NOTE: 上一个点位的类型
                     if last_point_type and last_point_type != 'peak':
                         is_trough_reverse = True
                         # 下跌趋势被反转，进入上涨通道，所以应该重新定义收益的基点。phase_peak 目的的是定义新基点
                         phase_peak = sum_chg_j
+                        phase_peak_indx = j + 1
                         is_peak_reverse = False
 
             elif diff_j < 0:
@@ -243,8 +261,12 @@ class Peak_and_Trough_Detecter:
                     # 1. 当前点位相比前期最高点累计下跌超过 self.min_chg
                     sum_chg_j - Ei_peak <= -self.min_chg and not is_trough_reverse,
                     sum_chg_j - phase_peak <= -self.min_chg,
+
+                    # self.Seq[j+1] / self.Seq[Ei_peak_indx] - 1 <= -self.min_chg and not is_trough_reverse,
+                    # self.Seq[j+1] / self.Seq[phase_peak_indx] - 1 <= -self.min_chg,
                     ]):
                     Ei_trough = sum_chg_j
+                    Ei_trough_indx = j + 1
                     gain_down_list.append({'indx': j+1, 'type': 'trough', 'sum_chg': Ei_trough})
                     last_point_sum_chg = Ei_trough
 
@@ -252,10 +274,14 @@ class Peak_and_Trough_Detecter:
                     if Ei_trough < phase_trough:
                         phase_trough = Ei_trough
 
+                    if self.Seq[Ei_trough_indx] < self.Seq[phase_trough_indx]:
+                        phase_trough_indx = Ei_trough_indx
+
                     if last_point_type and last_point_type != 'trough':
                         is_peak_reverse = True
                         # 上涨趋势被反转，进入下跌通道，所以应该重新定义回撤点的基点
                         phase_trough = sum_chg_j
+                        phase_trough_indx = j + 1
                         is_trough_reverse = False
 
             if gain_down_list:
@@ -414,7 +440,12 @@ class Peak_and_Trough_Detecter:
         reverse_points_data_copy['next_indx'] = reverse_points_data_copy['indx'].shift(-1)
         reverse_points_data_copy.dropna(how='any', inplace=True)
 
-        reverse_points_data_copy['diff'] = reverse_points_data_copy['next_sum_chg'] - reverse_points_data_copy['sum_chg']
+        # NOTE: 计算两个不同阶段点之间的收益
+        # reverse_points_data_copy['diff'] = reverse_points_data_copy['next_sum_chg'] - reverse_points_data_copy['sum_chg']
+        reverse_points_data_copy['diff'] = [
+            self.Seq[next_indx] / self.Seq[from_indx] - 1
+            for next_indx, from_indx in zip(reverse_points_data_copy['next_indx'], reverse_points_data_copy['indx'])
+            ]
         reverse_points_data_copy['trade_days'] = reverse_points_data_copy['next_indx'] - reverse_points_data_copy['indx']
 
         if point_type == 'peak':
@@ -502,7 +533,7 @@ class Peak_and_Trough_Detecter:
                 logging.warning(f'-------> 从【起始点】开始计算【最高收益】')
                 logging.warning(f'-------> 最大收益: {s2peak_return}, 持续 {top_peak_indx} 个交易日')
                 detecter_result = {
-                    'max_return': round(s2peak_return, 2),
+                    'max_return': round(s2peak_return, 3),
                     'trade_days': top_peak_indx,
                     'start_indx': 0,
                     'end_indx': int(top_peak_indx),
@@ -537,7 +568,8 @@ class Peak_and_Trough_Detecter:
                 logging.warning(f'-------> 从【最大回撤】开始计算【最高收益】')
                 logging.warning(f'-------> 最大收益: {trough2peak_return}, 持续 {trade_days} 个交易日')
                 detecter_result = {
-                    'max_return': round(trough2peak_return, 2),
+                    # 'max_return': round(trough2peak_return, 2),
+                    'max_return': round(self.Seq[int(top_peak_indx_after_trough)] / self.Seq[int(top_trough_indx)] - 1, 3),
                     'trade_days': trade_days,
                     'start_indx': int(top_trough_indx),
                     'end_indx': int(top_peak_indx_after_trough),
@@ -561,7 +593,7 @@ class Peak_and_Trough_Detecter:
                     logging.warning(f'-------> 从【起始点】开始计算【最大回撤】')
                     logging.warning(f'-------> 最大回撤: {s2trough_loss}, 持续 {top_trough_indx} 个交易日')
                     detecter_result = {
-                        'max_return': round(s2trough_loss, 2),
+                        'max_return': round(s2trough_loss, 3),
                         'trade_days': top_trough_indx,
                         'start_indx': 0,
                         'end_indx': int(top_trough_indx),
@@ -596,7 +628,8 @@ class Peak_and_Trough_Detecter:
                 logging.warning(f'-------> 从【最高点】开始计算【最大回撤】')
                 logging.warning(f'-------> 最大回撤: {peak2trough_loss}, 持续 {loss_days} 个交易日')
                 detecter_result = {
-                    'max_return': round(peak2trough_loss, 2),
+                    # 'max_return': round(peak2trough_loss, 2),
+                    'max_return': round(self.Seq[int(top_trough_indx_after_peak)] / self.Seq[int(top_peak_indx)] - 1, 3),
                     'trade_days': loss_days,
                     'start_indx': int(top_peak_indx),
                     'end_indx': int(top_trough_indx_after_peak),
@@ -632,7 +665,8 @@ class Peak_and_Trough_Detecter:
         start_indx = int(reverse_points_data_f['indx'].max())
         end_indx = len(self.Ei) - 1
         detecter_result = {
-            'max_return': round(point2curr_return, 2),
+            # 'max_return': round(point2curr_return, 2),
+            'max_return': round(self.Seq[end_indx] / self.Seq[start_indx] - 1, 3),
             'trade_days': end_indx - start_indx,
             'start_indx': start_indx,
             'end_indx': end_indx,
@@ -649,6 +683,7 @@ class Peak_and_Trough_Detecter:
                 options: ["peak", "trough"]
         '''
         named_point_cond = reverse_points_data['type'] == point_type
+        # NOTE: 获取 point_type 序列
         named_point_reverse_data = reverse_points_data.loc[named_point_cond].copy()
 
         if len(named_point_reverse_data) == 0:
@@ -663,7 +698,9 @@ class Peak_and_Trough_Detecter:
 
         end_indx = len(self.Ei) - 1
         detecter_result = {
-            'max_return': round(self.Ei[-1] - base_return, 2),
+            # NOTE: 用累计收益相减不稳定，因为 base 基点被固定，而不是相对变化的
+            # 'max_return': round(self.Ei[-1] - base_return, 3),
+            'max_return': round(self.Seq[-1] / self.Seq[start_indx] - 1, 3),
             'trade_days': end_indx - start_indx,
             'start_indx': start_indx,
             'end_indx': end_indx,
@@ -705,7 +742,8 @@ class Peak_and_Trough_Detecter:
 
         end_indx = len(self.Ei) - 1
         detecter_result = {
-            'max_return': round(self.Ei[-1] - base_return, 2),
+            # 'max_return': round(self.Ei[-1] - base_return, 2),
+            'max_return': round(self.Seq[-1] / self.Seq[start_indx] - 1, 3),
             'trade_days': end_indx - start_indx,
             'start_indx': start_indx,
             'end_indx': end_indx,
@@ -1056,6 +1094,7 @@ if __name__ == '__main__':
         '013074': 3/100,
         '010573': 3/100,
         '001230': 3/100,
+        '159636': 3/100,
         }
-    fundcode = '001230'
+    fundcode = '159636'
     peak_trough_detect_table(fundcode, min_chg_map[fundcode], drange=720, make_plot=True)
