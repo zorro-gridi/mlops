@@ -56,6 +56,7 @@ def phase_series_point(data: Union[pd.Series, list, np.array], start_point: int,
 
     # 取每组的最后 1 个点标签作为结果。因为，参照的是近期的整体数据
     k_labels = np.array([eatimator.labels_[-1] for eatimator in eatimator_list])
+    logging.warning(f'✅ 检查序列长度、与标签长度是否相等: {len(len(data) - start_point)} vs {len(k_labels)}')
     assert len(data) - start_point == len(k_labels)
 
     # 获取【原始的】每个聚类族的中心点
