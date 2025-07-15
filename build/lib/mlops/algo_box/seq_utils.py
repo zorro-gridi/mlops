@@ -56,7 +56,7 @@ def phase_series_point(data: Union[pd.Series, list, np.array], start_point: int,
 
     # 取每组的最后 1 个点标签作为结果。因为，参照的是近期的整体数据
     k_labels = np.array([eatimator.labels_[-1] for eatimator in eatimator_list])
-    logging.warning(f'✅ 检查序列长度、与标签长度是否相等: {len(data) - start_point} vs {len(k_labels)}')
+    logging.warning(f'✅ 检查序列长度、与标签长度是否相等: data: {len(data)}, start_point: {start_point}, k_labels: {len(k_labels)}')
     assert len(data) - start_point == len(k_labels)
 
     # 获取【原始的】每个聚类族的中心点
@@ -79,7 +79,7 @@ class Peak_and_Trough_Detecter:
         分析一段序列的Peak(最高点)和Trough(最低点)
     '''
     def __init__(self, min_chg, verbose=1) -> None:
-        if min_chg < 0.5 / 100:
+        if min_chg < 0.1 / 100:
             logging.warning(f'❌ min_chg 设置的太小, min_chg 阈值最小值: {min_chg}')
             raise Exception
         self.min_chg = min_chg
@@ -440,6 +440,7 @@ class Peak_and_Trough_Detecter:
         reverse_points_data_copy['next_sum_chg'] = reverse_points_data_copy['sum_chg'].shift(-1)
         reverse_points_data_copy['next_indx'] = reverse_points_data_copy['indx'].shift(-1)
         reverse_points_data_copy.dropna(how='any', inplace=True)
+        reverse_points_data_copy = reverse_points_data_copy.astype({'next_indx': int, 'indx': int})
 
         # NOTE: 计算两个不同阶段点之间的收益
         # reverse_points_data_copy['diff'] = reverse_points_data_copy['next_sum_chg'] - reverse_points_data_copy['sum_chg']
