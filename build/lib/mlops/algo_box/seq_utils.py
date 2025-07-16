@@ -875,7 +875,12 @@ class Peak_and_Trough_Detecter:
         # TODO: 这里可以考虑回撤修复收益、与顶点回撤损失分开计算
         phase_return_req = sorted(reverse_points['phase_return'].tolist())[exclude_num:-exclude_num]
         phase_return_avg = round(np.abs(phase_return_req).mean(), 3)
-        return trou_peak_pnum, phase_return_avg
+
+        trou_phase_avg = sorted(reverse_points.loc[reverse_points['type'] == 'trough', 'phase_return'].dropna().tolist())
+        trou_phase_avg = round(np.abs(trou_phase_avg).mean(), 3)
+        peak_phase_avg = sorted(reverse_points.loc[reverse_points['type'] == 'peak', 'phase_return'].dropna().tolist())
+        peak_phase_avg = round(np.abs(peak_phase_avg).mean(), 3)
+        return trou_peak_pnum, phase_return_avg, trou_phase_avg, peak_phase_avg
 
 
 def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
@@ -989,10 +994,12 @@ def peak_trough_detect_table(fundcode, min_chg, drange=720, make_plot=False):
     print(peak2trough_returns)
 
     # NOTE: 基于“回撤、收益”点的序列波动性分析
-    trou_peak_pnum, phase_return_avg = peak_trough_detecter.volatility_analysis(exclude_num=1)
+    trou_peak_pnum, phase_return_avg, trou_phase_avg, peak_phase_avg = peak_trough_detecter.volatility_analysis(exclude_num=1)
     fundcode_vibration_and_phase_return_info = pd.DataFrame([{
         'trou_peak_pnum': trou_peak_pnum,
         'phase_return_avg': phase_return_avg,
+        'trou_phase_avg': trou_phase_avg,
+        'peak_phase_avg': peak_phase_avg,
         'drange': drange,
         'fundcode': fundcode,
         'etldate': time.strftime('%Y-%m-%d'),
