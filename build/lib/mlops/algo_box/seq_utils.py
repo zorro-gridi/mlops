@@ -78,7 +78,7 @@ class Peak_and_Trough_Detecter:
     Desc:
         分析一段序列的Peak(最高点)和Trough(最低点)
     '''
-    def __init__(self, min_chg, verbose=1) -> None:
+    def __init__(self, min_chg, verbose=0) -> None:
         if min_chg < 0.1 / 100:
             logging.warning(f'❌ min_chg 设置的太小, min_chg 阈值最小值: {min_chg}')
             raise Exception
@@ -132,7 +132,8 @@ class Peak_and_Trough_Detecter:
                 if self.verbose:
                     logging.warning(f'--------> loop top_point: {top_point}')
             except:
-                logging.warning(f'--------> gain_down_list 循环完成..., 准备作图')
+                if self.verbose:
+                    logging.warning(f'--------> gain_down_list 循环完成..., 准备作图')
                 break
 
         detecter_result = None
@@ -289,7 +290,8 @@ class Peak_and_Trough_Detecter:
                 last_point_type = gain_down_list[-1]['type']
 
         if len(gain_down_list) == 0:
-            logging.warning(f'-------> 回撤、收益点列表返回为空!!! 请缩小统计阶段回撤、或收益的阈值参数"min_chg", 适当调小')
+            if self.verbose:
+                logging.warning(f'-------> 回撤、收益点列表返回为空!!! 请缩小统计阶段回撤、或收益的阈值参数"min_chg", 适当调小')
             raise Exception
 
         # for unit-test
@@ -313,7 +315,8 @@ class Peak_and_Trough_Detecter:
             ]
         if not reverse_indxs:
             unique_point_type = gain_down_list[0]['type']
-            logging.warning(f'-------> gain_down_list 回撤、收益点列表只有 {unique_point_type} 一种极值点')
+            if self.verbose:
+                logging.warning(f'-------> 从起始点轮询，当前点位的 gain_down_list 回撤、收益点列表只有 {unique_point_type} 一种极值点')
             return [0, len(gain_down_list)]
 
         # TODO: 第1批、和最后1批的 point_type 批次在循环中没有加入
@@ -360,7 +363,8 @@ class Peak_and_Trough_Detecter:
             top_point: 过滤后的有效最大回撤、最大收益点记录列表
         '''
         if len(gain_down_list) == 1:
-            logging.warning(f'-------> gain_down_list 只有 1 条回撤、或收益点记录: {gain_down_list[0]}, 直接返回')
+            if self.verbose:
+                logging.warning(f'-------> gain_down_list 只有 1 条回撤、或收益点记录: {gain_down_list[0]}, 直接返回')
             top_point = gain_down_list[0]
             self.reverse_indxs = top_point['indx']
         else:
@@ -468,9 +472,10 @@ class Peak_and_Trough_Detecter:
         else:
             raise Exception
 
-        logging.warning(f'-------> 阶段回撤与收益统计的结果表:')
-        logging.warning(reverse_points_data_copy)
-        logging.warning('\n')
+        if self.verbose:
+            logging.warning(f'-------> 阶段回撤与收益统计的结果表:')
+            logging.warning(reverse_points_data_copy)
+            logging.warning('\n')
 
         max_diff_cond = reverse_points_data_copy['diff'] == max_diff
         max_diff_indx = reverse_points_data_copy.loc[max_diff_cond, 'next_indx'].max()
@@ -532,8 +537,9 @@ class Peak_and_Trough_Detecter:
         if point_type == 'peak':
             # 从起始点开始, 计算最大收益
             if base_point == 'start':
-                logging.warning(f'-------> 从【起始点】开始计算【最高收益】')
-                logging.warning(f'-------> 最大收益: {s2peak_return}, 持续 {top_peak_indx} 个交易日')
+                if self.verbose:
+                    logging.warning(f'-------> 从【起始点】开始计算【最高收益】')
+                    logging.warning(f'-------> 最大收益: {s2peak_return}, 持续 {top_peak_indx} 个交易日')
                 detecter_result = {
                     'max_return': round(s2peak_return, 3),
                     'trade_days': top_peak_indx,
@@ -548,7 +554,8 @@ class Peak_and_Trough_Detecter:
                 after_trough_cond = reverse_points_data['indx'] >= top_trough_indx
                 reverse_points_data_after_trough = reverse_points_data.loc[after_trough_cond, :].copy()
                 if len(reverse_points_data_after_trough) == 1:
-                    logging.warning(f'-------> 该序列第1个点即是最高点, 此后持续下跌, 最高点还未收复!!! 从【最大回撤】-> 【最高收益】的结果为 0')
+                    if self.verbose:
+                        logging.warning(f'-------> 该序列第1个点即是最高点, 此后持续下跌, 最高点还未收复!!! 从【最大回撤】-> 【最高收益】的结果为 0')
                     detecter_result = {
                         'max_return': 0,
                         'trade_days': 0,
@@ -558,7 +565,8 @@ class Peak_and_Trough_Detecter:
                         }
                     return detecter_result
 
-                logging.warning(f'-------> 统计从【最大回撤】-> 【最高收益】的结果表:\n{reverse_points_data_after_trough}')
+                if self.verbose:
+                    logging.warning(f'-------> 统计从【最大回撤】-> 【最高收益】的结果表:\n{reverse_points_data_after_trough}')
 
                 top_peak_return_after_trough = reverse_points_data_after_trough['sum_chg'].max()
                 top_peak_indx_after_trough = self.get_top_point_indx(reverse_points_data_after_trough, point_type='peak')
@@ -567,8 +575,9 @@ class Peak_and_Trough_Detecter:
                 trough2peak_return = top_peak_return_after_trough - s2trough_loss
                 trade_days = top_peak_indx_after_trough - top_trough_indx
 
-                logging.warning(f'-------> 从【最大回撤】开始计算【最高收益】')
-                logging.warning(f'-------> 最大收益: {trough2peak_return}, 持续 {trade_days} 个交易日')
+                if self.verbose:
+                    logging.warning(f'-------> 从【最大回撤】开始计算【最高收益】')
+                    logging.warning(f'-------> 最大收益: {trough2peak_return}, 持续 {trade_days} 个交易日')
                 detecter_result = {
                     # 'max_return': round(trough2peak_return, 2),
                     'max_return': round(self.Seq[int(top_peak_indx_after_trough)] / self.Seq[int(top_trough_indx)] - 1, 3),
@@ -588,12 +597,14 @@ class Peak_and_Trough_Detecter:
             # 从起始点开始, 计算最大回撤
             if base_point == 'start':
                 if s2trough_loss > 0:
-                    logging.warning(f'-------> 从起始点以来, 最大回撤大于0, 因此, 阶段最大回撤替代')
-                    logging.warning(f'-------> 最大回撤: {s2trough_loss}, 持续 {top_trough_indx} 个交易日')
+                    if self.verbose:
+                        logging.warning(f'-------> 从起始点以来, 最大回撤大于0, 因此, 阶段最大回撤替代')
+                        logging.warning(f'-------> 最大回撤: {s2trough_loss}, 持续 {top_trough_indx} 个交易日')
                     return self.get_phase_max_return_or_loss(point_type=point_type)
                 else:
-                    logging.warning(f'-------> 从【起始点】开始计算【最大回撤】')
-                    logging.warning(f'-------> 最大回撤: {s2trough_loss}, 持续 {top_trough_indx} 个交易日')
+                    if self.verbose:
+                        logging.warning(f'-------> 从【起始点】开始计算【最大回撤】')
+                        logging.warning(f'-------> 最大回撤: {s2trough_loss}, 持续 {top_trough_indx} 个交易日')
                     detecter_result = {
                         'max_return': round(s2trough_loss, 3),
                         'trade_days': top_trough_indx,
@@ -610,7 +621,8 @@ class Peak_and_Trough_Detecter:
                 reverse_points_data_after_peak = reverse_points_data.loc[after_peak_cond, :].copy()
 
                 if len(reverse_points_data_after_peak) == 1:
-                    logging.warning(f'-------> 该序列最高点即是当前最新的数据点, 已创新高!!! 从【最大收益】-> 【最大回撤】的结果为 0')
+                    if self.verbose:
+                        logging.warning(f'-------> 该序列最高点即是当前最新的数据点, 已创新高!!! 从【最大收益】-> 【最大回撤】的结果为 0')
                     detecter_result = {
                         'max_return': 0,
                         'trade_days': 0,
@@ -620,15 +632,17 @@ class Peak_and_Trough_Detecter:
                         }
                     return detecter_result
 
-                logging.warning(f'-------> 统计从【最高收益】 -> 【最大回撤】的结果表:\n{reverse_points_data_after_peak}')
+                if self.verbose:
+                    logging.warning(f'-------> 统计从【最高收益】 -> 【最大回撤】的结果表:\n{reverse_points_data_after_peak}')
 
                 top_trough_indx_after_peak = self.get_top_point_indx(reverse_points_data_after_peak, point_type='trough')
                 top_trough_loss_after_peak = reverse_points_data_after_peak['sum_chg'].min()
 
                 peak2trough_loss = top_trough_loss_after_peak - s2peak_return
                 loss_days = top_trough_indx_after_peak - top_peak_indx
-                logging.warning(f'-------> 从【最高点】开始计算【最大回撤】')
-                logging.warning(f'-------> 最大回撤: {peak2trough_loss}, 持续 {loss_days} 个交易日')
+                if self.verbose:
+                    logging.warning(f'-------> 从【最高点】开始计算【最大回撤】')
+                    logging.warning(f'-------> 最大回撤: {peak2trough_loss}, 持续 {loss_days} 个交易日')
                 detecter_result = {
                     # 'max_return': round(peak2trough_loss, 2),
                     'max_return': round(self.Seq[int(top_trough_indx_after_peak)] / self.Seq[int(top_peak_indx)] - 1, 3),
@@ -689,7 +703,8 @@ class Peak_and_Trough_Detecter:
         named_point_reverse_data = reverse_points_data.loc[named_point_cond].copy()
 
         if len(named_point_reverse_data) == 0:
-            logging.warning(f'-------> 序列中没有 {point_type} 点, 默认从起始点开始 ...')
+            if self.verbose:
+                logging.warning(f'-------> 序列中没有 {point_type} 点, 默认从起始点开始 ...')
             base_return = 0
             start_indx = 0
         else:
@@ -734,7 +749,8 @@ class Peak_and_Trough_Detecter:
         reverse_points_data_f = reverse_points_data.loc[max_point_type_cond].copy()
 
         if len(reverse_points_data_f) == 0:
-            logging.warning(f'-------> 序列中没有 {point_type} 点, 默认从起始点开始 ...')
+            if self.verbose:
+                logging.warning(f'-------> 序列中没有 {point_type} 点, 默认从起始点开始 ...')
             base_return = 0
             start_indx = 0
         else:
@@ -771,20 +787,24 @@ class Peak_and_Trough_Detecter:
 
         reverse_points_data = pd.DataFrame(self.reverse_points)
         if base_point == 'default':
-            logging.warning(f'-------> 计算从上一个 reverse point(可能 peak 或 trough 点) 到 current 点的累计收益')
+            if self.verbose:
+                logging.warning(f'-------> 计算从上一个 reverse point(可能 peak 或 trough 点) 到 current 点的累计收益')
             detect_result = self.from_last_point_2_curr_return(reverse_points_data)
         elif base_point in ['peak', 'trough']:
-            logging.warning(f'-------> 计算从上一个 {base_point} 点到 current 点的累计收益')
+            if self.verbose:
+                logging.warning(f'-------> 计算从上一个 {base_point} 点到 current 点的累计收益')
             detect_result = self.from_named_point_2_curr_return(reverse_points_data, base_point)
         elif base_point in ['max_peak', 'max_trough']:
-            logging.warning(f'-------> 计算从最大 {base_point} 点到 current 点的累计收益')
+            if self.verbose:
+                logging.warning(f'-------> 计算从最大 {base_point} 点到 current 点的累计收益')
             detect_result = self.from_max_point_2_curr_return(reverse_points_data, base_point)
         else:
             logging.warning(f'-------> curr_return_base_hist_reverse_point() 未知计算模式')
             raise Exception
 
-        logging.warning(f'-------> 回撤点、或最高收益点到 current 点的累计收益统计:')
-        pprint(detect_result)
+        if self.verbose:
+            logging.warning(f'-------> 回撤点、或最高收益点到 current 点的累计收益统计:')
+            pprint(detect_result)
         return detect_result
 
     def format_reverse_point(self):
