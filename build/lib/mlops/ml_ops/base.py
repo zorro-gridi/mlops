@@ -362,6 +362,9 @@ class AbstractMLOps(metaclass=ABCMeta):
         Return:
             checkpoint
         '''
+        # MLFLOW alia 不识别 . 符号
+        model_alias = model_alias.replace('.', '')
+
         # find_best_model_args 的 checkpoint metric 指标不带 test 前缀
         if self.model_task.custom_loss_func:
             metric_name = self.model_task.custom_loss_func.loss_name
