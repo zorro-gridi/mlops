@@ -372,8 +372,8 @@ class AbstractMLOps(metaclass=ABCMeta):
             metric_name = self.model_task.model_eval_metric
 
         optimize_mode = self.model_task.optimize_mode
-        tune_model_metric = float(checkpoint[metric_name])
-        training_loss = float(checkpoint['training_loss'])
+        tune_model_metric = checkpoint[metric_name]
+        training_loss = checkpoint['training_loss']
         tune_sum_loss = tune_model_metric + training_loss
         tune_weight_loss = tune_model_metric * 0.8 + training_loss * 0.2
 
@@ -415,7 +415,7 @@ class AbstractMLOps(metaclass=ABCMeta):
                         hist_training_loss = hist_eval_metric = exception_value[optimize_mode]
 
                 # 更新评估指标的权重
-                hist_sum_loss = float(hist_training_loss) + float(hist_eval_metric)
+                hist_sum_loss = hist_training_loss + hist_eval_metric
                 hist_weight_loss = hist_training_loss * 0.2 + hist_eval_metric * 0.8
 
                 # NOTE: 比较测试指标
@@ -481,12 +481,11 @@ class AbstractMLOps(metaclass=ABCMeta):
         logging.warning(f'--------> best model args: {self.best_model_args}')
         logging.warning(f'--------> best data args: {self.best_data_args}')
 
-        # NOTE: 模型的训练与测试误差
-        params_config['training_loss'] = float(training_loss)
+        params_config['training_loss'] = training_loss
         params_config[f'test_{metric_name}'] = tune_model_metric
-
         # 登记模型的注册日期
         params_config['regist_date'] = time.strftime('%Y-%m-%d')
+
         params_config.update(self.best_data_args)
         logging.warning(f'---------> params_config: {params_config}')
 
@@ -524,8 +523,8 @@ class AbstractMLOps(metaclass=ABCMeta):
             )
         # log 记录 model & data best args
         mlflow.log_params(params_config)
-        mlflow.log_metric(f'test_{metric_name}', tune_model_metric)
 
+        mlflow.log_metric(f'test_{metric_name}', tune_model_metric)
         mlflow_client.set_registered_model_alias(reg_model_name, model_alias, '1')
         mlflow_client.set_registered_model_alias(reg_model_name, model_arch, '1')
 
