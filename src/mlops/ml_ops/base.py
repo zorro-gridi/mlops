@@ -296,7 +296,7 @@ class AbstractMLOps(metaclass=ABCMeta):
             raise Exception(f'-------> 没有找到历史的模型配置')
 
         # 历史模型的 training_loss 注册信息中提取
-        training_loss = hist_model_config['training_loss']
+        training_loss = float(hist_model_config['training_loss'])
         current_date = datetime.datetime.today()
         regist_date = hist_model_config['regist_date']
         days_diff = (current_date - datetime.datetime.strptime(regist_date, '%Y-%m-%d')).days
